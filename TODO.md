@@ -2,7 +2,7 @@
 
 ## Current Status
 
-- **CommonMark tests**: 201/542 passing (37.1%)
+- **CommonMark tests**: 202/542 passing (37.3%)
 - **Main tests**: 73/73 passing (100%)
 - **Serializer**: Normalized to remark-gfm output style
 
@@ -10,8 +10,9 @@
 
 ### Parser Improvements
 
-- [x] **Code spans**: 9/22 tests passing - basic inline code works, edge cases remain
-- [ ] **Emphasis edge cases**: Many failing tests related to delimiter matching
+- [x] **Code spans**: 10/22 tests passing - basic inline code works, edge cases remain
+- [x] **Emphasis left/right flanking**: Implemented CommonMark flanking rules for `*` and `_`
+- [ ] **Emphasis edge cases**: 64/132 passing - need delimiter stack algorithm for complex cases
 - [ ] **Nested lists**: Complex list nesting not handled correctly
 - [ ] **Link parsing**: Nested brackets and escape handling needs work
 
@@ -61,25 +62,25 @@
 | Category | Passing | Total | Rate |
 |----------|---------|-------|------|
 | Blank lines | 1 | 1 | 100% |
-| Soft line breaks | 2 | 2 | 100% |
+| Soft line breaks | 1 | 2 | 50.0% |
 | Textual content | 3 | 3 | 100% |
-| Paragraphs | 5 | 8 | 62.5% |
+| Paragraphs | 6 | 8 | 75.0% |
 | Indented code | 7 | 12 | 58.3% |
 | Autolinks | 11 | 19 | 57.9% |
 | Thematic breaks | 11 | 19 | 57.9% |
-| ATX headings | 10 | 18 | 55.6% |
-| Fenced code | 14 | 29 | 48.3% |
+| ATX headings | 11 | 18 | 61.1% |
+| Fenced code | 24 | 29 | 82.8% |
 | Block quotes | 12 | 25 | 48.0% |
-| Hard line breaks | 6 | 15 | 40.0% |
-| Emphasis | 42 | 132 | 31.8% |
-| List items | 14 | 48 | 29.2% |
+| Hard line breaks | 8 | 15 | 53.3% |
+| Emphasis | 64 | 132 | 48.5% |
+| List items | 13 | 48 | 27.1% |
 | Tabs | 3 | 11 | 27.3% |
-| Setext headings | 7 | 27 | 25.9% |
-| Backslash escapes | 4 | 13 | 30.8% |
+| Setext headings | 6 | 27 | 22.2% |
+| Backslash escapes | 5 | 13 | 38.5% |
 | Images | 5 | 22 | 22.7% |
 | Lists | 5 | 26 | 19.2% |
-| Links | 15 | 90 | 16.7% |
-| Code spans | 9 | 22 | 40.9% |
+| Links | 16 | 90 | 17.8% |
+| Code spans | 10 | 22 | 45.5% |
 
 ## Notes
 
