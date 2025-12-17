@@ -718,8 +718,11 @@ fn BlockParser::parse_list_item(
   let content = content_buf.to_string()
   let children : Array[Block] = []
 
-  if not(content.is_empty()) {
-    let inline_content = parse_inlines(content)
+  // Check for task list checkbox: [ ], [x], or [X]
+  let (checked, actual_content) = parse_task_checkbox(content)
+
+  if not(actual_content.is_empty()) {
+    let inline_content = parse_inlines(actual_content)
     children.push(Block::Paragraph(
       children=inline_content,
       span=Span::new(start, self.scanner.pos),
@@ -730,11 +733,46 @@ fn BlockParser::parse_list_item(
 
   {
     children,
-    checked: None,
+    checked,
     marker_offset,
     content_offset,
     span: Span::new(start, self.scanner.pos),
   }
+}
+
+///| Parse task list checkbox from content
+///| Returns (checked status, remaining content)
+fn parse_task_checkbox(content : String) -> (Bool?, String) {
+  // Check for [ ] (unchecked) or [x]/[X] (checked)
+  if content.length() >= 4 {
+    if content.has_prefix("[ ] ") {
+      return (Some(false), skip_n_chars(content, 4))
+    }
+    if content.has_prefix("[x] ") || content.has_prefix("[X] ") {
+      return (Some(true), skip_n_chars(content, 4))
+    }
+  }
+  // Handle case without trailing space (end of line)
+  if content == "[ ]" {
+    return (Some(false), "")
+  }
+  if content == "[x]" || content == "[X]" {
+    return (Some(true), "")
+  }
+  (None, content)
+}
+
+///| Skip first n characters of a string
+fn skip_n_chars(s : String, n : Int) -> String {
+  let buf = StringBuilder::new()
+  let mut i = 0
+  for c in s {
+    if i >= n {
+      buf.write_char(c)
+    }
+    i += 1
+  }
+  buf.to_string()
 }
 
 ///| Try to parse setext heading

@@ -352,3 +352,56 @@ test "serialize table roundtrip" {
   inspect(output.contains("| :-- |"), content="true")
   inspect(output.contains("| --: |"), content="true")
 }
+
+test "parse task list unchecked" {
+  let result = parse("- [ ] todo item\n")
+  match result.document.children[0] {
+    Block::BulletList(items~, ..) => {
+      inspect(items.length(), content="1")
+      inspect(items[0].checked, content="Some(false)")
+    }
+    _ => fail("Expected BulletList")
+  }
+}
+
+test "parse task list checked lowercase" {
+  let result = parse("- [x] done item\n")
+  match result.document.children[0] {
+    Block::BulletList(items~, ..) => {
+      inspect(items.length(), content="1")
+      inspect(items[0].checked, content="Some(true)")
+    }
+    _ => fail("Expected BulletList")
+  }
+}
+
+test "parse task list checked uppercase" {
+  let result = parse("- [X] done item\n")
+  match result.document.children[0] {
+    Block::BulletList(items~, ..) => {
+      inspect(items.length(), content="1")
+      inspect(items[0].checked, content="Some(true)")
+    }
+    _ => fail("Expected BulletList")
+  }
+}
+
+test "parse task list mixed" {
+  let result = parse("- [ ] foo\n- [x] bar\n")
+  match result.document.children[0] {
+    Block::BulletList(items~, ..) => {
+      inspect(items.length(), content="2")
+      inspect(items[0].checked, content="Some(false)")
+      inspect(items[1].checked, content="Some(true)")
+    }
+    _ => fail("Expected BulletList")
+  }
+}
+
+test "serialize task list roundtrip" {
+  let source = "- [ ] foo\n- [x] bar\n"
+  let result = parse(source)
+  let output = serialize(result.document)
+  inspect(output.contains("[ ] foo"), content="true")
+  inspect(output.contains("[x] bar"), content="true")
+}
