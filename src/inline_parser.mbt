@@ -419,10 +419,16 @@ fn InlineParser::try_parse_link(self : InlineParser, start : Int) -> Inline? {
     // Check for angle-bracketed URL
     if char_is(self.scanner.peek(), '<') {
       self.scanner.advance(1)
+      let mut angle_url_has_newline = false
       while not(self.scanner.is_eof()) {
         match self.scanner.peek() {
           Some('>') => {
             self.scanner.advance(1)
+            break
+          }
+          Some('\n') => {
+            // Newline in angle-bracket URL invalidates the link
+            angle_url_has_newline = true
             break
           }
           Some(c) => {
@@ -432,7 +438,12 @@ fn InlineParser::try_parse_link(self : InlineParser, start : Int) -> Inline? {
           None => break
         }
       }
+      if angle_url_has_newline {
+        self.scanner.restore(start)
+        return None
+      }
     } else {
+      let mut url_has_newline = false
       while not(self.scanner.is_eof()) {
         match self.scanner.peek() {
           Some('(') => {
@@ -449,6 +460,11 @@ fn InlineParser::try_parse_link(self : InlineParser, start : Int) -> Inline? {
             self.scanner.advance(1)
           }
           Some(' ') | Some('\t') => break  // End of URL
+          Some('\n') => {
+            // Newline in non-angle-bracket URL invalidates the link
+            url_has_newline = true
+            break
+          }
           Some(c) => {
             url_buf.write_char(c)
             self.scanner.advance(1)
@@ -456,14 +472,24 @@ fn InlineParser::try_parse_link(self : InlineParser, start : Int) -> Inline? {
           None => break
         }
       }
+      // If URL contains newline, abort link parsing
+      if url_has_newline {
+        self.scanner.restore(start)
+        return None
+      }
     }
 
     let url = url_buf.to_string()
 
-    // Skip whitespace
-    let _ = self.scanner.skip_spaces()
+    // Skip whitespace (including newlines) before title
+    while not(self.scanner.is_eof()) {
+      match self.scanner.peek() {
+        Some(' ') | Some('\t') | Some('\n') => self.scanner.advance(1)
+        _ => break
+      }
+    }
 
-    // Parse optional title
+    // Parse optional title (supports ", ', and () delimiters)
     let title = match self.scanner.peek() {
       Some('"') | Some('\'') => {
         let quote = match self.scanner.consume() {
@@ -476,6 +502,42 @@ fn InlineParser::try_parse_link(self : InlineParser, start : Int) -> Inline? {
             Some(c) if c == quote => {
               self.scanner.advance(1)
               break
+            }
+            Some('\\') => {
+              self.scanner.advance(1)
+              match self.scanner.consume() {
+                Some(c) => title_buf.write_char(c)
+                None => break
+              }
+            }
+            Some(c) => {
+              title_buf.write_char(c)
+              self.scanner.advance(1)
+            }
+            None => break
+          }
+        }
+        title_buf.to_string()
+      }
+      Some('(') => {
+        self.scanner.advance(1)  // Skip opening (
+        let title_buf = StringBuilder::new()
+        let mut paren_depth = 1
+        while not(self.scanner.is_eof()) && paren_depth > 0 {
+          match self.scanner.peek() {
+            Some(')') => {
+              paren_depth -= 1
+              if paren_depth == 0 {
+                self.scanner.advance(1)
+                break
+              }
+              title_buf.write_char(')')
+              self.scanner.advance(1)
+            }
+            Some('(') => {
+              paren_depth += 1
+              title_buf.write_char('(')
+              self.scanner.advance(1)
             }
             Some('\\') => {
               self.scanner.advance(1)
