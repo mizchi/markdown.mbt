@@ -63,8 +63,8 @@ When regenerating tests, skipped tests will automatically get `#skip("reason")` 
 ### Test Summary
 
 - **Total tests**: 542
-- **Passing**: 202 (37%)
-- **Skipped**: 340 (63%)
+- **Passing**: 207 (38.2%)
+- **Skipped**: 335 (61.8%)
 
 ### Skip Categories
 

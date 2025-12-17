@@ -40,7 +40,27 @@ fn InlineParser::parse(self : InlineParser) -> Array[Inline] {
 
   while not(self.scanner.is_eof()) {
     match self.parse_inline() {
-      Some(inline) => inlines.push(inline)
+      Some(inline) => {
+        // For soft/hard breaks, trim trailing whitespace from previous text
+        match inline {
+          Inline::SoftBreak(..) | Inline::HardBreak(..) => {
+            match inlines.last() {
+              Some(Inline::Text(content~, span~)) => {
+                let trimmed = content.trim_end(chars=" ").to_string()
+                if trimmed != content {
+                  let _ = inlines.pop()
+                  if not(trimmed.is_empty()) {
+                    inlines.push(Inline::Text(content=trimmed, span~))
+                  }
+                }
+              }
+              _ => ()
+            }
+          }
+          _ => ()
+        }
+        inlines.push(inline)
+      }
       None => {
         // Consume single character as text
         let start = self.scanner.pos
@@ -107,6 +127,10 @@ fn InlineParser::parse_inline(self : InlineParser) -> Inline? {
     // Soft break (newline)
     Some('\n') => {
       self.scanner.advance(1)
+      // Skip leading whitespace after newline (CommonMark spec)
+      while char_is(self.scanner.peek(), ' ') {
+        self.scanner.advance(1)
+      }
       Some(Inline::SoftBreak(span=Span::new(start, self.scanner.pos)))
     }
 
@@ -122,6 +146,10 @@ fn InlineParser::try_parse_escape(self : InlineParser, start : Int) -> Inline? {
     Some('\n') => {
       // Backslash + newline = hard break
       self.scanner.advance(1)
+      // Skip leading whitespace after newline (CommonMark spec)
+      while char_is(self.scanner.peek(), ' ') {
+        self.scanner.advance(1)
+      }
       Some(Inline::HardBreak(
         style=HardBreakStyle::Backslash,
         span=Span::new(start, self.scanner.pos),
@@ -832,6 +860,10 @@ fn InlineParser::try_parse_hard_break(self : InlineParser, start : Int) -> Inlin
 
   if char_is(self.scanner.peek(), '\n') {
     self.scanner.advance(1)
+    // Skip leading whitespace after newline (CommonMark spec)
+    while char_is(self.scanner.peek(), ' ') {
+      self.scanner.advance(1)
+    }
     return Some(Inline::HardBreak(
       style=HardBreakStyle::TwoSpaces,
       span=Span::new(start, self.scanner.pos),

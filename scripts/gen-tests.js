@@ -12,6 +12,9 @@
 const fs = require('fs');
 const path = require('path');
 
+// Parse command line arguments
+const noSkip = process.argv.includes('--no-skip');
+
 const SPEC_URL = 'https://spec.commonmark.org/0.31.2/spec.json';
 const OUTPUT_DIR = path.join(__dirname, '../src/cmark_tests');
 
@@ -72,18 +75,14 @@ const SKIP_TESTS = {
   // Indented code blocks: Edge cases
   'Indented code blocks': {
     reason: 'Indented code edge case',
-    examples: [108, 109, 112, 113, 115],
+    examples: [108, 109, 112, 115],
   },
   // Fenced code blocks: Edge cases
   'Fenced code blocks': {
     reason: 'Fenced code edge case',
     examples: [121, 138, 141, 145, 146],
   },
-  // Paragraphs: Edge cases
-  'Paragraphs': {
-    reason: 'Paragraph edge case',
-    examples: [222, 223],
-  },
+  // Paragraphs: No longer skipped (whitespace handling fixed)
   // Block quotes: Lazy continuation and nesting
   'Block quotes': {
     reason: 'Block quote edge case',
@@ -115,7 +114,7 @@ const SKIP_TESTS = {
       // URL edge cases: spaces, newlines, nested parens
       url_edge: [488, 489, 490, 491, 492, 493, 494, 496, 497, 498, 499, 503, 506, 508, 509, 510, 511, 512, 513, 514, 515],
       // Reference link edge cases
-      ref_link: [518, 519, 520, 521, 522, 523, 524, 525, 526, 527, 528, 529, 530, 531, 532, 533, 534, 535, 536, 537, 538, 539, 540, 542, 543, 544, 545, 546, 547, 548, 549, 550, 551, 552, 553, 554, 555, 556, 557, 558, 559, 560, 561, 562, 563, 564, 565, 566, 567, 568, 569, 570, 571],
+      ref_link: [518, 519, 520, 521, 522, 523, 524, 525, 526, 527, 528, 529, 530, 531, 532, 533, 534, 535, 536, 537, 538, 539, 540, 541, 542, 543, 544, 545, 546, 547, 548, 549, 550, 551, 552, 553, 554, 555, 556, 557, 558, 559, 560, 561, 562, 563, 564, 565, 566, 567, 568, 569, 570, 571],
     },
   },
   // Images: Similar to links edge cases
@@ -131,13 +130,9 @@ const SKIP_TESTS = {
   // Hard line breaks: Edge cases
   'Hard line breaks': {
     reason: 'Hard line break edge case',
-    examples: [636, 637, 642, 644, 646],
+    examples: [642, 644, 646],
   },
-  // Soft line breaks: Edge cases
-  'Soft line breaks': {
-    reason: 'Soft line break edge case',
-    examples: [649],
-  },
+  // Soft line breaks: No longer skipped (whitespace handling fixed)
 };
 
 // Get skip reason for a test
@@ -292,7 +287,7 @@ pub fn assert_commonmark_compat(input : String, example : Int) -> Unit {
 
     for (const test of tests) {
       const escapedInput = escapeString(test.markdown);
-      const skipReason = getSkipReason(section, test.example);
+      const skipReason = noSkip ? null : getSkipReason(section, test.example);
 
       if (skipReason) {
         content += `#skip("${skipReason}")\n`;
@@ -308,6 +303,10 @@ pub fn assert_commonmark_compat(input : String, example : Int) -> Unit {
   }
 
   console.log(`\nTotal: ${totalTests} tests generated in ${OUTPUT_DIR}`);
+  if (noSkip) {
+    console.log('\n⚠️  Generated with --no-skip: all tests will run without skip annotations');
+    console.log('   Remember to regenerate without --no-skip after checking!');
+  }
   console.log('\nRun tests with: moon test --target js -p mizchi/markdown/commonmark_tests');
 }
 

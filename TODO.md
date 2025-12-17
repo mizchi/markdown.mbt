@@ -2,7 +2,7 @@
 
 ## Current Status
 
-- **CommonMark tests**: 202/542 passing (37.3%)
+- **CommonMark tests**: 207/542 passing (38.2%)
 - **Main tests**: 73/73 passing (100%)
 - **Serializer**: Normalized to remark-gfm output style
 
@@ -62,16 +62,16 @@
 | Category | Passing | Total | Rate |
 |----------|---------|-------|------|
 | Blank lines | 1 | 1 | 100% |
-| Soft line breaks | 1 | 2 | 50.0% |
+| Soft line breaks | 2 | 2 | 100% |
 | Textual content | 3 | 3 | 100% |
-| Paragraphs | 6 | 8 | 75.0% |
-| Indented code | 7 | 12 | 58.3% |
+| Paragraphs | 8 | 8 | 100% |
+| Indented code | 8 | 12 | 66.7% |
 | Autolinks | 11 | 19 | 57.9% |
 | Thematic breaks | 11 | 19 | 57.9% |
 | ATX headings | 11 | 18 | 61.1% |
 | Fenced code | 24 | 29 | 82.8% |
 | Block quotes | 12 | 25 | 48.0% |
-| Hard line breaks | 8 | 15 | 53.3% |
+| Hard line breaks | 10 | 15 | 66.7% |
 | Emphasis | 64 | 132 | 48.5% |
 | List items | 13 | 48 | 27.1% |
 | Tabs | 3 | 11 | 27.3% |
@@ -79,7 +79,7 @@
 | Backslash escapes | 5 | 13 | 38.5% |
 | Images | 5 | 22 | 22.7% |
 | Lists | 5 | 26 | 19.2% |
-| Links | 16 | 90 | 17.8% |
+| Links | 15 | 90 | 16.7% |
 | Code spans | 10 | 22 | 45.5% |
 
 ## Notes
