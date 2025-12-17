@@ -61,6 +61,14 @@ moon bench                  # 改善を確認
 just bench-accept
 ```
 
+### CommonMark互換テスト (cmark_tests)
+
+`src/cmark_tests/` は自動生成されるため、**直接編集しない**。
+
+- テストのスキップ追加・削除: `scripts/gen-tests.js` の `SKIP_TESTS` を編集
+- 再生成: `node scripts/gen-tests.js`
+- 詳細: [CONTRIBUTING.md](./CONTRIBUTING.md)
+
 ### パフォーマンス最適化のポイント
 
 - `count_char` より `peek_at(n)` を使う（O(n) → O(1)）
