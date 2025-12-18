@@ -74,7 +74,7 @@ fn render_block_tui(block : @markdown.Block, buf : StringBuilder) -> Unit {
         buf.write_string("┌─ ")
         buf.write_string(info)
         buf.write_string(" ")
-        let remaining = max_width - info.iter().count() - 2
+        let remaining = max_width - info.iter().count() - 1
         buf.write_string("─".repeat(remaining))
         buf.write_string("┐")
       } else {
