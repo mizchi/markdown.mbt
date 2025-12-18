@@ -134,18 +134,46 @@ fn render_block_tui(block : @markdown.Block, buf : StringBuilder) -> Unit {
     }
 
     @markdown.Block::Table(header~, rows~, ..) => {
+      // Calculate column widths
+      let col_count = header.length()
+      let widths : Array[Int] = Array::make(col_count, 0)
+
+      // Measure header widths
+      for i, cell in header {
+        let w = measure_inlines_width(cell.children)
+        if w > widths[i] {
+          widths[i] = w
+        }
+      }
+
+      // Measure row widths
+      for row in rows {
+        for i, cell in row {
+          if i < col_count {
+            let w = measure_inlines_width(cell.children)
+            if w > widths[i] {
+              widths[i] = w
+            }
+          }
+        }
+      }
+
       // Header
       buf.write_string(bold)
-      buf.write_string("│ ")
+      buf.write_string("│")
       for i, cell in header {
-        if i > 0 {
-          buf.write_string(" │ ")
-        }
-        render_inlines_tui_raw(cell.children, buf)
+        buf.write_string(" ")
+        let cell_buf = StringBuilder::new()
+        render_inlines_tui_raw(cell.children, cell_buf)
+        let content = cell_buf.to_string()
+        buf.write_string(content)
+        let padding = widths[i] - measure_inlines_width(cell.children)
+        buf.write_string(" ".repeat(padding))
+        buf.write_string(" │")
       }
-      buf.write_string(" │")
       buf.write_string(reset)
       buf.write_string("\n")
+
       // Separator
       buf.write_string(dim)
       buf.write_string("├")
@@ -153,21 +181,31 @@ fn render_block_tui(block : @markdown.Block, buf : StringBuilder) -> Unit {
         if i > 0 {
           buf.write_string("┼")
         }
-        buf.write_string("───")
+        buf.write_string("─".repeat(widths[i] + 2))
       }
       buf.write_string("┤")
       buf.write_string(reset)
       buf.write_string("\n")
+
       // Rows
       for row in rows {
-        buf.write_string("│ ")
-        for i, cell in row {
-          if i > 0 {
-            buf.write_string(" │ ")
+        buf.write_string("│")
+        for i = 0; i < col_count; i = i + 1 {
+          buf.write_string(" ")
+          if i < row.length() {
+            let cell = row[i]
+            let cell_buf = StringBuilder::new()
+            render_inlines_tui_raw(cell.children, cell_buf)
+            let content = cell_buf.to_string()
+            buf.write_string(content)
+            let padding = widths[i] - measure_inlines_width(cell.children)
+            buf.write_string(" ".repeat(padding))
+          } else {
+            buf.write_string(" ".repeat(widths[i]))
           }
-          render_inlines_tui_raw(cell.children, buf)
+          buf.write_string(" │")
         }
-        buf.write_string(" │\n")
+        buf.write_string("\n")
       }
       buf.write_string("\n")
     }
@@ -185,6 +223,35 @@ fn render_block_tui(block : @markdown.Block, buf : StringBuilder) -> Unit {
       }
       buf.write_string("\n")
     }
+  }
+}
+
+///| Measure the display width of inline elements (excluding ANSI codes)
+fn measure_inlines_width(inlines : Array[@markdown.Inline]) -> Int {
+  let mut width = 0
+  for inline in inlines {
+    width = width + measure_inline_width(inline)
+  }
+  width
+}
+
+///| Measure display width of a single inline element
+fn measure_inline_width(inline : @markdown.Inline) -> Int {
+  match inline {
+    @markdown.Inline::Text(content~, ..) => content.iter().count()
+    @markdown.Inline::Code(content~, ..) => content.iter().count() + 2 // backticks
+    @markdown.Inline::Emphasis(children~, ..) => measure_inlines_width(children)
+    @markdown.Inline::Strong(children~, ..) => measure_inlines_width(children)
+    @markdown.Inline::Strikethrough(children~, ..) => measure_inlines_width(children)
+    @markdown.Inline::Link(children~, ..) => measure_inlines_width(children)
+    @markdown.Inline::RefLink(children~, ..) => measure_inlines_width(children)
+    @markdown.Inline::Autolink(url~, ..) => url.iter().count()
+    @markdown.Inline::Image(alt~, ..) => alt.iter().count() + 2 // emoji
+    @markdown.Inline::RefImage(alt~, ..) => alt.iter().count() + 2
+    @markdown.Inline::HtmlInline(html~, ..) => html.iter().count()
+    @markdown.Inline::SoftBreak(..) => 0
+    @markdown.Inline::HardBreak(..) => 0
+    @markdown.Inline::FootnoteReference(label~, ..) => label.iter().count() + 3 // [^]
   }
 }
 
