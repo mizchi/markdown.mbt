@@ -15,8 +15,6 @@ jobs:
         uses: illusory0x0/setup-moonbit@v0.1.0
         with:
           version: stable
-      - name: Check
-        run: moon check
       - uses: actions/setup-node@v6
         with:
           node-version: 24
@@ -27,11 +25,12 @@ jobs:
           run_install: false
       - name: Install dependencies
         run: pnpm install
-
       - name: Generate CommonMark tests
         run: node scripts/gen-tests.js
       - name: Generate GFM tests
         run:  node scripts/gen-gfm-tests.js
+      - name: Check
+        run: moon check
       - name: Test all
         run: moon test --target all
       - name: Test Bench
