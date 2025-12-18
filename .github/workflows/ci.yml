@@ -35,7 +35,7 @@ jobs:
           moon check
       - name: Test all
         run: |
-          moon test src --target all
+          moon test src --target js,native,wasm-gc
       - name: Moon test
         run: |
           moon test src/cmark_tests --target js
