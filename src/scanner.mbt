@@ -23,14 +23,11 @@ pub fn Scanner::new(source : String) -> Scanner {
   let chars = source.to_array()
   let len = chars.length()
 
-  // Check if we have any non-BMP characters
-  let mut has_non_bmp = false
-  for i = 0; i < len; i = i + 1 {
-    if is_non_bmp(chars[i]) {
-      has_non_bmp = true
-      break
-    }
-  }
+  // Fast check: if UTF-16 length == code point count, all chars are BMP
+  // String.length() returns UTF-16 code units
+  // chars.length() returns code points
+  // Difference means non-BMP characters exist (surrogate pairs)
+  let has_non_bmp = source.length() != len
 
   // Only build UTF-16 offset array if needed (has non-BMP characters)
   let utf16_offsets : Array[Int]? = if has_non_bmp {
