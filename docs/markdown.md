@@ -436,9 +436,10 @@ Phase 3: Full CRDT
 // After: Array[Char] で O(1)
 pub(all) struct Scanner {
   source : String
-  chars : Array[Char]  // 事前変換
-  mut pos : Int
-  len : Int
+  chars : Array[Char]  // 事前変換（コードポイント配列）
+  mut pos : Int        // コードポイント単位の位置
+  len : Int            // コードポイント数
+  utf16_offsets : Array[Int]?  // 非BMP文字用UTF-16オフセット
 }
 ```
 
@@ -448,6 +449,42 @@ pub(all) struct Scanner {
 | WASM-GC | **56%高速化** (scanner peek/advance) |
 
 **結論**: WASM-GC本番向けには有効、JSでも許容範囲。
+
+### 15.2.1 Unicode (非BMP文字) 対応
+
+MoonBit の文字列は内部的に UTF-16 を使用している:
+
+| API | 戻り値 |
+|-----|--------|
+| `String.length()` | UTF-16 コードユニット数 |
+| `String.to_array()` | Unicode コードポイント配列 |
+| `String.unsafe_substring()` | UTF-16 インデックスを期待 |
+
+**問題**: 絵文字などの非BMP文字（U+10000以上）は、UTF-16 でサロゲートペア（2 units）になる。Scanner の `pos` はコードポイント単位だが、`substring` は UTF-16 インデックスを使うため、位置がずれる。
+
+**解決策**: 非BMP文字が存在する場合のみ、UTF-16 オフセット配列を構築:
+
+```moonbit
+// 高速判定: UTF-16長 != コードポイント数なら非BMP文字あり
+let has_non_bmp = source.length() != chars.length()
+
+// 非BMP文字がある場合のみオフセット配列を構築
+let utf16_offsets : Array[Int]? = if has_non_bmp {
+  // utf16_offsets[i] = コードポイントi の UTF-16開始位置
+  Some(build_offsets(chars))
+} else {
+  None  // BMP文字のみ: インデックス変換不要
+}
+```
+
+**パフォーマンス影響**:
+
+| シナリオ | オーバーヘッド |
+|---------|---------------|
+| BMP文字のみ（日本語等） | **+2-5%** |
+| 非BMP文字あり（絵文字等） | オフセット配列構築コスト |
+
+**設計判断**: 日本語・中国語などの BMP 文字は影響最小限。絵文字は正しく処理されるようになった。
 
 ### 15.3 #valtype 最適化
 

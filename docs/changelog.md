@@ -1,5 +1,43 @@
 # Changelog
 
+## 2025-12-19: Unicode (non-BMP) support for Scanner
+
+**Commits:** `a616f73`, `8d99c3a`
+
+### Problem
+
+Scanner used code point indices internally (`to_array()`) but `substring()` used UTF-16 indices (`unsafe_substring()`). This caused garbled output for non-BMP characters (emoji, rare CJK).
+
+### Changes
+
+- Add `utf16_offsets : Array[Int]?` field to Scanner for code point → UTF-16 index mapping
+- `substring()`, `remaining()`, `read_line()` now correctly convert indices
+- Fast detection: `source.length() != chars.length()` (O(1) instead of O(n) loop)
+- Skip offset array creation when all characters are BMP
+
+### Performance Impact
+
+| Benchmark | Before | After | Change |
+|-----------|--------|-------|--------|
+| parse: small | 23.86µs | 24.25µs | **+1.6%** |
+| parse: medium | 97.52µs | 100.24µs | **+2.8%** |
+| parse: large | 481.37µs | 503.22µs | **+4.5%** |
+| scanner: read_line 100x | 5.13µs | 6.40µs | +25% |
+
+### Compatibility
+
+| Character Type | Status |
+|----------------|--------|
+| ASCII | ✅ No change |
+| BMP (Japanese, Chinese, Korean) | ✅ +2-5% overhead |
+| Non-BMP (emoji) | ✅ Now works correctly |
+
+### Tests
+
+Added `src/unicode_test.mbt` with 64 comprehensive tests for CJK and emoji handling.
+
+---
+
 ## 2025-12-17: Nested link detection
 
 **Commit:** `24739bc`
