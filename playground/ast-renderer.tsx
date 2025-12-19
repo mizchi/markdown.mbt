@@ -8,7 +8,7 @@ import type {
   ListItem,
   TableCell,
   TableAlign,
-} from "./ast-types";
+} from "../js/api";
 
 // Block renderer
 export function renderBlock(block: Block, key?: string | number): ComponentChildren {

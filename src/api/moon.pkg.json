@@ -7,14 +7,30 @@
       "exports": [
         "md_parse_to_ast",
         "md_get_ast",
-        "md_free_ast"
+        "md_free_ast",
+        "md_to_html",
+        "md_to_markdown",
+        "md_to_ast_json",
+        "md_render_html",
+        "md_serialize",
+        "md_parse_with_source",
+        "md_parse_incremental",
+        "md_free"
       ]
     },
     "wasm-gc": {
       "exports": [
         "md_parse_to_ast",
         "md_get_ast",
-        "md_free_ast"
+        "md_free_ast",
+        "md_to_html",
+        "md_to_markdown",
+        "md_to_ast_json",
+        "md_render_html",
+        "md_serialize",
+        "md_parse_with_source",
+        "md_parse_incremental",
+        "md_free"
       ]
     }
   }

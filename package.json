@@ -1,25 +1,32 @@
 {
-  "name": "markdown.mbt",
-  "version": "1.0.0",
-  "description": "",
-  "main": "index.js",
+  "name": "@mizchi/markdown",
+  "version": "0.1.2",
+  "description": "incremental markdown parser",
   "scripts": {
-    "test": "echo \"Error: no test specified\" && exit 1"
+    "prepublishOnly": "moon build"
   },
-  "keywords": [],
-  "author": "",
-  "license": "ISC",
+  "exports": {
+    ".": {
+      "import": "./js/api.js",
+      "types": "./js/api.d.ts"
+    }
+  },
+  "keywords": ["markdown", "moonbit"],
+  "author": "mizchi <miz404@gmail.com>",
+  "license": "MIT",
   "packageManager": "pnpm@10.23.0",
-  "dependencies": {
-    "remark": "^15.0.1",
-    "remark-stringify": "^11.0.0",
-    "unified": "^11.0.5"
-  },
   "devDependencies": {
     "preact": "^10.28.0",
+    "remark": "^15.0.1",
+    "remark-stringify": "^11.0.0",
     "remark-gfm": "^4.0.1",
     "remark-html": "^16.0.1",
     "typescript": "^5.9.3",
-    "vite": "^7.3.0"
-  }
+    "vite": "^7.3.0",
+    "unified": "^11.0.5"
+  },
+  "files": [
+    "js",
+    "target/js/release/build"
+  ]
 }

@@ -1,7 +1,7 @@
 import { render } from "preact";
 import { useState, useCallback, useEffect, useRef } from "preact/hooks";
-import { md_parse_to_ast, md_get_ast, md_free_ast } from "../target/js/release/build/api/api.js";
-import type { Document } from "./ast-types";
+import { parse } from "../js/api.js";
+import type { Document } from "../js/api";
 import { MarkdownRenderer } from "./ast-renderer";
 
 const STORAGE_KEY = "markdown-editor-content";
@@ -115,23 +115,18 @@ function useDarkMode(): [boolean, () => void] {
   return [isDark, toggle];
 }
 
-function parseToAst(source: string): Document {
-  const handle = md_parse_to_ast(source);
-  const json = md_get_ast(handle);
-  md_free_ast(handle);
-  return JSON.parse(json) as Document;
-}
 
 // Find block element at cursor position
 function findBlockAtPosition(ast: Document, position: number): number | null {
   for (let i = 0; i < ast.children.length; i++) {
-    const block = ast.children[i];
+    const block = ast.children[i]!;
     if (position >= block.span.from && position <= block.span.to) {
       return i;
     }
   }
   // If position is beyond all blocks, return the last block
-  if (ast.children.length > 0 && position >= ast.children[ast.children.length - 1].span.to) {
+  const lastBlock = ast.children[ast.children.length - 1];
+  if (ast.children.length > 0 && lastBlock && position >= lastBlock.span.to) {
     return ast.children.length - 1;
   }
   return null;
@@ -139,7 +134,7 @@ function findBlockAtPosition(ast: Document, position: number): number | null {
 
 function App() {
   const [source, setSource] = useState(initialMarkdown);
-  const [ast, setAst] = useState<Document>(() => parseToAst(initialMarkdown));
+  const [ast, setAst] = useState<Document>(() => parse(initialMarkdown));
   const [cursorPosition, setCursorPosition] = useState(0);
   const [isInitialized, setIsInitialized] = useState(false);
   const [isDark, toggleDark] = useDarkMode();
@@ -163,14 +158,14 @@ function App() {
         const localTimestamp = parseInt(localStorage.getItem(`${STORAGE_KEY}-timestamp`) || "0", 10);
         if (idbData.timestamp >= localTimestamp) {
           setSource(idbData.content);
-          setAst(parseToAst(idbData.content));
+          setAst(parse(idbData.content));
         } else if (localContent) {
           setSource(localContent);
-          setAst(parseToAst(localContent));
+          setAst(parse(localContent));
         }
       } else if (localContent) {
         setSource(localContent);
-        setAst(parseToAst(localContent));
+        setAst(parse(localContent));
       }
 
       setIsInitialized(true);
@@ -189,7 +184,7 @@ function App() {
           // If IDB has newer content, update
           if (idbData.timestamp > currentTimestamp) {
             setSource(idbData.content);
-            setAst(parseToAst(idbData.content));
+            setAst(parse(idbData.content));
             localStorage.setItem(STORAGE_KEY, idbData.content);
             localStorage.setItem(`${STORAGE_KEY}-timestamp`, idbData.timestamp.toString());
           }
@@ -224,7 +219,7 @@ function App() {
     const blockIndex = findBlockAtPosition(ast, cursorPosition);
     if (blockIndex === null) return;
 
-    const block = ast.children[blockIndex];
+    const block = ast.children[blockIndex]!;
     const selector = `[data-span="${block.span.from}-${block.span.to}"]`;
     const element = previewRef.current.querySelector(selector);
 
@@ -237,7 +232,7 @@ function App() {
     const target = e.target as HTMLTextAreaElement;
     const newSource = target.value;
     setSource(newSource);
-    setAst(parseToAst(newSource));
+    setAst(parse(newSource));
     setCursorPosition(target.selectionStart);
   }, []);
 
