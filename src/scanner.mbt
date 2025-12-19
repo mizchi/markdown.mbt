@@ -2,18 +2,64 @@
 
 ///|
 /// Scanner state - uses Array[Char] for O(1) character access
+/// Handles Unicode correctly by tracking UTF-16 offsets for non-BMP characters
 pub(all) struct Scanner {
   source : String
-  chars : Array[Char] // Pre-converted for fast access
-  mut pos : Int
-  len : Int
+  chars : Array[Char] // Pre-converted for fast access (code points)
+  mut pos : Int // Position in code points
+  len : Int // Length in code points
+  utf16_offsets : Array[Int]? // Maps code point index -> UTF-16 index (None if all BMP)
+}
+
+///|
+/// Check if a character is outside BMP (needs surrogate pair in UTF-16)
+fn is_non_bmp(c : Char) -> Bool {
+  c.to_int() > 0xFFFF
 }
 
 ///|
 /// Create a new scanner
 pub fn Scanner::new(source : String) -> Scanner {
   let chars = source.to_array()
-  { source, chars, pos: 0, len: chars.length() }
+  let len = chars.length()
+
+  // Check if we have any non-BMP characters
+  let mut has_non_bmp = false
+  for i = 0; i < len; i = i + 1 {
+    if is_non_bmp(chars[i]) {
+      has_non_bmp = true
+      break
+    }
+  }
+
+  // Only build UTF-16 offset array if needed (has non-BMP characters)
+  let utf16_offsets : Array[Int]? = if has_non_bmp {
+    let offsets : Array[Int] = Array::make(len + 1, 0)
+    let mut utf16_pos = 0
+    for i = 0; i < len; i = i + 1 {
+      offsets[i] = utf16_pos
+      if is_non_bmp(chars[i]) {
+        utf16_pos += 2 // Surrogate pair
+      } else {
+        utf16_pos += 1
+      }
+    }
+    offsets[len] = utf16_pos
+    Some(offsets)
+  } else {
+    None // All BMP: code point index == UTF-16 index
+  }
+
+  { source, chars, pos: 0, len, utf16_offsets }
+}
+
+///|
+/// Convert code point index to UTF-16 index
+fn Scanner::to_utf16_index(self : Scanner, cp_index : Int) -> Int {
+  match self.utf16_offsets {
+    Some(offsets) => offsets[cp_index]
+    None => cp_index // All BMP: same index
+  }
 }
 
 ///|
@@ -70,14 +116,27 @@ pub fn Scanner::remaining(self : Scanner) -> String {
   if self.pos >= self.len {
     ""
   } else {
-    self.source.unsafe_substring(start=self.pos, end=self.len)
+    // Convert code point position to UTF-16 position
+    let utf16_start = self.to_utf16_index(self.pos)
+    let utf16_end = self.to_utf16_index(self.len)
+    self.source.unsafe_substring(start=utf16_start, end=utf16_end)
   }
 }
 
 ///|
-/// Get substring from start to end position
+/// Get substring from start to end position (code point indices)
 pub fn Scanner::substring(self : Scanner, start : Int, end : Int) -> String {
-  self.source.unsafe_substring(start~, end~)
+  // Clamp indices to valid range
+  let clamped_start = if start < 0 { 0 } else if start > self.len { self.len } else { start }
+  let clamped_end = if end < 0 { 0 } else if end > self.len { self.len } else { end }
+  if clamped_start >= clamped_end {
+    ""
+  } else {
+    // Convert code point positions to UTF-16 positions
+    let utf16_start = self.to_utf16_index(clamped_start)
+    let utf16_end = self.to_utf16_index(clamped_end)
+    self.source.unsafe_substring(start=utf16_start, end=utf16_end)
+  }
 }
 
 ///|
@@ -126,7 +185,10 @@ pub fn Scanner::read_line(self : Scanner) -> String {
     }
     self.pos += 1
   }
-  self.source.unsafe_substring(start~, end=self.pos)
+  // Convert code point positions to UTF-16 positions
+  let utf16_start = self.to_utf16_index(start)
+  let utf16_end = self.to_utf16_index(self.pos)
+  self.source.unsafe_substring(start=utf16_start, end=utf16_end)
 }
 
 ///|
