@@ -150,6 +150,8 @@
     .container.view-editor .editor,
     .container.view-preview .preview {
       flex: 1;
+      max-width: 900px;
+      margin: 0 auto;
     }
 
     .editor, .preview {
@@ -160,6 +162,11 @@
 
     .container.view-editor .editor {
       border-right: none;
+    }
+
+    .container.view-editor,
+    .container.view-preview {
+      justify-content: center;
     }
 
     .editor {
