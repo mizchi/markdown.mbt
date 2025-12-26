@@ -136,14 +136,13 @@
       background: var(--selection-bg);
     }
 
-    /* Show textarea text during IME composition */
-    .editor-textarea.composing {
+    /* During IME composition */
+    .editor-wrapper.composing .editor-textarea {
       color: var(--text-primary);
     }
 
-    /* Hide highlight layer during IME composition */
-    .editor-highlight.composing-hide {
-      opacity: 0;
+    .editor-wrapper.composing .editor-highlight {
+      opacity: 0.3;
     }
 
     /* Visible highlight layer */
@@ -244,6 +243,7 @@
     import { highlight } from '../js/lezer_api.js';
 
     const editor = document.getElementById('editor');
+    const editorWrapper = document.querySelector('.editor-wrapper');
     const highlightEl = document.getElementById('highlight');
     const lineNumbersEl = document.getElementById('lineNumbers');
     const cursorPosEl = document.getElementById('cursorPos');
@@ -276,12 +276,10 @@ console.log(greet(user));
     // =========================================================================
 
     function updateHighlight() {
-      const code = editor.value;
+      // Skip during IME composition
+      if (isComposing) return;
 
-      // During IME composition, don't update highlight to avoid flickering
-      if (isComposing) {
-        return;
-      }
+      const code = editor.value;
 
       try {
         const html = highlight(code, currentLang);
@@ -352,29 +350,21 @@ console.log(greet(user));
 
     editor.addEventListener('compositionstart', (e) => {
       isComposing = true;
-      compositionText = '';
-      editor.classList.add('composing');
-      highlightEl.classList.add('composing-hide');
+      editorWrapper.classList.add('composing');
       imeIndicator.classList.add('active');
       statusEl.textContent = 'IME: Composing...';
-      console.log('compositionstart');
     });
 
     editor.addEventListener('compositionupdate', (e) => {
-      compositionText = e.data;
-      console.log('compositionupdate:', e.data);
+      // Don't update highlight during composition - let textarea show
     });
 
     editor.addEventListener('compositionend', (e) => {
       isComposing = false;
-      compositionText = '';
-      editor.classList.remove('composing');
-      highlightEl.classList.remove('composing-hide');
+      editorWrapper.classList.remove('composing');
       imeIndicator.classList.remove('active');
       statusEl.textContent = 'Ready';
-      console.log('compositionend:', e.data);
 
-      // Now update highlight after composition is complete
       updateHighlight();
       updateLineNumbers();
     });
