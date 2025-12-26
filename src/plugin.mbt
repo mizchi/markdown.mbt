@@ -23,7 +23,7 @@ pub struct CodeBlockInfo {
 ///|
 /// Parse code block info string into components
 pub fn parse_code_block_info(info : String) -> CodeBlockInfo {
-  let trimmed = info.trim_space().to_string()
+  let trimmed = info.trim().to_string()
   if trimmed.is_empty() {
     return { lang: "", filename: "", meta: "" }
   }
@@ -35,7 +35,7 @@ pub fn parse_code_block_info(info : String) -> CodeBlockInfo {
       let main = trimmed.unsafe_substring(start=0, end=idx)
       let meta_str = trimmed
         .unsafe_substring(start=idx + 1, end=trimmed_len)
-        .trim_space()
+        .trim()
         .to_string()
       (main, meta_str)
     }
