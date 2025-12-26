@@ -10,7 +10,8 @@
         "highlight_json",
         "highlight_html",
         "highlight_css",
-        "highlight_bash"
+        "highlight_bash",
+        "highlight_rust"
       ]
     }
   }

@@ -388,3 +388,10 @@ pub fn highlight_bash_shiki(source : String, theme : ShikiTheme) -> String {
   let tokens = @bash.highlight_bash(source)
   tokens_to_shiki_html(source, tokens, theme)
 }
+
+///|
+/// Highlight Rust to Shiki-compatible HTML
+pub fn highlight_rust_shiki(source : String, theme : ShikiTheme) -> String {
+  let tokens = @rust.highlight_rust(source)
+  tokens_to_shiki_html(source, tokens, theme)
+}

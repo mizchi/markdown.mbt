@@ -6,6 +6,7 @@
     "mizchi/markdown/lezer/json",
     "mizchi/markdown/lezer/html",
     "mizchi/markdown/lezer/css",
-    "mizchi/markdown/lezer/bash"
+    "mizchi/markdown/lezer/bash",
+    "mizchi/markdown/lezer/rust"
   ]
 }

@@ -41,3 +41,10 @@ pub fn highlight_css(source : String) -> String {
 pub fn highlight_bash(source : String) -> String {
   @shiki.highlight_bash_shiki(source, @shiki.github_dark())
 }
+
+///|
+/// Highlight Rust to Shiki-compatible HTML
+/// Theme: github-dark
+pub fn highlight_rust(source : String) -> String {
+  @shiki.highlight_rust_shiki(source, @shiki.github_dark())
+}

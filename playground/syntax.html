@@ -183,6 +183,7 @@
         <select id="lang">
           <option value="typescript">TypeScript</option>
           <option value="moonbit">MoonBit</option>
+          <option value="rust">Rust</option>
           <option value="json">JSON</option>
           <option value="html">HTML</option>
           <option value="css">CSS</option>
@@ -195,6 +196,7 @@
       <span style="color: var(--text-secondary); font-size: 12px;">Examples:</span>
       <button class="example-btn" data-lang="typescript" data-example="ts">TypeScript</button>
       <button class="example-btn" data-lang="moonbit" data-example="moonbit">MoonBit</button>
+      <button class="example-btn" data-lang="rust" data-example="rust">Rust</button>
       <button class="example-btn" data-lang="json" data-example="json">JSON</button>
       <button class="example-btn" data-lang="html" data-example="html">HTML</button>
       <button class="example-btn" data-lang="css" data-example="css">CSS</button>
@@ -398,7 +400,49 @@ main() {
   log "INFO" "Application finished"
 }
 
-main "\$@"`
+main "\$@"`,
+      rust: `use std::collections::HashMap;
+
+/// A simple key-value store
+#[derive(Debug, Clone)]
+struct Store<T> {
+    data: HashMap<String, T>,
+}
+
+impl<T: Clone> Store<T> {
+    /// Create a new empty store
+    fn new() -> Self {
+        Store {
+            data: HashMap::new(),
+        }
+    }
+
+    /// Insert a value
+    fn insert(&mut self, key: &str, value: T) {
+        self.data.insert(key.to_string(), value);
+    }
+
+    /// Get a value by key
+    fn get(&self, key: &str) -> Option<&T> {
+        self.data.get(key)
+    }
+}
+
+fn main() {
+    let mut store: Store<i32> = Store::new();
+    store.insert("count", 42);
+
+    match store.get("count") {
+        Some(value) => println!("Value: {}", value),
+        None => println!("Key not found"),
+    }
+
+    // Using a macro
+    let numbers = vec![1, 2, 3, 4, 5];
+    for n in &numbers {
+        println!("{}", n);
+    }
+}`
     };
 
     let highlight = null;

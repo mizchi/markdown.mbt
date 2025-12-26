@@ -599,6 +599,99 @@ test "shiki/bash: comment" {
 }
 
 // =============================================================================
+// Rust-specific Tests
+// =============================================================================
+
+test "shiki/rust: simple function" {
+  let source = "fn main() { println!(\"Hello\"); }"
+  let html = highlight_rust_shiki(source, github_dark())
+
+  assert_true!(html.contains("<pre class=\"shiki"))
+  assert_true!(html.contains("<span class=\"line\">"))
+}
+
+test "shiki/rust: struct definition" {
+  let source =
+    #|struct Point {
+    #|    x: f64,
+    #|    y: f64,
+    #|}
+  let html = highlight_rust_shiki(source, github_dark())
+
+  let line_count = count_occurrences(html, "<span class=\"line\">")
+  assert_true!(line_count >= 4)
+}
+
+test "shiki/rust: enum definition" {
+  let source =
+    #|enum Option<T> {
+    #|    Some(T),
+    #|    None,
+    #|}
+  let html = highlight_rust_shiki(source, github_dark())
+
+  assert_true!(html.contains("<pre class=\"shiki"))
+}
+
+test "shiki/rust: impl block" {
+  let source =
+    #|impl Point {
+    #|    fn new(x: f64, y: f64) -> Self {
+    #|        Point { x, y }
+    #|    }
+    #|}
+  let html = highlight_rust_shiki(source, github_dark())
+
+  assert_true!(html.contains("<pre class=\"shiki"))
+}
+
+test "shiki/rust: match expression" {
+  let source =
+    #|match value {
+    #|    Some(v) => v,
+    #|    None => 0,
+    #|}
+  let html = highlight_rust_shiki(source, github_dark())
+
+  assert_true!(html.contains("<pre class=\"shiki"))
+}
+
+test "shiki/rust: lifetimes" {
+  let source = "fn longest<'a>(x: &'a str, y: &'a str) -> &'a str { x }"
+  let html = highlight_rust_shiki(source, github_dark())
+
+  assert_true!(html.contains("<pre class=\"shiki"))
+}
+
+test "shiki/rust: macros" {
+  let source = "let v = vec![1, 2, 3];\nprintln!(\"{:?}\", v);"
+  let html = highlight_rust_shiki(source, github_dark())
+
+  assert_true!(html.contains("<pre class=\"shiki"))
+}
+
+test "shiki/rust: attributes" {
+  let source = "#[derive(Debug, Clone)]\nstruct Data { value: i32 }"
+  let html = highlight_rust_shiki(source, github_dark())
+
+  assert_true!(html.contains("<pre class=\"shiki"))
+}
+
+test "shiki/rust: doc comment" {
+  let source = "/// This is a doc comment\nfn documented() {}"
+  let html = highlight_rust_shiki(source, github_dark())
+
+  assert_true!(html.contains("<pre class=\"shiki"))
+}
+
+test "shiki/rust: use statement" {
+  let source = "use std::collections::HashMap;"
+  let html = highlight_rust_shiki(source, github_dark())
+
+  assert_true!(html.contains("<pre class=\"shiki"))
+}
+
+// =============================================================================
 // Edge Cases
 // =============================================================================
 

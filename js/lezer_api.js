@@ -11,6 +11,7 @@ import {
   highlight_html,
   highlight_css,
   highlight_bash,
+  highlight_rust,
 } from "../target/js/release/build/lezer_api/lezer_api.js";
 
 export {
@@ -20,6 +21,7 @@ export {
   highlight_html as highlightHTML,
   highlight_css as highlightCSS,
   highlight_bash as highlightBash,
+  highlight_rust as highlightRust,
 };
 
 /**
@@ -55,6 +57,9 @@ export function highlight(source, lang) {
     case "shell":
     case "zsh":
       return highlight_bash(source);
+    case "rust":
+    case "rs":
+      return highlight_rust(source);
     default:
       // Return plain text wrapped in shiki format
       return `<pre class="shiki" style="background-color: #0d1117; color: #c9d1d9"><code><span class="line"><span style="color: #c9d1d9">${escapeHtml(source)}</span></span></code></pre>`;
