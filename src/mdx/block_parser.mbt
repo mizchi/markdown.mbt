@@ -42,7 +42,7 @@ pub fn try_parse_mdx_blocks_from_block(
       // Split by newlines to handle multiple statements
       let lines = split_lines(content)
       for line in lines {
-        let trimmed = line.trim()
+        let trimmed = line.trim(chars=" \t\n\r")
 
         // Try import
         if trimmed.has_prefix("import ") || trimmed.has_prefix("import{") {
@@ -395,7 +395,7 @@ fn try_parse_export(content : String, span : @markdown.Span) -> MdxBlock? {
   let info = parse_export_kind(chars, pos)
 
   // Get the value (rest of the content)
-  let value = substring(chars, info.value_start, len).trim().to_string()
+  let value = substring(chars, info.value_start, len).trim(chars=" \t\n\r").to_string()
   Some(
     MdxBlock::ExportDecl(
       kind=info.kind,

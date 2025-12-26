@@ -966,7 +966,7 @@ fn BlockParser::try_parse_setext_heading(
 
   // Read content line
   let content = self.scanner.read_line()
-  if content.trim().is_empty() {
+  if content.trim(chars=" \t\n\r").is_empty() {
     return None
   }
   if char_is(self.scanner.peek(), '\n') {
@@ -997,7 +997,7 @@ fn BlockParser::try_parse_setext_heading(
   if char_is(self.scanner.peek(), '\n') {
     self.scanner.advance(1)
   }
-  let content_str = content.trim().to_string()
+  let content_str = content.trim(chars=" \t\n\r").to_string()
   let children = parse_inlines(content_str, strict=self.strict)
   Some(
     Block::Heading(
@@ -1394,7 +1394,7 @@ fn BlockParser::parse_paragraph(self : BlockParser, start : Int) -> Block? {
     }
   }
   let content = content_buf.to_string()
-  if content.trim().is_empty() {
+  if content.trim(chars=" \t\n\r").is_empty() {
     return None
   }
   let children = parse_inlines(content, strict=self.strict)
@@ -1441,7 +1441,7 @@ fn BlockParser::try_parse_table(self : BlockParser, start : Int) -> Block? {
   // Count header columns - must match separator columns for valid table
   let header_cells = split_table_cells(header_line)
   let header_col_count = header_cells
-    .filter(fn(c) { not(c.trim().is_empty()) })
+    .filter(fn(c) { not(c.trim(chars=" \t\n\r").is_empty()) })
     .length()
   if header_col_count != alignments.length() {
     // Column count mismatch - not a valid table
@@ -1488,7 +1488,7 @@ fn parse_table_alignments(line : String) -> Array[TableAlign] {
   let alignments : Array[TableAlign] = []
   let cells = split_table_cells(line)
   for cell in cells {
-    let trimmed = cell.trim().to_string()
+    let trimmed = cell.trim(chars=" \t\n\r").to_string()
     if trimmed.is_empty() {
       continue
     }
@@ -1536,7 +1536,7 @@ fn parse_table_row(
     if i >= expected_cols {
       break
     }
-    let content = cell.trim().to_string()
+    let content = cell.trim(chars=" \t\n\r").to_string()
     let children = parse_inlines(content, strict~)
     cells.push({ children, span: Span::new(0, content.length()) }, // Simplified span
     )
@@ -1576,13 +1576,13 @@ fn split_table_cells(line : String) -> Array[String] {
 
   // Add last cell
   let last = buf.to_string()
-  if not(last.trim().is_empty()) {
+  if not(last.trim(chars=" \t\n\r").is_empty()) {
     cells.push(last)
   }
 
   // Remove first cell if empty (leading |)
   if cells.length() > 0 {
-    match cells[0].trim().to_string() {
+    match cells[0].trim(chars=" \t\n\r").to_string() {
       "" => {
         let _ = cells.remove(0)
 
@@ -1661,7 +1661,7 @@ fn parse_simple_yaml(yaml : String) -> Array[(String, String)] {
   let entries : Array[(String, String)] = []
   let lines = yaml.split("\n")
   for line in lines {
-    let trimmed = line.to_string().trim()
+    let trimmed = line.to_string().trim(chars=" \t\n\r")
     if trimmed.is_empty() || trimmed.has_prefix("#") {
       continue
     }
@@ -1670,12 +1670,12 @@ fn parse_simple_yaml(yaml : String) -> Array[(String, String)] {
         let key = trimmed
           .view(end_offset=colon_idx)
           .to_string()
-          .trim()
+          .trim(chars=" \t\n\r")
           .to_string()
         let value = trimmed
           .view(start_offset=colon_idx + 1)
           .to_string()
-          .trim()
+          .trim(chars=" \t\n\r")
           .to_string()
         // Remove quotes if present
         let clean_value = if value.has_prefix("\"") && value.has_suffix("\"") {
