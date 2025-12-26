@@ -253,7 +253,7 @@ fn parse_and_sanitize_tag(
   // Check for comment
   if not(is_closing) && pos + 2 < len &&
      chars[pos] == '!' && chars[pos + 1] == '-' && chars[pos + 2] == '-' {
-    return parse_comment(chars, start)
+    return parse_comment(chars, start, config)
   }
 
   // Check for doctype
@@ -393,14 +393,22 @@ fn parse_and_sanitize_tag(
 
 ///|
 /// Parse HTML comment
-fn parse_comment(chars : Array[Char], start : Int) -> (String, Int) {
+fn parse_comment(
+  chars : Array[Char],
+  start : Int,
+  config : SanitizeConfig
+) -> (String, Int) {
   let len = chars.length()
   let mut pos = start + 4  // Skip <!--
 
   // Find end of comment -->
   while pos + 2 < len {
     if chars[pos] == '-' && chars[pos + 1] == '-' && chars[pos + 2] == '>' {
-      // Remove comments entirely for safety
+      if config.allow_comments {
+        // Return comment as-is
+        return (extract_string(chars, start, pos + 3), pos + 3)
+      }
+      // Remove comments for safety (default)
       // Comments can be used for XSS attacks (e.g., breaking out of textarea)
       return ("", pos + 3)
     }

@@ -254,6 +254,87 @@ test "sanitize: custom forbidden tags" {
 }
 
 // =============================================================================
+// Web Components / Custom Elements Tests
+// =============================================================================
+
+test "sanitize: custom elements blocked by default" {
+  let html = "<my-component>Content</my-component>"
+  let result = sanitize(html)
+  assert_eq(result.content.contains("my-component"), false)
+  assert_eq(result.content.contains("Content"), true)
+}
+
+test "sanitize: custom elements allowed with flag" {
+  let config : SanitizeConfig = {
+    ..SanitizeConfig::default(),
+    allow_custom_elements: true,
+  }
+  let html = "<my-component>Content</my-component>"
+  let result = sanitize(html, config~)
+  assert_eq(result.content.contains("my-component"), true)
+  assert_eq(result.content.contains("Content"), true)
+}
+
+test "sanitize: custom elements filtered by whitelist" {
+  let config : SanitizeConfig = {
+    ..SanitizeConfig::default(),
+    allow_custom_elements: true,
+    allowed_custom_elements: ["my-button", "my-input"],
+  }
+  let html = "<my-button>Click</my-button><my-evil>Bad</my-evil><my-input/>"
+  let result = sanitize(html, config~)
+  assert_eq(result.content.contains("my-button"), true)
+  assert_eq(result.content.contains("my-input"), true)
+  assert_eq(result.content.contains("my-evil"), false)
+}
+
+test "sanitize: with_custom_elements helper" {
+  let config = SanitizeConfig::with_custom_elements(["x-button", "x-card"])
+  let html = "<x-button>Click</x-button><x-card>Card</x-card><x-other>Other</x-other>"
+  let result = sanitize(html, config~)
+  assert_eq(result.content.contains("x-button"), true)
+  assert_eq(result.content.contains("x-card"), true)
+  assert_eq(result.content.contains("x-other"), false)
+}
+
+test "sanitize: custom elements preserve attributes" {
+  let config = SanitizeConfig::with_custom_elements(["my-element"])
+  let html = "<my-element data-value=\"123\" class=\"styled\">Content</my-element>"
+  let result = sanitize(html, config~)
+  assert_eq(result.content.contains("data-value"), true)
+  assert_eq(result.content.contains("class=\"styled\""), true)
+}
+
+test "sanitize: custom elements strip event handlers" {
+  let config = SanitizeConfig::with_custom_elements(["my-element"])
+  let html = "<my-element onclick=\"alert(1)\">Content</my-element>"
+  let result = sanitize(html, config~)
+  assert_eq(result.content.contains("my-element"), true)
+  assert_eq(result.content.contains("onclick"), false)
+}
+
+// =============================================================================
+// Comments Configuration Tests
+// =============================================================================
+
+test "sanitize: comments removed by default" {
+  let html = "<p>Hello</p><!-- comment --><p>World</p>"
+  let result = sanitize(html)
+  assert_eq(result.content.contains("comment"), false)
+  assert_eq(result.content, "<p>Hello</p><p>World</p>")
+}
+
+test "sanitize: comments allowed with flag" {
+  let config : SanitizeConfig = {
+    ..SanitizeConfig::default(),
+    allow_comments: true,
+  }
+  let html = "<p>Hello</p><!-- comment --><p>World</p>"
+  let result = sanitize(html, config~)
+  assert_eq(result.content.contains("<!-- comment -->"), true)
+}
+
+// =============================================================================
 // URL Sanitization Tests
 // =============================================================================
 

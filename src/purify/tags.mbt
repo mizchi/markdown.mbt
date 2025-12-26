@@ -113,6 +113,30 @@ pub fn is_allowed_tag(tag : String, config : SanitizeConfig) -> Bool {
     return true
   }
 
+  // Check custom elements (web components)
+  if config.allow_custom_elements && is_custom_element(lower) {
+    // If allowed_custom_elements is empty, allow all custom elements
+    // Otherwise, only allow those in the whitelist
+    if config.allowed_custom_elements.length() == 0 {
+      return true
+    }
+    if array_contains_str(config.allowed_custom_elements, lower) {
+      return true
+    }
+  }
+
+  false
+}
+
+///|
+/// Check if a tag name is a custom element (contains hyphen)
+pub fn is_custom_element(tag : String) -> Bool {
+  let chars = tag.to_array()
+  for c in chars {
+    if c == '-' {
+      return true
+    }
+  }
   false
 }
 

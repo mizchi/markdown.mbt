@@ -21,6 +21,11 @@ pub(all) struct SanitizeConfig {
   allow_aria_attr : Bool
   /// Allow target attribute on links
   allow_link_target : Bool
+  /// Allow custom elements (web components with hyphen in name)
+  allow_custom_elements : Bool
+  /// Allowed custom element names (e.g., ["my-component", "x-button"])
+  /// Only used when allow_custom_elements is true
+  allowed_custom_elements : Array[String]
   /// Additional allowed tags (lowercase)
   additional_tags : Array[String]
   /// Additional forbidden tags (lowercase)
@@ -31,6 +36,8 @@ pub(all) struct SanitizeConfig {
   forbidden_attrs : Array[String]
   /// Allowed URL schemes for links/images
   allowed_schemes : Array[String]
+  /// Allow HTML comments (disabled by default for safety)
+  allow_comments : Bool
 }
 
 ///|
@@ -43,11 +50,14 @@ pub fn SanitizeConfig::default() -> SanitizeConfig {
     allow_data_attr: true,
     allow_aria_attr: true,
     allow_link_target: false, // Prevent target="_blank" without rel="noopener"
+    allow_custom_elements: false, // Web components disabled by default
+    allowed_custom_elements: [],
     additional_tags: [],
     forbidden_tags: [],
     additional_attrs: [],
     forbidden_attrs: [],
     allowed_schemes: ["http", "https", "mailto", "tel"],
+    allow_comments: false, // Comments disabled by default for safety
   }
 }
 
@@ -61,11 +71,14 @@ pub fn SanitizeConfig::strict() -> SanitizeConfig {
     allow_data_attr: false,
     allow_aria_attr: false,
     allow_link_target: false,
+    allow_custom_elements: false,
+    allowed_custom_elements: [],
     additional_tags: [],
     forbidden_tags: [],
     additional_attrs: [],
     forbidden_attrs: [],
     allowed_schemes: ["http", "https", "mailto"],
+    allow_comments: false,
   }
 }
 
@@ -79,11 +92,26 @@ pub fn SanitizeConfig::permissive() -> SanitizeConfig {
     allow_data_attr: true,
     allow_aria_attr: true,
     allow_link_target: true,
+    allow_custom_elements: false, // Still disabled - must be explicitly whitelisted
+    allowed_custom_elements: [],
     additional_tags: [],
     forbidden_tags: [],
     additional_attrs: [],
     forbidden_attrs: [],
     allowed_schemes: ["http", "https", "mailto", "tel", "ftp"],
+    allow_comments: false,
+  }
+}
+
+///|
+/// Create config with specific web components allowed
+pub fn SanitizeConfig::with_custom_elements(
+  elements : Array[String]
+) -> SanitizeConfig {
+  {
+    ..SanitizeConfig::default(),
+    allow_custom_elements: true,
+    allowed_custom_elements: elements,
   }
 }
 
