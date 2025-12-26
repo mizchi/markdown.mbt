@@ -297,7 +297,6 @@ export const SyntaxHighlightEditor = forwardRef<SyntaxHighlightEditorHandle, Syn
   const highlightRef = useRef<HTMLDivElement>(null);
   const lineNumbersRef = useRef<HTMLDivElement>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
-  const isComposingRef = useRef(false);
   const initializedRef = useRef(false);
 
   useImperativeHandle(ref, () => ({
@@ -305,7 +304,7 @@ export const SyntaxHighlightEditor = forwardRef<SyntaxHighlightEditorHandle, Syn
   }));
 
   const updateHighlight = useCallback(() => {
-    if (isComposingRef.current || !highlightRef.current) return;
+    if (!highlightRef.current) return;
 
     try {
       const html = highlightMarkdown(value);
@@ -351,9 +350,8 @@ export const SyntaxHighlightEditor = forwardRef<SyntaxHighlightEditorHandle, Syn
   const handleInput = useCallback(
     (e: Event) => {
       const target = e.target as HTMLTextAreaElement;
-      if (!isComposingRef.current) {
-        onChange(target.value);
-      }
+      // Always update value to keep controlled component in sync
+      onChange(target.value);
       onCursorChange?.(target.selectionStart);
     },
     [onChange, onCursorChange]
@@ -373,18 +371,6 @@ export const SyntaxHighlightEditor = forwardRef<SyntaxHighlightEditorHandle, Syn
     [onChange]
   );
 
-  const handleCompositionStart = useCallback(() => {
-    isComposingRef.current = true;
-    wrapperRef.current?.classList.add("composing");
-  }, []);
-
-  const handleCompositionEnd = useCallback(() => {
-    isComposingRef.current = false;
-    wrapperRef.current?.classList.remove("composing");
-    if (editorRef.current) {
-      onChange(editorRef.current.value);
-    }
-  }, [onChange]);
 
   const handleCursorUpdate = useCallback(
     (e: Event) => {
@@ -408,8 +394,6 @@ export const SyntaxHighlightEditor = forwardRef<SyntaxHighlightEditorHandle, Syn
           onKeyDown={handleKeyDown}
           onKeyUp={handleCursorUpdate}
           onClick={handleCursorUpdate}
-          onCompositionStart={handleCompositionStart}
-          onCompositionEnd={handleCompositionEnd}
           spellcheck={false}
           autocomplete="off"
           autocorrect="off"
