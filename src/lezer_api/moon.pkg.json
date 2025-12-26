@@ -1,0 +1,17 @@
+{
+  "import": [
+    "mizchi/markdown/lezer/shiki"
+  ],
+  "link": {
+    "js": {
+      "exports": [
+        "highlight_typescript",
+        "highlight_moonbit",
+        "highlight_json",
+        "highlight_html",
+        "highlight_css",
+        "highlight_bash"
+      ]
+    }
+  }
+}
