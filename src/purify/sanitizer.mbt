@@ -213,6 +213,7 @@ fn try_skip_forbidden_tag_with_content(
 /// Check if a tag is forbidden and has content that should be skipped
 fn is_content_forbidden_tag(tag : String) -> Bool {
   // Tags whose content should also be removed
+  // Note: form is NOT included - we remove the tag but keep content
   tag == "script" ||
   tag == "style" ||
   tag == "noscript" ||
@@ -220,7 +221,6 @@ fn is_content_forbidden_tag(tag : String) -> Bool {
   tag == "object" ||
   tag == "embed" ||
   tag == "applet" ||
-  tag == "form" ||
   tag == "template"
 }
 
@@ -400,13 +400,14 @@ fn parse_comment(chars : Array[Char], start : Int) -> (String, Int) {
   // Find end of comment -->
   while pos + 2 < len {
     if chars[pos] == '-' && chars[pos + 1] == '-' && chars[pos + 2] == '>' {
-      // Return the comment as-is (comments are safe)
-      return (extract_string(chars, start, pos + 3), pos + 3)
+      // Remove comments entirely for safety
+      // Comments can be used for XSS attacks (e.g., breaking out of textarea)
+      return ("", pos + 3)
     }
     pos += 1
   }
 
-  // Unclosed comment - return as text
+  // Unclosed comment - remove entirely
   ("", len)
 }
 
@@ -460,10 +461,16 @@ fn parse_attribute_value(chars : Array[Char], start : Int) -> (String, Int) {
     (decode_html_entities(value), pos)
   } else {
     // Unquoted value
+    // Note: '/' is valid in unquoted values (e.g., data:image/jpeg)
+    // Only stop on '/>' which indicates self-closing tag
     let value_start = pos
     while pos < len &&
           not(is_whitespace_char(chars[pos])) &&
-          chars[pos] != '>' && chars[pos] != '/' {
+          chars[pos] != '>' {
+      // Check for self-closing tag '/>'
+      if chars[pos] == '/' && pos + 1 < len && chars[pos + 1] == '>' {
+        break
+      }
       pos += 1
     }
     (decode_html_entities(extract_string(chars, value_start, pos)), pos)

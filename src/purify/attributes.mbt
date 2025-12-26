@@ -22,9 +22,10 @@ pub fn allowed_attributes() -> Array[String] {
     // List attributes
     "value", "reversed", "start",
     // Form attributes (limited)
-    "name", "placeholder", "readonly", "disabled", "required",
+    // Note: "name" is excluded to prevent DOM clobbering attacks
+    "placeholder", "readonly", "disabled", "required", "checked",
     "maxlength", "minlength", "pattern", "size", "rows", "cols",
-    "for", "autocomplete",
+    "for", "autocomplete", "selected", "multiple",
     // Media attributes
     "controls", "loop", "muted", "poster", "preload",
     // Misc
@@ -73,6 +74,8 @@ pub fn forbidden_attributes() -> Array[String] {
     "ping", "dynsrc", "lowsrc",
     // Background (can load external resources)
     "background",
+    // DOM clobbering prevention (name attribute on img/form elements)
+    "name",
   ]
 }
 
@@ -194,7 +197,9 @@ pub fn is_forbidden_attribute(attr_name : String, config : SanitizeConfig) -> Bo
 ///|
 /// Check if a URL is safe (no javascript:, vbscript:, data: with scripts)
 pub fn is_safe_url(url : String, config : SanitizeConfig) -> Bool {
-  let trimmed = trim_string(url)
+  // First strip control characters (used for obfuscation)
+  let cleaned = strip_control_chars(url)
+  let trimmed = trim_string(cleaned)
   let lower = to_lowercase_attr(trimmed)
 
   // Check for dangerous protocols
@@ -260,6 +265,21 @@ fn extract_protocol(url : String) -> String? {
 // =============================================================================
 // Helper Functions
 // =============================================================================
+
+///|
+/// Strip control characters (ASCII 0-31) used for URL obfuscation
+fn strip_control_chars(s : String) -> String {
+  let chars = s.to_array()
+  let buf = StringBuilder::new()
+  for c in chars {
+    let code = c.to_int()
+    // Keep only printable ASCII and higher Unicode
+    if code >= 32 {
+      buf.write_char(c)
+    }
+  }
+  buf.to_string()
+}
 
 ///|
 fn to_lowercase_attr(s : String) -> String {
