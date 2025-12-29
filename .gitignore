@@ -6,3 +6,5 @@ src/gfm_tests/
 playground/dist/
 wrangler.json
 bench_results.csv
+playwright-report
+test-results/

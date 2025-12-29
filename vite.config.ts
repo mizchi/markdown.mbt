@@ -2,9 +2,8 @@ import { defineConfig } from "vite";
 
 export default defineConfig({
   esbuild: {
-    jsxFactory: "h",
-    jsxFragment: "Fragment",
-    jsxImportSource: "preact",
+    jsx: "automatic",
+    jsxImportSource: "@luna_ui/luna",
   },
   root: "playground",
 });

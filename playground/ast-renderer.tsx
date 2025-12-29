@@ -1,6 +1,5 @@
-///| Preact renderer for mdast AST
+///| Luna UI renderer for mdast AST
 
-import type { ComponentChildren } from "preact";
 import type {
   Root,
   RootContent,
@@ -12,6 +11,30 @@ import type {
 import type { Position } from "unist";
 // @ts-ignore - no type declarations for lezer_api.js
 import { highlight } from "../js/lezer_api.js";
+
+// Helper component to render raw HTML using ref callback
+function RawHtml({ html, ...props }: { html: string } & Record<string, unknown>) {
+  return (
+    <div
+      {...props}
+      ref={(el) => {
+        if (el) el.innerHTML = html;
+      }}
+    />
+  );
+}
+
+// Helper component to render raw HTML in a span
+function RawHtmlSpan({ html, ...props }: { html: string } & Record<string, unknown>) {
+  return (
+    <span
+      {...props}
+      ref={(el) => {
+        if (el) el.innerHTML = html;
+      }}
+    />
+  );
+}
 
 // Language alias mapping
 const langMap: Record<string, string> = {
@@ -53,7 +76,7 @@ function getSpan(node: { position?: Position | undefined }): string {
 }
 
 // Block renderer
-export function renderBlock(block: RootContent, key?: string | number): ComponentChildren {
+export function renderBlock(block: RootContent, key?: string | number): JSX.Element | null {
   switch (block.type) {
     case "paragraph":
       return (
@@ -78,10 +101,10 @@ export function renderBlock(block: RootContent, key?: string | number): Componen
       if (highlighted) {
         // Use highlighted HTML from lezer (shiki format)
         return (
-          <div
+          <RawHtml
             key={key}
             data-span={getSpan(block)}
-            dangerouslySetInnerHTML={{ __html: highlighted }}
+            html={highlighted}
           />
         );
       }
@@ -131,10 +154,10 @@ export function renderBlock(block: RootContent, key?: string | number): Componen
 
     case "html":
       return (
-        <div
+        <RawHtml
           key={key}
           data-span={getSpan(block)}
-          dangerouslySetInnerHTML={{ __html: block.value }}
+          html={block.value}
         />
       );
 
@@ -190,7 +213,7 @@ export function renderBlock(block: RootContent, key?: string | number): Componen
 }
 
 // List item renderer
-function renderListItem(item: ListItem, key: number): ComponentChildren {
+function renderListItem(item: ListItem, key: number): JSX.Element {
   const isTask = item.checked != null;
 
   if (isTask) {
@@ -221,7 +244,7 @@ function renderTableCell(
   key: number,
   Tag: "th" | "td",
   align: AlignType | undefined
-): ComponentChildren {
+): JSX.Element {
   const style = align ? { textAlign: align } : undefined;
   return (
     <Tag key={key} style={style} data-span={getSpan(cell)}>
@@ -231,7 +254,7 @@ function renderTableCell(
 }
 
 // Inline renderer
-export function renderInline(inline: PhrasingContent, key?: string | number): ComponentChildren {
+export function renderInline(inline: PhrasingContent, key?: string | number): JSX.Element | string | null {
   switch (inline.type) {
     case "text":
       // Check for newline (soft break representation)
@@ -298,7 +321,7 @@ export function renderInline(inline: PhrasingContent, key?: string | number): Co
 
     case "html":
       return (
-        <span key={key} dangerouslySetInnerHTML={{ __html: inline.value }} />
+        <RawHtmlSpan key={key} html={inline.value} />
       );
 
     case "footnoteReference":
@@ -315,6 +338,7 @@ export function renderInline(inline: PhrasingContent, key?: string | number): Co
 
 // Document renderer component
 export function MarkdownRenderer({ ast }: { ast: Root }) {
+  if (!ast) return null;
   return (
     <div class="markdown-body" data-span={getSpan(ast)}>
       {ast.children.map((block, i) => renderBlock(block, i))}
