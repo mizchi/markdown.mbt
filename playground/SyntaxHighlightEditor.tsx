@@ -21,11 +21,13 @@ const langMap: Record<string, string> = {
   md: "markdown",
   markdown: "markdown",
   sh: "bash",
+  bash: "bash",
   shell: "bash",
   zsh: "bash",
+  rs: "rust",
 };
 
-const supportedLangs = ["typescript", "moonbit", "json", "html", "css", "bash"];
+const supportedLangs = ["typescript", "moonbit", "json", "html", "css", "bash", "rust"];
 
 function escapeHtml(text: string): string {
   return text
