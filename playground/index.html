@@ -270,6 +270,14 @@
       color: var(--text-primary);
     }
 
+    .highlight-line {
+      min-height: 1.5em; /* Match line-height */
+    }
+
+    .highlight-line:empty::after {
+      content: "\00a0"; /* Non-breaking space for empty lines */
+    }
+
     /* Simple editor (plain textarea) */
     .simple-editor {
       width: 100%;

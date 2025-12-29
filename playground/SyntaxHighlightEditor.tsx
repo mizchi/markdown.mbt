@@ -1,13 +1,14 @@
-import { useRef, useEffect, useCallback, useState, useImperativeHandle } from "preact/hooks";
-import { forwardRef } from "preact/compat";
+import { createEffect, onMount, createSignal, createMemo, For } from "@luna_ui/luna";
 // @ts-ignore - no type declarations for lezer_api.js
 import { highlight } from "../js/lezer_api.js";
 
 interface SyntaxHighlightEditorProps {
-  value: string;
+  value: () => string;  // Always accessor for fine-grained reactivity
   onChange: (value: string) => void;
   onCursorChange?: (position: number) => void;
   initialCursorPosition?: number;
+  ref?: (handle: SyntaxHighlightEditorHandle) => void;
+  showLineNumbers?: boolean; // Default: false for better performance
 }
 
 // Language alias mapping
@@ -29,22 +30,72 @@ const langMap: Record<string, string> = {
 
 const supportedLangs = ["typescript", "moonbit", "json", "html", "css", "bash", "rust"];
 
-function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;");
+// Cache for code block highlighting - avoids re-highlighting unchanged blocks
+const codeBlockCache = new Map<string, string[]>();
+// Cache for markdown line highlighting
+const lineCache = new Map<string, string>();
+// Cache for inline highlighting
+const inlineCache = new Map<string, string>();
+const MAX_CACHE_SIZE = 100;
+const MAX_INLINE_CACHE_SIZE = 200;
+
+function getCachedHighlight(code: string, lang: string): string[] | undefined {
+  return codeBlockCache.get(`${lang}:${code}`);
 }
 
-function highlightMarkdown(source: string): string {
+function setCachedHighlight(code: string, lang: string, result: string[]): void {
+  const key = `${lang}:${code}`;
+  // Simple LRU-ish: clear oldest entries when cache is full
+  if (codeBlockCache.size >= MAX_CACHE_SIZE) {
+    const firstKey = codeBlockCache.keys().next().value;
+    if (firstKey) codeBlockCache.delete(firstKey);
+  }
+  codeBlockCache.set(key, result);
+}
+
+// Optimized escapeHtml - fast path for strings without special chars
+function escapeHtml(text: string): string {
+  // Fast path: check if any escaping is needed
+  let needsEscape = false;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    if (c === "&" || c === "<" || c === ">" || c === '"') {
+      needsEscape = true;
+      break;
+    }
+  }
+  if (!needsEscape) return text;
+
+  // Slow path: build escaped string
+  const parts: string[] = [];
+  let start = 0;
+  for (let i = 0; i < text.length; i++) {
+    const c = text[i];
+    let escape: string | null = null;
+    switch (c) {
+      case "&": escape = "&amp;"; break;
+      case "<": escape = "&lt;"; break;
+      case ">": escape = "&gt;"; break;
+      case '"': escape = "&quot;"; break;
+    }
+    if (escape) {
+      if (i > start) parts.push(text.slice(start, i));
+      parts.push(escape);
+      start = i + 1;
+    }
+  }
+  if (start < text.length) parts.push(text.slice(start));
+  return parts.join("");
+}
+
+// Returns array of highlighted lines (for incremental updates)
+function highlightMarkdownLines(source: string): string[] {
   const lines = source.split("\n");
   const result: string[] = [];
   let inCodeBlock = false;
   let codeBlockLang = "";
   let codeBlockFenceLen = 0;
   let codeBlockContent: string[] = [];
-  let codeBlockStartLine = -1;
 
   for (let i = 0; i < lines.length; i++) {
     const line = lines[i]!;
@@ -58,7 +109,6 @@ function highlightMarkdown(source: string): string {
       codeBlockFenceLen = fenceMatch[1]!.length;
       codeBlockLang = (fenceMatch[2] || "").toLowerCase();
       codeBlockContent = [];
-      codeBlockStartLine = i;
       result.push(highlightFenceLine(line, fenceMatch[1]!, fenceMatch[2] || ""));
     } else if (inCodeBlock) {
       // Check for end of code block
@@ -66,7 +116,6 @@ function highlightMarkdown(source: string): string {
       if (endFenceMatch && endFenceMatch[1]!.length >= codeBlockFenceLen) {
         // End of code block - highlight and add all content lines
         const highlightedLines = highlightCodeBlockLines(codeBlockContent, codeBlockLang);
-        // Ensure we have the same number of lines
         for (let j = 0; j < codeBlockContent.length; j++) {
           result.push(highlightedLines[j] ?? escapeHtml(codeBlockContent[j]!));
         }
@@ -84,14 +133,19 @@ function highlightMarkdown(source: string): string {
     }
   }
 
-  // Handle unclosed code block - add accumulated lines as escaped text
+  // Handle unclosed code block
   if (inCodeBlock) {
     for (const line of codeBlockContent) {
       result.push(escapeHtml(line));
     }
   }
 
-  return result.join("\n");
+  return result;
+}
+
+// Legacy function for compatibility - returns joined string
+function highlightMarkdown(source: string): string {
+  return highlightMarkdownLines(source).join("\n");
 }
 
 function highlightFenceLine(line: string, fence: string, lang: string): string {
@@ -106,18 +160,22 @@ function highlightCodeBlockLines(lines: string[], lang: string): string[] {
   if (lines.length === 0) return [];
 
   const mappedLang = langMap[lang] || lang;
+  const code = lines.join("\n");
+
+  // Check cache first
+  const cached = getCachedHighlight(code, mappedLang);
+  if (cached) return cached;
+
+  let result: string[];
 
   // For markdown blocks, recursively highlight
   if (mappedLang === "markdown") {
-    const code = lines.join("\n");
     const highlighted = highlightMarkdown(code);
-    return highlighted.split("\n");
+    result = highlighted.split("\n");
   }
-
   // Use our syntax highlighters for supported languages
-  if (supportedLangs.includes(mappedLang)) {
+  else if (supportedLangs.includes(mappedLang)) {
     try {
-      const code = lines.join("\n");
       const html = highlight(code, mappedLang);
       // Extract content from shiki output
       const match = html.match(/<code>([\s\S]*)<\/code>/);
@@ -132,20 +190,44 @@ function highlightCodeBlockLines(lines: string[], lang: string): string[] {
         if (resultLines.length > 0 && resultLines[resultLines.length - 1] === "") {
           resultLines.pop();
         }
-        return resultLines;
+        result = resultLines;
+      } else {
+        result = lines.map((line) => escapeHtml(line));
       }
     } catch (e) {
       console.error("Code highlight error:", e);
+      result = lines.map((line) => escapeHtml(line));
     }
+  } else {
+    // Fallback: just escape each line
+    result = lines.map((line) => escapeHtml(line));
   }
 
-  // Fallback: just escape each line
-  return lines.map((line) => escapeHtml(line));
+  // Cache the result
+  setCachedHighlight(code, mappedLang, result);
+  return result;
 }
 
 function highlightMarkdownLine(line: string): string {
   // Empty line
   if (!line) return "";
+
+  // Check cache first
+  const cached = lineCache.get(line);
+  if (cached !== undefined) return cached;
+
+  const result = highlightMarkdownLineImpl(line);
+
+  // Cache the result (with LRU-ish eviction)
+  if (lineCache.size >= MAX_CACHE_SIZE) {
+    const firstKey = lineCache.keys().next().value;
+    if (firstKey !== undefined) lineCache.delete(firstKey);
+  }
+  lineCache.set(line, result);
+  return result;
+}
+
+function highlightMarkdownLineImpl(line: string): string {
 
   // Heading
   const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
@@ -191,6 +273,22 @@ function highlightMarkdownLine(line: string): string {
 function highlightInline(text: string): string {
   if (!text) return "";
 
+  // Check cache first
+  const cached = inlineCache.get(text);
+  if (cached !== undefined) return cached;
+
+  const result = highlightInlineImpl(text);
+
+  // Cache the result
+  if (inlineCache.size >= MAX_INLINE_CACHE_SIZE) {
+    const firstKey = inlineCache.keys().next().value;
+    if (firstKey !== undefined) inlineCache.delete(firstKey);
+  }
+  inlineCache.set(text, result);
+  return result;
+}
+
+function highlightInlineImpl(text: string): string {
   let result = "";
   let i = 0;
   const len = text.length;
@@ -289,108 +387,314 @@ function highlightInline(text: string): string {
   return result;
 }
 
+// Fast DOM update - use textContent for plain text, innerHTML only when needed
+function setLineContent(el: HTMLElement, html: string): void {
+  if (!html || html === "&nbsp;") {
+    el.textContent = "\u00A0"; // Non-breaking space
+    return;
+  }
+  // Check if HTML contains any tags (fast check)
+  const hasTag = html.indexOf("<") !== -1;
+  if (!hasTag) {
+    // Plain text with HTML entities - decode and use textContent
+    // Fast path: check for common entities
+    if (html.indexOf("&") !== -1) {
+      // Has entities - decode them
+      el.textContent = html
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .replace(/&quot;/g, '"');
+    } else {
+      // Pure text - use directly
+      el.textContent = html;
+    }
+  } else {
+    // Has HTML formatting - must use innerHTML
+    el.innerHTML = html;
+  }
+}
+
 export interface SyntaxHighlightEditorHandle {
   focus: () => void;
 }
 
-export const SyntaxHighlightEditor = forwardRef<SyntaxHighlightEditorHandle, SyntaxHighlightEditorProps>(
-  function SyntaxHighlightEditor({ value, onChange, onCursorChange, initialCursorPosition }, ref) {
-  const editorRef = useRef<HTMLTextAreaElement>(null);
-  const highlightRef = useRef<HTMLDivElement>(null);
-  const lineNumbersRef = useRef<HTMLDivElement>(null);
-  const wrapperRef = useRef<HTMLDivElement>(null);
-  const initializedRef = useRef(false);
+export function SyntaxHighlightEditor(props: SyntaxHighlightEditorProps) {
+  let editorRef: HTMLTextAreaElement | null = null;
+  let highlightRef: HTMLDivElement | null = null;
+  let lineNumbersRef: HTMLDivElement | null = null;
+  let wrapperRef: HTMLDivElement | null = null;
+  let initialized = false;
 
-  useImperativeHandle(ref, () => ({
-    focus: () => editorRef.current?.focus(),
-  }));
+  // Incremental update state - track previous highlighted lines for diff
+  let prevHighlightedLines: string[] = [];
+  let lineElements: HTMLDivElement[] = [];
+  let lastCursorLine = -1; // Track which line cursor is on for targeted updates
+  let lastValueLength = 0; // Track value length for fast newline detection
 
-  const updateHighlight = useCallback(() => {
-    if (!highlightRef.current) return;
+  // Track if change came from user input (to skip redundant textarea.value update)
+  let isUserInput = false;
 
-    try {
-      const html = highlightMarkdown(value);
-      highlightRef.current.innerHTML = html;
-    } catch (e) {
-      console.error("Highlight error:", e);
-      highlightRef.current.innerHTML = escapeHtml(value);
+  // Signal for line count - enables efficient updates (only when count changes)
+  const [lineCount, setLineCount] = createSignal(1);
+
+  // Expose handle via ref prop
+  onMount(() => {
+    if (props.ref) {
+      props.ref({
+        focus: () => editorRef?.focus(),
+      });
     }
-  }, [value]);
+  });
 
-  const updateLineNumbers = useCallback(() => {
-    if (!lineNumbersRef.current) return;
-    const lines = value.split("\n");
-    let html = "";
-    for (let i = 1; i <= lines.length; i++) {
-      html += `<div class="line-number">${i}</div>`;
-    }
-    lineNumbersRef.current.innerHTML = html;
-  }, [value]);
-
-  const syncScroll = useCallback(() => {
-    if (!editorRef.current || !highlightRef.current || !lineNumbersRef.current) return;
-    highlightRef.current.style.transform = `translate(${-editorRef.current.scrollLeft}px, ${-editorRef.current.scrollTop}px)`;
-    lineNumbersRef.current.style.transform = `translateY(${-editorRef.current.scrollTop}px)`;
-  }, []);
-
-  // Update on value change
-  useEffect(() => {
-    updateHighlight();
-    updateLineNumbers();
-  }, [updateHighlight, updateLineNumbers]);
-
-  // Restore initial cursor position once
-  useEffect(() => {
-    if (!initializedRef.current && editorRef.current && initialCursorPosition != null && initialCursorPosition > 0) {
-      const pos = Math.min(initialCursorPosition, value.length);
-      editorRef.current.setSelectionRange(pos, pos);
-      editorRef.current.focus();
-      initializedRef.current = true;
-    }
-  }, [initialCursorPosition, value.length]);
-
-  const handleInput = useCallback(
-    (e: Event) => {
-      const target = e.target as HTMLTextAreaElement;
-      // Always update value to keep controlled component in sync
-      onChange(target.value);
-      onCursorChange?.(target.selectionStart);
-    },
-    [onChange, onCursorChange]
-  );
-
-  const handleKeyDown = useCallback(
-    (e: KeyboardEvent) => {
-      if (e.key === "Tab") {
-        e.preventDefault();
-        const target = e.target as HTMLTextAreaElement;
-        const start = target.selectionStart;
-        const end = target.selectionEnd;
-        target.setRangeText("  ", start, end, "end");
-        onChange(target.value);
+  // Get line number and line content from cursor position (0-indexed)
+  // Returns [lineNumber, lineStart, lineEnd] without splitting entire string
+  const getLineInfo = (text: string, pos: number): [number, number, number] => {
+    let line = 0;
+    let lineStart = 0;
+    for (let i = 0; i < pos && i < text.length; i++) {
+      if (text[i] === "\n") {
+        line++;
+        lineStart = i + 1;
       }
-    },
-    [onChange]
-  );
+    }
+    // Find line end
+    let lineEnd = text.indexOf("\n", pos);
+    if (lineEnd === -1) lineEnd = text.length;
+    return [line, lineStart, lineEnd];
+  };
+
+  // Count lines without creating array (faster than split for large docs)
+  const countLines = (text: string): number => {
+    let count = 1;
+    for (let i = 0; i < text.length; i++) {
+      if (text[i] === "\n") count++;
+    }
+    return count;
+  };
+
+  // Highlight a single line
+  const highlightSingleLine = (line: string): string => {
+    // Check cache first
+    const cached = lineCache.get(line);
+    if (cached !== undefined) return cached;
+    return highlightMarkdownLine(line);
+  };
+
+  // Incremental highlight update - only update changed lines
+  const updateHighlight = () => {
+    if (!highlightRef || !editorRef) return;
+    const value = props.value();
+    const valueLen = value.length;
+    const cursorPos = editorRef.selectionStart;
+    const [cursorLine, lineStart, lineEnd] = getLineInfo(value, cursorPos);
+
+    // First render - must do full highlight
+    if (lineElements.length === 0) {
+      const newHighlightedLines = highlightMarkdownLines(value);
+      highlightRef.innerHTML = "";
+      for (let i = 0; i < newHighlightedLines.length; i++) {
+        const div = document.createElement("div");
+        div.className = "highlight-line";
+        setLineContent(div, newHighlightedLines[i]!);
+        highlightRef.appendChild(div);
+        lineElements.push(div);
+      }
+      prevHighlightedLines = newHighlightedLines;
+      lastCursorLine = cursorLine;
+      lastValueLength = valueLen;
+      return;
+    }
+
+    // Fast check for line count change:
+    // - If exactly 1 char was added/removed, check if it's a newline
+    // - Otherwise, do full count
+    const lengthDiff = valueLen - lastValueLength;
+    let lineCountChanged = false;
+
+    if (lengthDiff === 1) {
+      // Single char added - check if it's newline at cursor-1
+      lineCountChanged = cursorPos > 0 && value[cursorPos - 1] === "\n";
+    } else if (lengthDiff === -1) {
+      // Single char deleted - cursor line changed means newline was deleted
+      lineCountChanged = cursorLine !== lastCursorLine;
+    } else if (lengthDiff !== 0) {
+      // Multiple chars changed (paste, cut, etc.) - must count
+      const newLineCount = countLines(value);
+      lineCountChanged = newLineCount !== prevHighlightedLines.length;
+    }
+
+    lastValueLength = valueLen;
+
+    // If line count changed or cursor jumped lines, do full re-highlight
+    if (lineCountChanged || Math.abs(cursorLine - lastCursorLine) > 1) {
+      const newHighlightedLines = highlightMarkdownLines(value);
+      const maxLen = Math.max(lineElements.length, newHighlightedLines.length);
+
+      for (let i = 0; i < maxLen; i++) {
+        if (i >= newHighlightedLines.length) {
+          lineElements[i]?.remove();
+        } else if (i >= lineElements.length) {
+          const div = document.createElement("div");
+          div.className = "highlight-line";
+          setLineContent(div, newHighlightedLines[i]!);
+          highlightRef.appendChild(div);
+          lineElements.push(div);
+        } else if (prevHighlightedLines[i] !== newHighlightedLines[i]) {
+          setLineContent(lineElements[i], newHighlightedLines[i]!);
+        }
+      }
+
+      if (newHighlightedLines.length < lineElements.length) {
+        lineElements.length = newHighlightedLines.length;
+      }
+
+      prevHighlightedLines = newHighlightedLines;
+      lastCursorLine = cursorLine;
+      return;
+    }
+
+    // Fast path: only the cursor line changed (single character typed)
+    // Extract just the current line without splitting entire string
+    const rawLine = value.slice(lineStart, lineEnd);
+
+    if (lineElements[cursorLine]) {
+      const newHighlight = highlightSingleLine(rawLine);
+      if (prevHighlightedLines[cursorLine] !== newHighlight) {
+        setLineContent(lineElements[cursorLine], newHighlight);
+        prevHighlightedLines[cursorLine] = newHighlight;
+      }
+    }
+
+    lastCursorLine = cursorLine;
+  };
+
+  const syncScroll = () => {
+    if (!editorRef || !highlightRef) return;
+    highlightRef.style.transform = `translate(${-editorRef.scrollLeft}px, ${-editorRef.scrollTop}px)`;
+    if (props.showLineNumbers && lineNumbersRef) {
+      lineNumbersRef.style.transform = `translateY(${-editorRef.scrollTop}px)`;
+    }
+  };
+
+  // Direct highlight update - Luna's signal batch handles scheduling via queueMicrotask
+  const scheduleHighlight = () => {
+    updateHighlight();
+  };
+
+  // Update textarea value and schedule highlight when value changes
+  createEffect(() => {
+    // Access props.value() to subscribe to changes
+    const value = props.value();
+
+    // Only update textarea if change came from external source (not user input)
+    // Skip both the comparison and assignment for user input (both are expensive for large docs)
+    if (isUserInput) {
+      isUserInput = false; // Reset flag
+    } else if (editorRef) {
+      // External change - must update textarea
+      editorRef.value = value;
+    }
+
+    // Update line count only if line numbers are shown
+    if (props.showLineNumbers) {
+      // Count newlines directly (faster than split for large docs)
+      let newLineCount = 1;
+      for (let i = 0; i < value.length; i++) {
+        if (value[i] === "\n") newLineCount++;
+      }
+      if (newLineCount !== lineCount()) {
+        setLineCount(newLineCount);
+      }
+    }
+
+    // Schedule highlight update for next frame
+    scheduleHighlight();
+  });
 
 
-  const handleCursorUpdate = useCallback(
-    (e: Event) => {
+  // Setup function called when editor ref is set
+  const setupEditor = (el: HTMLTextAreaElement) => {
+    editorRef = el;
+    const value = props.value();
+
+    // Set initial value
+    el.value = value;
+
+    // Reset scroll position
+    el.scrollTop = 0;
+    el.scrollLeft = 0;
+
+    // Defer initial line count to avoid updating signal during render
+    if (props.showLineNumbers) {
+      queueMicrotask(() => {
+        setLineCount(value.split("\n").length);
+      });
+    }
+
+    // Initial highlight (synchronous for initial render)
+    updateHighlight();
+
+    // Reset transforms
+    if (highlightRef) {
+      highlightRef.style.transform = "translate(0px, 0px)";
+    }
+    if (props.showLineNumbers && lineNumbersRef) {
+      lineNumbersRef.style.transform = "translateY(0px)";
+    }
+
+    // Restore cursor position
+    if (props.initialCursorPosition != null && props.initialCursorPosition > 0) {
+      const pos = Math.min(props.initialCursorPosition, value.length);
+      el.setSelectionRange(pos, pos);
+      initialized = true;
+    }
+  };
+
+  const handleInput = (e: Event) => {
+    const target = e.target as HTMLTextAreaElement;
+    isUserInput = true; // Mark as user input to skip redundant textarea.value update
+    props.onChange(target.value);
+    props.onCursorChange?.(target.selectionStart);
+  };
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === "Tab") {
+      e.preventDefault();
       const target = e.target as HTMLTextAreaElement;
-      onCursorChange?.(target.selectionStart);
-    },
-    [onCursorChange]
-  );
+      const start = target.selectionStart;
+      const end = target.selectionEnd;
+      target.setRangeText("  ", start, end, "end");
+      isUserInput = true; // Mark as user input
+      props.onChange(target.value);
+    }
+  };
+
+  const handleCursorUpdate = (e: Event) => {
+    const target = e.target as HTMLTextAreaElement;
+    props.onCursorChange?.(target.selectionStart);
+  };
+
+  // Memoized array for For component - fine-grained updates (fixed in Luna 0.3.3)
+  const lineNumbersArray = createMemo(() => {
+    const count = lineCount();
+    return Array.from({ length: count }, (_, i) => i + 1);
+  });
 
   return (
     <div class="syntax-editor-container">
-      <div class="line-numbers" ref={lineNumbersRef}></div>
-      <div class="editor-wrapper" ref={wrapperRef}>
-        <div class="editor-highlight" ref={highlightRef}></div>
+      {props.showLineNumbers && (
+        <div class="line-numbers" ref={(el) => { lineNumbersRef = el; }}>
+          <For each={lineNumbersArray}>
+            {(num) => <div class="line-number">{num}</div>}
+          </For>
+        </div>
+      )}
+      <div class="editor-wrapper" ref={(el) => { wrapperRef = el; }}>
+        <div class="editor-highlight" ref={(el) => { highlightRef = el; }}></div>
         <textarea
-          ref={editorRef}
+          ref={setupEditor}
           class="editor-textarea"
-          value={value}
           onInput={handleInput}
           onScroll={syncScroll}
           onKeyDown={handleKeyDown}
@@ -404,4 +708,4 @@ export const SyntaxHighlightEditor = forwardRef<SyntaxHighlightEditorHandle, Syn
       </div>
     </div>
   );
-});
+}

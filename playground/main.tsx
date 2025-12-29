@@ -1,5 +1,4 @@
-import { render } from "preact";
-import { useState, useCallback, useEffect, useRef } from "preact/hooks";
+import { render, createSignal, createEffect, onMount, onCleanup, Show, batch } from "@luna_ui/luna";
 import { parse } from "../js/api.js";
 import type { Root } from "mdast";
 import { MarkdownRenderer } from "./ast-renderer";
@@ -131,37 +130,6 @@ function saveUIState(state: Partial<UIState>): void {
   }
 }
 
-// Debounce hook
-function useDebounce<T>(value: T, delay: number): T {
-  const [debouncedValue, setDebouncedValue] = useState<T>(value);
-
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedValue(value), delay);
-    return () => clearTimeout(timer);
-  }, [value, delay]);
-
-  return debouncedValue;
-}
-
-// Dark mode hook
-function useDarkMode(): [boolean, () => void] {
-  const [isDark, setIsDark] = useState(() => {
-    const saved = localStorage.getItem("theme");
-    if (saved) return saved === "dark";
-    return window.matchMedia("(prefers-color-scheme: dark)").matches;
-  });
-
-  useEffect(() => {
-    document.documentElement.setAttribute("data-theme", isDark ? "dark" : "light");
-    localStorage.setItem("theme", isDark ? "dark" : "light");
-  }, [isDark]);
-
-  const toggle = useCallback(() => setIsDark((v) => !v), []);
-
-  return [isDark, toggle];
-}
-
-
 // Find block element at cursor position
 function findBlockAtPosition(ast: Root, position: number): number | null {
   for (let i = 0; i < ast.children.length; i++) {
@@ -184,88 +152,148 @@ function findBlockAtPosition(ast: Root, position: number): number | null {
 type ViewMode = "split" | "editor" | "preview";
 type EditorMode = "highlight" | "simple";
 
+// Simple editor component (created once, updated via effect)
+function SimpleEditor(props: {
+  value: () => string;
+  onChange: (value: string) => void;
+  ref?: (el: HTMLTextAreaElement) => void;
+}) {
+  let textareaRef: HTMLTextAreaElement | null = null;
+
+  const setupTextarea = (el: HTMLTextAreaElement) => {
+    textareaRef = el;
+    el.value = props.value();
+    props.ref?.(el);
+  };
+
+  createEffect(() => {
+    const value = props.value();
+    if (textareaRef && textareaRef.value !== value) {
+      textareaRef.value = value;
+    }
+  });
+
+  return (
+    <textarea
+      ref={setupTextarea}
+      class="simple-editor"
+      onInput={(e) => props.onChange((e.target as HTMLTextAreaElement).value)}
+      spellcheck={false}
+    />
+  );
+}
+
 // SVG Icons for view modes
 const SplitIcon = () => (
   <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor">
-    <rect x="1" y="2" width="8" height="16" rx="1" stroke="currentColor" strokeWidth="1.5" fill="none" />
-    <rect x="11" y="2" width="8" height="16" rx="1" stroke="currentColor" strokeWidth="1.5" fill="none" />
+    <rect x="1" y="2" width="8" height="16" rx="1" stroke="currentColor" stroke-width="1.5" fill="none" />
+    <rect x="11" y="2" width="8" height="16" rx="1" stroke="currentColor" stroke-width="1.5" fill="none" />
   </svg>
 );
 
 const EditorIcon = () => (
   <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor">
-    <rect x="2" y="2" width="16" height="16" rx="1" stroke="currentColor" strokeWidth="1.5" fill="none" />
-    <line x1="5" y1="6" x2="15" y2="6" stroke="currentColor" strokeWidth="1.5" />
-    <line x1="5" y1="10" x2="12" y2="10" stroke="currentColor" strokeWidth="1.5" />
-    <line x1="5" y1="14" x2="14" y2="14" stroke="currentColor" strokeWidth="1.5" />
+    <rect x="2" y="2" width="16" height="16" rx="1" stroke="currentColor" stroke-width="1.5" fill="none" />
+    <line x1="5" y1="6" x2="15" y2="6" stroke="currentColor" stroke-width="1.5" />
+    <line x1="5" y1="10" x2="12" y2="10" stroke="currentColor" stroke-width="1.5" />
+    <line x1="5" y1="14" x2="14" y2="14" stroke="currentColor" stroke-width="1.5" />
   </svg>
 );
 
 const PreviewIcon = () => (
   <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor">
-    <rect x="2" y="2" width="16" height="16" rx="1" stroke="currentColor" strokeWidth="1.5" fill="none" />
-    <circle cx="10" cy="10" r="3" stroke="currentColor" strokeWidth="1.5" fill="none" />
-    <path d="M4 10 Q7 5, 10 5 Q13 5, 16 10 Q13 15, 10 15 Q7 15, 4 10" stroke="currentColor" strokeWidth="1.5" fill="none" />
+    <rect x="2" y="2" width="16" height="16" rx="1" stroke="currentColor" stroke-width="1.5" fill="none" />
+    <circle cx="10" cy="10" r="3" stroke="currentColor" stroke-width="1.5" fill="none" />
+    <path d="M4 10 Q7 5, 10 5 Q13 5, 16 10 Q13 15, 10 15 Q7 15, 4 10" stroke="currentColor" stroke-width="1.5" fill="none" />
   </svg>
 );
 
 // Syntax highlight editor icon (colorful brackets)
 const HighlightIcon = () => (
   <svg viewBox="0 0 20 20" width="18" height="18" fill="none">
-    <text x="2" y="14" fontSize="12" fill="#d73a49" fontFamily="monospace" fontWeight="bold">&lt;</text>
-    <text x="8" y="14" fontSize="12" fill="#22863a" fontFamily="monospace">/</text>
-    <text x="12" y="14" fontSize="12" fill="#0366d6" fontFamily="monospace" fontWeight="bold">&gt;</text>
+    <text x="2" y="14" font-size="12" fill="#d73a49" font-family="monospace" font-weight="bold">&lt;</text>
+    <text x="8" y="14" font-size="12" fill="#22863a" font-family="monospace">/</text>
+    <text x="12" y="14" font-size="12" fill="#0366d6" font-family="monospace" font-weight="bold">&gt;</text>
   </svg>
 );
 
 // Simple textarea icon (plain text)
 const SimpleIcon = () => (
   <svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor">
-    <rect x="2" y="2" width="16" height="16" rx="1" stroke="currentColor" strokeWidth="1.5" fill="none" />
-    <line x1="5" y1="6" x2="15" y2="6" stroke="currentColor" strokeWidth="1" opacity="0.5" />
-    <line x1="5" y1="9" x2="13" y2="9" stroke="currentColor" strokeWidth="1" opacity="0.5" />
-    <line x1="5" y1="12" x2="14" y2="12" stroke="currentColor" strokeWidth="1" opacity="0.5" />
-    <line x1="5" y1="15" x2="10" y2="15" stroke="currentColor" strokeWidth="1" opacity="0.5" />
+    <rect x="2" y="2" width="16" height="16" rx="1" stroke="currentColor" stroke-width="1.5" fill="none" />
+    <line x1="5" y1="6" x2="15" y2="6" stroke="currentColor" stroke-width="1" opacity="0.5" />
+    <line x1="5" y1="9" x2="13" y2="9" stroke="currentColor" stroke-width="1" opacity="0.5" />
+    <line x1="5" y1="12" x2="14" y2="12" stroke="currentColor" stroke-width="1" opacity="0.5" />
+    <line x1="5" y1="15" x2="10" y2="15" stroke="currentColor" stroke-width="1" opacity="0.5" />
   </svg>
 );
+
+
 
 function App() {
   // Load UI state synchronously for initial render
   const initialUIState = loadUIState();
 
-  const [source, setSource] = useState("");
-  const [ast, setAst] = useState<Root | null>(null);
-  const [cursorPosition, setCursorPosition] = useState(initialUIState.cursorPosition);
-  const [isInitialized, setIsInitialized] = useState(false);
-  const editorRef = useRef<SyntaxHighlightEditorHandle>(null);
-  const [isDark, toggleDark] = useDarkMode();
-  const [saveStatus, setSaveStatus] = useState<"saved" | "saving" | "idle">("idle");
-  const [viewMode, setViewMode] = useState<ViewMode>(initialUIState.viewMode);
-  const [editorMode, setEditorMode] = useState<EditorMode>(initialUIState.editorMode);
-  const simpleEditorRef = useRef<HTMLTextAreaElement>(null);
+  const [source, setSource] = createSignal("");
+  const [ast, setAst] = createSignal<Root | null>(null);
+  const [cursorPosition, setCursorPosition] = createSignal(initialUIState.cursorPosition);
+  const [isInitialized, setIsInitialized] = createSignal(false);
+  const [isDark, setIsDark] = createSignal((() => {
+    const saved = localStorage.getItem("theme");
+    if (saved) return saved === "dark";
+    return window.matchMedia("(prefers-color-scheme: dark)").matches;
+  })());
+  const [saveStatus, setSaveStatus] = createSignal<"saved" | "saving" | "idle">("idle");
+  const [viewMode, setViewMode] = createSignal<ViewMode>(initialUIState.viewMode);
+  const [editorMode, setEditorMode] = createSignal<EditorMode>(initialUIState.editorMode);
 
-  // Track if content has been modified since load (to avoid saving on initial load)
-  const hasModified = useRef(false);
-  // Track last synced timestamp for tab sync
-  const lastSyncedTimestamp = useRef(0);
-  // Track if currently saving (to avoid sync during save)
-  const isSaving = useRef(false);
+  // Refs
+  let editorRef: SyntaxHighlightEditorHandle | null = null;
+  let simpleEditorRef: HTMLTextAreaElement | null = null;
+  let previewRef: HTMLDivElement | null = null;
 
-  const previewRef = useRef<HTMLDivElement>(null);
-  const debouncedSource = useDebounce(source, DEBOUNCE_DELAY);
+  // Track if content has been modified since load
+  let hasModified = false;
+  let lastSyncedTimestamp = 0;
+  let isSaving = false;
 
-  const handleViewModeChange = useCallback((mode: ViewMode) => {
+  // Debounced source for saving
+  const [debouncedSource, setDebouncedSource] = createSignal("");
+  let debounceTimer: number | undefined;
+
+  createEffect(() => {
+    const value = source();
+    clearTimeout(debounceTimer);
+    debounceTimer = window.setTimeout(() => {
+      setDebouncedSource(value);
+    }, DEBOUNCE_DELAY);
+  });
+
+  // AST parsing moved to handleChange with batch() for efficiency
+
+  const toggleDark = () => {
+    setIsDark((v) => !v);
+  };
+
+  // Apply dark mode
+  createEffect(() => {
+    const dark = isDark();
+    document.documentElement.setAttribute("data-theme", dark ? "dark" : "light");
+    localStorage.setItem("theme", dark ? "dark" : "light");
+  });
+
+  const handleViewModeChange = (mode: ViewMode) => {
     setViewMode(mode);
     saveUIState({ viewMode: mode });
-  }, []);
+  };
 
-  const handleEditorModeChange = useCallback((mode: EditorMode) => {
+  const handleEditorModeChange = (mode: EditorMode) => {
     setEditorMode(mode);
     saveUIState({ editorMode: mode });
-  }, []);
+  };
 
   // Keyboard shortcuts for view mode
-  useEffect(() => {
+  onMount(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (e.ctrlKey || e.metaKey) {
         if (e.key === "1") {
@@ -281,56 +309,50 @@ function App() {
       }
     };
     window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [handleViewModeChange]);
+    onCleanup(() => window.removeEventListener("keydown", handleKeyDown));
+  });
 
-  // Load initial content from IndexedDB, fallback to default for first visit
-  useEffect(() => {
-    async function loadInitialContent() {
-      let content = initialMarkdown;
-      let timestamp = 0;
+  // Load initial content from IndexedDB
+  onMount(async () => {
+    let content = initialMarkdown;
+    let timestamp = 0;
 
-      try {
-        const idbData = await loadFromIDB();
-        if (idbData && idbData.content) {
-          content = idbData.content;
-          timestamp = idbData.timestamp;
-        }
-      } catch (e) {
-        console.error("Failed to load from IndexedDB:", e);
+    try {
+      const idbData = await loadFromIDB();
+      if (idbData && idbData.content) {
+        content = idbData.content;
+        timestamp = idbData.timestamp;
       }
-
-      setSource(content);
-      setAst(parse(content));
-      lastSyncedTimestamp.current = timestamp;
-      setIsInitialized(true);
-
-      // Focus editor after initialization
-      requestAnimationFrame(() => {
-        editorRef.current?.focus();
-      });
+    } catch (e) {
+      console.error("Failed to load from IndexedDB:", e);
     }
 
-    loadInitialContent();
-  }, []);
+    setSource(content);
+    // Initial AST - parsed immediately (debounce effect will also fire but that's ok)
+    setAst(parse(content));
+    lastSyncedTimestamp = timestamp;
+    setIsInitialized(true);
+
+    // Focus editor after initialization
+    requestAnimationFrame(() => {
+      editorRef?.focus();
+    });
+  });
 
   // Handle visibility change for tab sync
-  useEffect(() => {
+  onMount(() => {
     async function handleVisibilityChange() {
-      // Only sync when becoming visible
       if (document.visibilityState !== "visible") return;
-      // Don't sync while saving or if there are unsaved local changes
-      if (isSaving.current || hasModified.current) return;
+      if (isSaving || hasModified) return;
 
       try {
         const idbData = await loadFromIDB();
         if (!idbData) return;
 
-        // If IDB has newer content from another tab, sync it
-        if (idbData.timestamp > lastSyncedTimestamp.current) {
+        if (idbData.timestamp > lastSyncedTimestamp) {
           setSource(idbData.content);
-          setAst(parse(idbData.content));
-          lastSyncedTimestamp.current = idbData.timestamp;
+          // AST will be parsed by debounce effect
+          lastSyncedTimestamp = idbData.timestamp;
         }
       } catch (e) {
         console.error("Failed to sync from IndexedDB:", e);
@@ -338,160 +360,188 @@ function App() {
     }
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    return () => document.removeEventListener("visibilitychange", handleVisibilityChange);
-  }, []);
+    onCleanup(() => document.removeEventListener("visibilitychange", handleVisibilityChange));
+  });
 
   // Save content to IndexedDB with debounce
-  useEffect(() => {
-    if (!isInitialized) return;
-    if (!hasModified.current) return; // Don't save on initial load
+  createEffect(() => {
+    const debounced = debouncedSource();
+    if (!isInitialized()) return;
+    if (!hasModified) return;
 
-    isSaving.current = true;
+    isSaving = true;
     setSaveStatus("saving");
-    saveToIDB(debouncedSource)
+    saveToIDB(debounced)
       .then((timestamp) => {
-        lastSyncedTimestamp.current = timestamp;
-        hasModified.current = false;
-        isSaving.current = false;
+        lastSyncedTimestamp = timestamp;
+        hasModified = false;
+        isSaving = false;
         setSaveStatus("saved");
         setTimeout(() => setSaveStatus("idle"), 1000);
       })
       .catch((e) => {
         console.error("Failed to save to IndexedDB:", e);
-        isSaving.current = false;
+        isSaving = false;
         setSaveStatus("idle");
       });
-  }, [debouncedSource, isInitialized]);
+  });
+
+  // Render preview when AST changes
+  createEffect(() => {
+    const currentAst = ast();
+    if (!currentAst || !previewRef) return;
+    previewRef.innerHTML = "";
+    render(previewRef, <MarkdownRenderer ast={currentAst} />);
+  });
 
   // Sync preview scroll with cursor position
-  useEffect(() => {
-    if (!previewRef.current || !ast) return;
+  createEffect(() => {
+    const pos = cursorPosition();
+    const currentAst = ast();
+    if (!previewRef || !currentAst) return;
 
-    const blockIndex = findBlockAtPosition(ast, cursorPosition);
+    const blockIndex = findBlockAtPosition(currentAst, pos);
     if (blockIndex === null) return;
 
-    const block = ast.children[blockIndex]!;
+    const block = currentAst.children[blockIndex]!;
     const start = block.position?.start?.offset ?? 0;
     const end = block.position?.end?.offset ?? 0;
     const selector = `[data-span="${start}-${end}"]`;
-    const element = previewRef.current.querySelector(selector);
+    const element = previewRef.querySelector(selector);
 
     if (element) {
       element.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-  }, [cursorPosition, ast]);
+  });
 
-  const handleChange = useCallback((newSource: string) => {
-    hasModified.current = true;
+
+  // Debounced AST parsing - separate from source updates for better input responsiveness
+  let astParseTimer: number | undefined;
+  const AST_PARSE_DELAY = 100; // ms - delay AST parsing to not block input
+
+  const handleChange = (newSource: string) => {
+    hasModified = true;
+    // Update source immediately for responsive input
     setSource(newSource);
-    setAst(parse(newSource));
-  }, []);
 
-  const handleCursorChange = useCallback((position: number) => {
+    // Debounce AST parsing - preview doesn't need to update on every keystroke
+    clearTimeout(astParseTimer);
+    astParseTimer = window.setTimeout(() => {
+      setAst(parse(newSource));
+    }, AST_PARSE_DELAY);
+  };
+
+  // Debounce cursor position saving
+  let cursorSaveTimer: number | undefined;
+  const handleCursorChange = (position: number) => {
     setCursorPosition(position);
-    saveUIState({ cursorPosition: position });
-  }, []);
-
-  // Don't render until initialized to prevent flash of default content
-  if (!isInitialized || ast === null) {
-    return null;
-  }
+    // Debounce localStorage write - don't need to save every keystroke
+    clearTimeout(cursorSaveTimer);
+    cursorSaveTimer = window.setTimeout(() => {
+      saveUIState({ cursorPosition: position });
+    }, 500);
+  };
 
   return (
-    <div class="app-container">
-      <header class="toolbar">
-        <div class="toolbar-left">
-          <div class="view-mode-buttons">
-            <button
-              class={`view-mode-btn ${viewMode === "split" ? "active" : ""}`}
-              onClick={() => handleViewModeChange("split")}
-              title="Split view (Ctrl+1)"
-            >
-              <SplitIcon />
-            </button>
-            <button
-              class={`view-mode-btn ${viewMode === "editor" ? "active" : ""}`}
-              onClick={() => handleViewModeChange("editor")}
-              title="Editor only (Ctrl+2)"
-            >
-              <EditorIcon />
-            </button>
-            <button
-              class={`view-mode-btn ${viewMode === "preview" ? "active" : ""}`}
-              onClick={() => handleViewModeChange("preview")}
-              title="Preview only (Ctrl+3)"
-            >
-              <PreviewIcon />
-            </button>
+    <Show when={isInitialized}>
+      {() => (
+        <div class="app-container">
+          <header class="toolbar">
+            <div class="toolbar-left">
+              <div class="view-mode-buttons">
+                <button
+                  class={`view-mode-btn ${viewMode() === "split" ? "active" : ""}`}
+                  onClick={() => handleViewModeChange("split")}
+                  title="Split view (Ctrl+1)"
+                >
+                  <SplitIcon />
+                </button>
+                <button
+                  class={`view-mode-btn ${viewMode() === "editor" ? "active" : ""}`}
+                  onClick={() => handleViewModeChange("editor")}
+                  title="Editor only (Ctrl+2)"
+                >
+                  <EditorIcon />
+                </button>
+                <button
+                  class={`view-mode-btn ${viewMode() === "preview" ? "active" : ""}`}
+                  onClick={() => handleViewModeChange("preview")}
+                  title="Preview only (Ctrl+3)"
+                >
+                  <PreviewIcon />
+                </button>
+              </div>
+              <div class="editor-mode-buttons">
+                <button
+                  class={`view-mode-btn ${editorMode() === "highlight" ? "active" : ""}`}
+                  onClick={() => handleEditorModeChange("highlight")}
+                  title="Syntax highlight editor"
+                >
+                  <HighlightIcon />
+                </button>
+                <button
+                  class={`view-mode-btn ${editorMode() === "simple" ? "active" : ""}`}
+                  onClick={() => handleEditorModeChange("simple")}
+                  title="Simple text editor"
+                >
+                  <SimpleIcon />
+                </button>
+              </div>
+              <span class={`save-status ${saveStatus()}`}>
+                {saveStatus() === "saving" && "Saving..."}
+                {saveStatus() === "saved" && "Saved"}
+              </span>
+            </div>
+            <div class="toolbar-actions">
+              <button onClick={toggleDark} class="theme-toggle" title="Toggle dark mode">
+                {isDark() ? "☀️" : "🌙"}
+              </button>
+              <a
+                href="https://github.com/mizchi/markdown.mbt"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="github-link"
+                title="View on GitHub"
+              >
+                <svg viewBox="0 0 16 16" width="20" height="20" fill="currentColor">
+                  <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
+                </svg>
+              </a>
+            </div>
+          </header>
+          <div class={`container view-${viewMode()}`}>
+            {/* Editor panel - use CSS visibility instead of Show to prevent re-creation */}
+            <div class="editor" style={{ display: viewMode() === "preview" ? "none" : undefined }}>
+              {/* Syntax highlight editor - always mounted, visibility controlled by CSS */}
+              <div style={{ display: editorMode() === "highlight" ? "contents" : "none" }}>
+                <SyntaxHighlightEditor
+                  ref={(el) => { editorRef = el; }}
+                  value={source}
+                  onChange={handleChange}
+                  onCursorChange={handleCursorChange}
+                  initialCursorPosition={initialUIState.cursorPosition}
+                />
+              </div>
+              {/* Simple editor - always mounted, visibility controlled by CSS */}
+              <div style={{ display: editorMode() === "simple" ? "contents" : "none" }}>
+                <SimpleEditor
+                  value={source}
+                  onChange={handleChange}
+                  ref={(el) => { simpleEditorRef = el; }}
+                />
+              </div>
+            </div>
+            {/* Preview panel - use CSS visibility instead of Show */}
+            <div
+              class="preview"
+              style={{ display: viewMode() === "editor" ? "none" : undefined }}
+              ref={(el) => { previewRef = el; }}
+            />
           </div>
-          <div class="editor-mode-buttons">
-            <button
-              class={`view-mode-btn ${editorMode === "highlight" ? "active" : ""}`}
-              onClick={() => handleEditorModeChange("highlight")}
-              title="Syntax highlight editor"
-            >
-              <HighlightIcon />
-            </button>
-            <button
-              class={`view-mode-btn ${editorMode === "simple" ? "active" : ""}`}
-              onClick={() => handleEditorModeChange("simple")}
-              title="Simple text editor"
-            >
-              <SimpleIcon />
-            </button>
-          </div>
-          <span class={`save-status ${saveStatus}`}>
-            {saveStatus === "saving" && "Saving..."}
-            {saveStatus === "saved" && "Saved"}
-          </span>
         </div>
-        <div class="toolbar-actions">
-          <button onClick={toggleDark} class="theme-toggle" title="Toggle dark mode">
-            {isDark ? "☀️" : "🌙"}
-          </button>
-          <a
-            href="https://github.com/mizchi/markdown.mbt"
-            target="_blank"
-            rel="noopener noreferrer"
-            class="github-link"
-            title="View on GitHub"
-          >
-            <svg viewBox="0 0 16 16" width="20" height="20" fill="currentColor">
-              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/>
-            </svg>
-          </a>
-        </div>
-      </header>
-      <div class={`container view-${viewMode}`}>
-        {(viewMode === "split" || viewMode === "editor") && (
-          <div class="editor">
-            {editorMode === "highlight" ? (
-              <SyntaxHighlightEditor
-                ref={editorRef}
-                value={source}
-                onChange={handleChange}
-                onCursorChange={handleCursorChange}
-                initialCursorPosition={initialUIState.cursorPosition}
-              />
-            ) : (
-              <textarea
-                ref={simpleEditorRef}
-                class="simple-editor"
-                value={source}
-                onInput={(e) => handleChange((e.target as HTMLTextAreaElement).value)}
-                spellcheck={false}
-              />
-            )}
-          </div>
-        )}
-        {(viewMode === "split" || viewMode === "preview") && (
-          <div class="preview" ref={previewRef}>
-            <MarkdownRenderer ast={ast} />
-          </div>
-        )}
-      </div>
-    </div>
+      )}
+    </Show>
   );
 }
 
-render(<App />, document.getElementById("app")!);
+render(document.getElementById("app")!, <App />);
