@@ -81,7 +81,7 @@ export function renderBlock(block: RootContent, key?: string | number): JSX.Elem
     case "paragraph":
       return (
         <p key={key} data-span={getSpan(block)}>
-          {block.children.map((child, i) => renderInline(child, i))}
+          {block.children.map((child, i) => renderInline(child, i)).filter(Boolean)}
         </p>
       );
 
@@ -89,7 +89,7 @@ export function renderBlock(block: RootContent, key?: string | number): JSX.Elem
       const Tag = `h${block.depth}` as "h1" | "h2" | "h3" | "h4" | "h5" | "h6";
       return (
         <Tag key={key} data-span={getSpan(block)}>
-          {block.children.map((child, i) => renderInline(child, i))}
+          {block.children.map((child, i) => renderInline(child, i)).filter(Boolean)}
         </Tag>
       );
     }
@@ -120,7 +120,7 @@ export function renderBlock(block: RootContent, key?: string | number): JSX.Elem
     case "blockquote":
       return (
         <blockquote key={key} data-span={getSpan(block)}>
-          {block.children.map((child, i) => renderBlock(child, i))}
+          {block.children.map((child, i) => renderBlock(child, i)).filter(Boolean)}
         </blockquote>
       );
 
@@ -134,7 +134,7 @@ export function renderBlock(block: RootContent, key?: string | number): JSX.Elem
             class={hasTaskItems ? "contains-task-list" : undefined}
             data-span={getSpan(block)}
           >
-            {block.children.map((item, i) => renderListItem(item, i))}
+            {block.children.map((item, i) => renderListItem(item, i)).filter(Boolean)}
           </ol>
         );
       }
@@ -144,7 +144,7 @@ export function renderBlock(block: RootContent, key?: string | number): JSX.Elem
           class={hasTaskItems ? "contains-task-list" : undefined}
           data-span={getSpan(block)}
         >
-          {block.children.map((item, i) => renderListItem(item, i))}
+          {block.children.map((item, i) => renderListItem(item, i)).filter(Boolean)}
         </ul>
       );
     }
@@ -171,7 +171,7 @@ export function renderBlock(block: RootContent, key?: string | number): JSX.Elem
               <tr>
                 {headerRow.children.map((cell, i) =>
                   renderTableCell(cell, i, "th", align[i])
-                )}
+                ).filter(Boolean)}
               </tr>
             </thead>
           )}
@@ -181,7 +181,7 @@ export function renderBlock(block: RootContent, key?: string | number): JSX.Elem
                 <tr key={rowIdx}>
                   {row.children.map((cell, i) =>
                     renderTableCell(cell, i, "td", align[i])
-                  )}
+                  ).filter(Boolean)}
                 </tr>
               ))}
             </tbody>
@@ -199,7 +199,7 @@ export function renderBlock(block: RootContent, key?: string | number): JSX.Elem
           data-span={getSpan(block)}
         >
           <sup>{block.label ?? block.identifier}</sup>
-          {block.children.map((child, i) => renderBlock(child, i))}
+          {block.children.map((child, i) => renderBlock(child, i)).filter(Boolean)}
         </div>
       );
 
@@ -242,7 +242,7 @@ function renderListItem(item: ListItem, key: number): JSX.Element {
 
   return (
     <li key={key} data-span={getSpan(item)}>
-      {item.children.map((child, i) => renderBlock(child, i))}
+      {item.children.map((child, i) => renderBlock(child, i)).filter(Boolean)}
     </li>
   );
 }
@@ -257,7 +257,7 @@ function renderTableCell(
   const style = align ? { textAlign: align } : undefined;
   return (
     <Tag key={key} style={style} data-span={getSpan(cell)}>
-      {cell.children.map((child, i) => renderInline(child, i))}
+      {cell.children.map((child, i) => renderInline(child, i)).filter(Boolean)}
     </Tag>
   );
 }
@@ -278,21 +278,21 @@ export function renderInline(inline: PhrasingContent, key?: string | number): JS
     case "emphasis":
       return (
         <em key={key}>
-          {inline.children.map((child, i) => renderInline(child, i))}
+          {inline.children.map((child, i) => renderInline(child, i)).filter(Boolean)}
         </em>
       );
 
     case "strong":
       return (
         <strong key={key}>
-          {inline.children.map((child, i) => renderInline(child, i))}
+          {inline.children.map((child, i) => renderInline(child, i)).filter(Boolean)}
         </strong>
       );
 
     case "delete":
       return (
         <del key={key}>
-          {inline.children.map((child, i) => renderInline(child, i))}
+          {inline.children.map((child, i) => renderInline(child, i)).filter(Boolean)}
         </del>
       );
 
@@ -302,7 +302,7 @@ export function renderInline(inline: PhrasingContent, key?: string | number): JS
     case "link":
       return (
         <a key={key} href={inline.url} title={inline.title ?? undefined}>
-          {inline.children.map((child, i) => renderInline(child, i))}
+          {inline.children.map((child, i) => renderInline(child, i)).filter(Boolean)}
         </a>
       );
 
@@ -310,7 +310,7 @@ export function renderInline(inline: PhrasingContent, key?: string | number): JS
       // Reference links should be resolved; for now render as text
       return (
         <span key={key}>
-          {inline.children.map((child, i) => renderInline(child, i))}
+          {inline.children.map((child, i) => renderInline(child, i)).filter(Boolean)}
         </span>
       );
 
@@ -350,7 +350,7 @@ export function MarkdownRenderer({ ast }: { ast: Root }) {
   if (!ast) return null;
   return (
     <div class="markdown-body" data-span={getSpan(ast)}>
-      {ast.children.map((block, i) => renderBlock(block, i))}
+      {ast.children.map((block, i) => renderBlock(block, i)).filter(Boolean)}
     </div>
   );
 }
