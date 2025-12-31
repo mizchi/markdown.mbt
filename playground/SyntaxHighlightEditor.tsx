@@ -462,10 +462,22 @@ export function SyntaxHighlightEditor(props: SyntaxHighlightEditorProps) {
           }
         },
         setValue: (value: string) => {
-          if (editorRef) {
+          if (editorRef && highlightRef) {
             editorRef.value = value;
-            // Trigger highlight update
-            updateHighlight(value);
+            // Force full re-highlight since this is an external update
+            // (incremental update uses cursor position which may be stale)
+            const newHighlightedLines = highlightMarkdownLines(value);
+            highlightRef.innerHTML = "";
+            lineElements.length = 0;
+            for (let i = 0; i < newHighlightedLines.length; i++) {
+              const div = document.createElement("div");
+              div.className = "highlight-line";
+              setLineContent(div, newHighlightedLines[i]!);
+              highlightRef.appendChild(div);
+              lineElements.push(div);
+            }
+            prevHighlightedLines = newHighlightedLines;
+            lastValueLength = value.length;
           }
         },
       });
