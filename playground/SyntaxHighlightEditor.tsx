@@ -728,20 +728,22 @@ export function SyntaxHighlightEditor(props: SyntaxHighlightEditorProps) {
         </div>
       )}
       <div class="editor-wrapper" ref={(el) => { wrapperRef = el; }}>
-        <div class="editor-highlight" ref={(el) => { highlightRef = el; }}></div>
-        <textarea
-          ref={setupEditor}
-          class="editor-textarea"
-          onInput={handleInput}
-          onScroll={syncScroll}
-          onKeyDown={handleKeyDown}
-          onKeyUp={handleCursorUpdate}
-          onClick={handleCursorUpdate}
-          spellcheck={false}
-          autocomplete="off"
-          autocorrect="off"
-          autocapitalize="off"
-        />
+        <div class="editor-content">
+          <div class="editor-highlight" ref={(el) => { highlightRef = el; }}></div>
+          <textarea
+            ref={setupEditor}
+            class="editor-textarea"
+            onInput={handleInput}
+            onScroll={syncScroll}
+            onKeyDown={handleKeyDown}
+            onKeyUp={handleCursorUpdate}
+            onClick={handleCursorUpdate}
+            spellcheck={false}
+            autocomplete="off"
+            autocorrect="off"
+            autocapitalize="off"
+          />
+        </div>
       </div>
     </div>
   );
