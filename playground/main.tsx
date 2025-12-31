@@ -481,9 +481,9 @@ function App() {
     setSource(newSource);
     setAst(parse(newSource));
 
-    // Sync editor text
+    // Sync editor text with targeted update using span
     if (editorMode() === "highlight" && editorRef) {
-      editorRef.setValue(newSource);
+      editorRef.setValue(newSource, { start, end });
     } else if (simpleEditorRef) {
       simpleEditorRef.value = newSource;
     }

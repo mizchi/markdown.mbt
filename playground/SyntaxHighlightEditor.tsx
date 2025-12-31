@@ -415,13 +415,23 @@ function setLineContent(el: HTMLElement, html: string): void {
   }
 }
 
+// Convert character offset to line number (0-indexed)
+function getLineFromOffset(text: string, offset: number): number {
+  let line = 0;
+  for (let i = 0; i < offset && i < text.length; i++) {
+    if (text[i] === "\n") line++;
+  }
+  return line;
+}
+
 export interface SyntaxHighlightEditorHandle {
   focus: () => void;
   getCursorPosition: () => number;
   setCursorPosition: (pos: number) => void;
   getScrollTop: () => number;
   setScrollTop: (top: number) => void;
-  setValue: (value: string) => void;
+  // setValue with optional span for targeted line updates
+  setValue: (value: string, span?: { start: number; end: number }) => void;
 }
 
 export function SyntaxHighlightEditor(props: SyntaxHighlightEditorProps) {
@@ -461,23 +471,42 @@ export function SyntaxHighlightEditor(props: SyntaxHighlightEditorProps) {
             editorRef.scrollTop = top;
           }
         },
-        setValue: (value: string) => {
+        setValue: (value: string, span?: { start: number; end: number }) => {
           if (editorRef && highlightRef) {
             editorRef.value = value;
-            // Force full re-highlight since this is an external update
-            // (incremental update uses cursor position which may be stale)
-            const newHighlightedLines = highlightMarkdownLines(value);
-            highlightRef.innerHTML = "";
-            lineElements.length = 0;
-            for (let i = 0; i < newHighlightedLines.length; i++) {
-              const div = document.createElement("div");
-              div.className = "highlight-line";
-              setLineContent(div, newHighlightedLines[i]!);
-              highlightRef.appendChild(div);
-              lineElements.push(div);
+
+            if (span && lineElements.length > 0) {
+              // Targeted update: find lines affected by span and update only those
+              const startLine = getLineFromOffset(value, span.start);
+              const endLine = getLineFromOffset(value, span.end);
+              const newHighlightedLines = highlightMarkdownLines(value);
+
+              // Update only affected lines
+              for (let i = startLine; i <= endLine && i < newHighlightedLines.length; i++) {
+                if (i < lineElements.length) {
+                  // Update existing line
+                  if (prevHighlightedLines[i] !== newHighlightedLines[i]) {
+                    setLineContent(lineElements[i]!, newHighlightedLines[i]!);
+                  }
+                }
+              }
+              prevHighlightedLines = newHighlightedLines;
+              lastValueLength = value.length;
+            } else {
+              // Full re-highlight (fallback when no span provided)
+              const newHighlightedLines = highlightMarkdownLines(value);
+              highlightRef.innerHTML = "";
+              lineElements.length = 0;
+              for (let i = 0; i < newHighlightedLines.length; i++) {
+                const div = document.createElement("div");
+                div.className = "highlight-line";
+                setLineContent(div, newHighlightedLines[i]!);
+                highlightRef.appendChild(div);
+                lineElements.push(div);
+              }
+              prevHighlightedLines = newHighlightedLines;
+              lastValueLength = value.length;
             }
-            prevHighlightedLines = newHighlightedLines;
-            lastValueLength = value.length;
           }
         },
       });
