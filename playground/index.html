@@ -337,28 +337,28 @@
       tab-size: 2;
     }
 
-    /* Markdown syntax colors - Light theme */
+    /* Markdown syntax colors - Light theme (high contrast) */
     /* NOTE: Do NOT use font-weight/font-style here - it causes cursor position mismatch
        because textarea and highlight overlay must have identical character widths */
-    .md-heading { color: #d73a49; }
-    .md-heading-marker { color: #d73a49; }
-    .md-bold { color: #d73a49; }
-    .md-italic { color: #005cc5; }
-    .md-bold-italic { color: #d73a49; }
-    .md-strikethrough { color: var(--text-secondary); text-decoration: line-through; }
-    .md-code { color: #22863a; background: rgba(27, 31, 35, 0.05); border-radius: 3px; }
-    .md-code-marker { color: #6a737d; }
-    .md-fence { color: #6a737d; }
-    .md-fence-lang { color: #22863a; }
-    .md-link-text { color: #0366d6; }
-    .md-link-url { color: #6a737d; }
-    .md-link-bracket { color: #6a737d; }
-    .md-image { color: #0366d6; }
-    .md-list-marker { color: #d73a49; }
-    .md-blockquote { color: #6a737d; }
-    .md-hr { color: #6a737d; }
-    .md-html { color: #6a737d; }
-    .md-escape { color: #6a737d; }
+    .md-heading { color: #b31d28; }
+    .md-heading-marker { color: #b31d28; }
+    .md-bold { color: #b31d28; }
+    .md-italic { color: #0550ae; }
+    .md-bold-italic { color: #b31d28; }
+    .md-strikethrough { color: #57606a; text-decoration: line-through; }
+    .md-code { color: #116329; background: rgba(27, 31, 35, 0.08); border-radius: 3px; }
+    .md-code-marker { color: #57606a; }
+    .md-fence { color: #57606a; }
+    .md-fence-lang { color: #116329; }
+    .md-link-text { color: #0550ae; }
+    .md-link-url { color: #57606a; }
+    .md-link-bracket { color: #57606a; }
+    .md-image { color: #0550ae; }
+    .md-list-marker { color: #b31d28; }
+    .md-blockquote { color: #57606a; }
+    .md-hr { color: #57606a; }
+    .md-html { color: #57606a; }
+    .md-escape { color: #57606a; }
 
     /* Markdown syntax colors - Dark theme */
     [data-theme="dark"] .md-heading { color: #ff7b72; }
@@ -379,6 +379,20 @@
     [data-theme="dark"] .md-hr { color: #484f58; }
     [data-theme="dark"] .md-html { color: #8b949e; }
     [data-theme="dark"] .md-escape { color: #8b949e; }
+
+    /* Light mode: map Lezer dark theme colors to light theme equivalents */
+    /* Lezer outputs dark theme inline colors, we override them for light mode only */
+    :root:not([data-theme="dark"]) .highlight-line span[style*="color: #ff7b72"] { color: #cf222e !important; }
+    :root:not([data-theme="dark"]) .highlight-line span[style*="color: #ffa657"] { color: #953800 !important; }
+    :root:not([data-theme="dark"]) .highlight-line span[style*="color: #d2a8ff"] { color: #8250df !important; }
+    :root:not([data-theme="dark"]) .highlight-line span[style*="color: #a5d6ff"] { color: #0a3069 !important; }
+    :root:not([data-theme="dark"]) .highlight-line span[style*="color: #79c0ff"] { color: #0550ae !important; }
+    :root:not([data-theme="dark"]) .highlight-line span[style*="color: #7ee787"] { color: #116329 !important; }
+    :root:not([data-theme="dark"]) .highlight-line span[style*="color: #8b949e"] { color: #6e7781 !important; }
+    :root:not([data-theme="dark"]) .highlight-line span[style*="color: #c9d1d9"] { color: #24292f !important; }
+    :root:not([data-theme="dark"]) .highlight-line span[style*="color: #e6edf3"] { color: #24292f !important; }
+
+    /* Dark mode: Lezer's default colors are used (no override) */
 
     .preview {
       background: var(--bg-secondary);
