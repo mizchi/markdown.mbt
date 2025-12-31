@@ -1020,7 +1020,7 @@ let html_block_tags : Array[String] = [
   "fieldset", "figcaption", "figure", "footer", "form", "frame", "frameset", "h1",
   "h2", "h3", "h4", "h5", "h6", "head", "header", "hr", "html", "iframe", "legend",
   "li", "link", "main", "menu", "menuitem", "nav", "noframes", "ol", "optgroup",
-  "option", "p", "param", "search", "section", "summary", "table", "tbody", "td",
+  "option", "p", "param", "search", "section", "summary", "svg", "table", "tbody", "td",
   "tfoot", "th", "thead", "title", "tr", "track", "ul",
 ]
 

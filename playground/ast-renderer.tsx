@@ -22,8 +22,19 @@ export interface RendererCallbacks {
   onCodeAction?: (span: string, lang: string, action: string) => void;
 }
 
-// Helper component to render raw HTML using ref callback
-function RawHtml({ html, ...props }: { html: string } & Record<string, unknown>) {
+// Code block handler for custom rendering (e.g., SVG, mermaid, moonlight)
+export interface CodeBlockHandler {
+  render: (code: string, span: string, key?: string | number) => JSX.Element;
+}
+
+// Renderer options for customizing rendering behavior
+export interface RendererOptions {
+  // Custom handlers for specific code block languages
+  codeBlockHandlers?: Record<string, CodeBlockHandler>;
+}
+
+// Helper component to render raw HTML using ref callback (exported for custom handlers)
+export function RawHtml({ html, ...props }: { html: string } & Record<string, unknown>) {
   return (
     <div
       {...props}
@@ -89,7 +100,8 @@ function getSpan(node: { position?: Position | undefined }): string {
 export function renderBlock(
   block: RootContent,
   key?: string | number,
-  callbacks?: RendererCallbacks
+  callbacks?: RendererCallbacks,
+  options?: RendererOptions
 ): JSX.Element | null {
   switch (block.type) {
     case "paragraph":
@@ -110,6 +122,14 @@ export function renderBlock(
 
     case "code": {
       const lang = block.lang ?? "";
+      const span = getSpan(block);
+
+      // Check for custom handler first
+      const handler = options?.codeBlockHandlers?.[lang];
+      if (handler) {
+        return handler.render(block.value, span, key);
+      }
+
       const highlighted = lang ? highlightCode(block.value, lang) : null;
 
       if (highlighted) {
@@ -117,7 +137,7 @@ export function renderBlock(
         return (
           <RawHtml
             key={key}
-            data-span={getSpan(block)}
+            data-span={span}
             html={highlighted}
           />
         );
@@ -125,7 +145,7 @@ export function renderBlock(
 
       // Fallback for unsupported languages
       return (
-        <pre key={key} data-span={getSpan(block)}>
+        <pre key={key} data-span={span}>
           <code class={lang ? `language-${lang}` : undefined}>{block.value}</code>
         </pre>
       );
@@ -134,7 +154,7 @@ export function renderBlock(
     case "blockquote":
       return (
         <blockquote key={key} data-span={getSpan(block)}>
-          {block.children.map((child, i) => renderBlock(child, i, callbacks)).filter(Boolean)}
+          {block.children.map((child, i) => renderBlock(child, i, callbacks, options)).filter(Boolean)}
         </blockquote>
       );
 
@@ -148,7 +168,7 @@ export function renderBlock(
             class={hasTaskItems ? "contains-task-list" : undefined}
             data-span={getSpan(block)}
           >
-            {block.children.map((item, i) => renderListItem(item, i, callbacks)).filter(Boolean)}
+            {block.children.map((item, i) => renderListItem(item, i, callbacks, options)).filter(Boolean)}
           </ol>
         );
       }
@@ -158,7 +178,7 @@ export function renderBlock(
           class={hasTaskItems ? "contains-task-list" : undefined}
           data-span={getSpan(block)}
         >
-          {block.children.map((item, i) => renderListItem(item, i, callbacks)).filter(Boolean)}
+          {block.children.map((item, i) => renderListItem(item, i, callbacks, options)).filter(Boolean)}
         </ul>
       );
     }
@@ -213,7 +233,7 @@ export function renderBlock(
           data-span={getSpan(block)}
         >
           <sup>{block.label ?? block.identifier}</sup>
-          {block.children.map((child, i) => renderBlock(child, i, callbacks)).filter(Boolean)}
+          {block.children.map((child, i) => renderBlock(child, i, callbacks, options)).filter(Boolean)}
         </div>
       );
 
@@ -230,7 +250,8 @@ export function renderBlock(
 function renderListItem(
   item: ListItem,
   key: number,
-  callbacks?: RendererCallbacks
+  callbacks?: RendererCallbacks,
+  options?: RendererOptions
 ): JSX.Element {
   const isTask = item.checked != null;
 
@@ -245,7 +266,7 @@ function renderListItem(
           if (el) children.push(el);
         });
       } else {
-        const el = renderBlock(child, i, callbacks);
+        const el = renderBlock(child, i, callbacks, options);
         if (el) children.push(el);
       }
     });
@@ -273,7 +294,7 @@ function renderListItem(
 
   return (
     <li key={key} data-span={getSpan(item)}>
-      {item.children.map((child, i) => renderBlock(child, i, callbacks)).filter(Boolean)}
+      {item.children.map((child, i) => renderBlock(child, i, callbacks, options)).filter(Boolean)}
     </li>
   );
 }
@@ -380,14 +401,16 @@ export function renderInline(inline: PhrasingContent, key?: string | number): JS
 export function MarkdownRenderer({
   ast,
   callbacks,
+  options,
 }: {
   ast: Root;
   callbacks?: RendererCallbacks;
+  options?: RendererOptions;
 }) {
   if (!ast) return null;
   return (
     <div class="markdown-body" data-span={getSpan(ast)}>
-      {ast.children.map((block, i) => renderBlock(block, i, callbacks)).filter(Boolean)}
+      {ast.children.map((block, i) => renderBlock(block, i, callbacks, options)).filter(Boolean)}
     </div>
   );
 }

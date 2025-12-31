@@ -1,7 +1,7 @@
 import { render, createSignal, createEffect, createMemo, onMount, onCleanup, Show, batch } from "@luna_ui/luna";
 import { parse } from "../js/api.js";
 import type { Root } from "mdast";
-import { MarkdownRenderer, type RendererCallbacks } from "./ast-renderer";
+import { MarkdownRenderer, RawHtml, type RendererCallbacks, type RendererOptions } from "./ast-renderer";
 import { SyntaxHighlightEditor, type SyntaxHighlightEditorHandle } from "./SyntaxHighlightEditor";
 
 // IndexedDB for content (reliable async storage)
@@ -510,6 +510,19 @@ function App() {
     onTaskToggle: handleTaskToggle,
   };
 
+  // Options for custom code block rendering
+  const rendererOptions: RendererOptions = {
+    codeBlockHandlers: {
+      // Render ```svg blocks as inline SVG
+      svg: {
+        render: (code, span, key) => (
+          <RawHtml key={key} data-span={span} html={code} />
+        ),
+      },
+      // Future: moonlight-svg, mermaid, etc.
+    },
+  };
+
   // Render preview when AST changes
   createEffect(() => {
     const currentAst = ast();
@@ -517,7 +530,7 @@ function App() {
 
     // Clear and re-render
     previewRef.innerHTML = "";
-    render(previewRef, <MarkdownRenderer ast={currentAst} callbacks={rendererCallbacks} />);
+    render(previewRef, <MarkdownRenderer ast={currentAst} callbacks={rendererCallbacks} options={rendererOptions} />);
     lastRenderedAst = currentAst;
   });
 
