@@ -3,7 +3,6 @@ import { parse } from "../js/api.js";
 import type { Root } from "mdast";
 import { MarkdownRenderer, RawHtml, sanitizeSvg, type RendererCallbacks, type RendererOptions } from "./ast-renderer";
 import { SyntaxHighlightEditor, type SyntaxHighlightEditorHandle } from "./SyntaxHighlightEditor";
-import { MoonlightEditor } from "./MoonlightEditor";
 
 // IndexedDB for content (reliable async storage)
 const IDB_NAME = "markdown-editor";
@@ -56,18 +55,6 @@ Edit the SVG below and see live preview:
   <rect x="10" y="10" width="80" height="80" fill="#4a90d9" rx="8"/>
   <circle cx="150" cy="50" r="40" fill="#e74c3c"/>
   <text x="100" y="95" text-anchor="middle" fill="#333" font-size="12">Edit me!</text>
-</svg>
-\`\`\`
-
-## Moonlight SVG Editor
-
-Interactive SVG editing with [Moonlight](https://github.com/mizchi/moonlight):
-
-\`\`\`moonlight-svg
-<svg viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
-  <rect x="50" y="50" width="120" height="80" fill="#3498db" rx="10"/>
-  <circle cx="280" cy="90" r="50" fill="#e74c3c"/>
-  <polygon points="200,200 150,280 250,280" fill="#2ecc71"/>
 </svg>
 \`\`\`
 
@@ -530,39 +517,6 @@ function App() {
     });
   };
 
-  // Handle SVG change from Moonlight editor
-  const handleSvgChange = (newSvg: string, span: string) => {
-    const [startStr, endStr] = span.split("-");
-    const start = parseInt(startStr, 10);
-    const end = parseInt(endStr, 10);
-
-    const currentSource = source();
-
-    // Find the code block content boundaries (skip ```moonlight-svg\n and \n```)
-    // The span includes the entire code block, we need to find the actual content
-    const blockText = currentSource.slice(start, end);
-    const contentStart = blockText.indexOf("\n") + 1;
-    const contentEnd = blockText.lastIndexOf("\n```");
-
-    if (contentStart > 0 && contentEnd > contentStart) {
-      const prefix = currentSource.slice(0, start + contentStart);
-      const suffix = currentSource.slice(start + contentEnd);
-      const newSource = prefix + newSvg + suffix;
-
-      // Update source and AST
-      hasModified = true;
-      setSource(newSource);
-      setAst(parse(newSource));
-
-      // Sync editor text
-      if (editorMode() === "highlight" && editorRef) {
-        editorRef.setValue(newSource);
-      } else if (simpleEditorRef) {
-        simpleEditorRef.value = newSource;
-      }
-    }
-  };
-
   // Callbacks for interactive preview
   const rendererCallbacks: RendererCallbacks = {
     onTaskToggle: handleTaskToggle,
@@ -582,18 +536,6 @@ function App() {
           // Default: render as inline SVG (sanitized for safety)
           return <RawHtml key={key} data-span={span} html={sanitizeSvg(code)} />;
         },
-      },
-      // Render ```moonlight-svg blocks with interactive Moonlight editor
-      "moonlight-svg": {
-        render: (code, span) => (
-          <MoonlightEditor
-            initialSvg={code}
-            span={span}
-            onSvgChange={handleSvgChange}
-            width={400}
-            height={300}
-          />
-        ),
       },
     },
   };

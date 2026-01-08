@@ -214,6 +214,7 @@
       display: none;
       flex: 1;
       min-height: 0;
+      overflow: hidden;
     }
 
     .editor-mode-highlight .editor-highlight-wrapper {
@@ -239,6 +240,7 @@
       width: 100%;
       height: 100%;
       background: var(--bg-primary);
+      overflow: hidden;
     }
 
     .line-numbers {
@@ -261,25 +263,13 @@
     .editor-wrapper {
       flex: 1;
       position: relative;
-      overflow: auto;
-      display: flex;
-      justify-content: center;
+      overflow-x: hidden;
+      overflow-y: auto;
     }
 
     .editor-content {
       position: relative;
       width: 100%;
-      max-width: 900px;
-      border-left: 1px solid var(--border-color);
-      border-right: 1px solid var(--border-color);
-    }
-
-    @media (max-width: 768px) {
-      .editor-content {
-        max-width: 100%;
-        border-left: none;
-        border-right: none;
-      }
     }
 
     .editor-textarea,
@@ -308,6 +298,7 @@
       resize: none;
       outline: none;
       z-index: 2;
+      overflow: hidden;
     }
 
     .editor-textarea::selection {

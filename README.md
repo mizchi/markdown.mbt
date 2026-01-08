@@ -144,6 +144,72 @@ pnpm exec vite
 
 See [docs/markdown.md](./docs/markdown.md) for detailed architecture and design.
 
+----
+
+## Roadmap: Interactive Notebook (src/notebook/)
+
+marimo-inspired reactive notebook system for MDX documents.
+
+### Extended Syntax
+
+```mdx
+---
+title: My Notebook
+---
+
+<Inline source="./intro.md" />
+
+```moonbit {:cell=data}
+let numbers = [1, 2, 3, 4, 5]
+let sum = numbers.fold(init=0, fn(acc, x) { acc + x })
+```
+
+```js {:cell=viz :deps=data :output=html}
+const chart = createChart(data.numbers);
+chart.render();
+```
+```
+
+### Code Block Attributes
+
+| Attribute | Description |
+|-----------|-------------|
+| `:cell=name` | Name the cell for dependency tracking |
+| `:deps=a,b` | Explicit dependencies on other cells |
+| `:hide` | Hide source code, show only output |
+| `:output=html\|json\|text` | Output format |
+| `:exec` | Mark as executable (without cell name) |
+
+### Inline Directive
+
+```jsx
+<Inline source="./path/to/file.md" section="#heading-id" recursive="false" />
+```
+
+### Implementation Status
+
+- [x] Core types (Cell, Notebook, DependencyGraph)
+- [x] Code block attribute parser (`:cell=`, `:deps=`, etc.)
+- [x] Dependency analyzer (DAG, topological sort, cycle detection)
+- [x] Markdown parser integration
+- [x] Session API (execute, stale detection, JSON/HTML export)
+- [x] JS FFI evaluator interface
+- [ ] MoonBit code evaluator (compile & execute)
+- [ ] Frontend editor component (React/Solid)
+- [ ] Visualization components (Chart, Table, SVG)
+- [ ] File watcher for `<Inline>` resolution
+- [ ] REPL mode
+
+### TODO
+
+1. **MoonBit Evaluator**: Compile MoonBit cells to JS/WASM and execute
+2. **Frontend Editor**: Interactive cell editing with Monaco/CodeMirror
+3. **Visualization**: Built-in chart/table/svg components
+4. **File Resolution**: Resolve `<Inline source="..."/>` at build time
+5. **Export**: Generate static HTML or executable notebooks
+
+----
+
 ## CommonMark Compatibility
 
 This parser handles most common Markdown syntax correctly and works well for typical use cases like documentation, blog posts, and notes.
