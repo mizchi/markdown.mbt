@@ -418,3 +418,78 @@ test "is_mdx_tag combines both checks" {
   assert_false(is_mdx_tag("div")) // HTML
   assert_false(is_mdx_tag("span")) // HTML
 }
+
+// =============================================================================
+// Multi-line JSX Children Tests (Issue: mdx-multiline-children-issue)
+// =============================================================================
+
+///|
+test "multi-line JSX children are preserved" {
+  let mdx =
+    #|<my-comp>
+    #|  <div>Child content</div>
+    #|  <p>More content</p>
+    #|</my-comp>
+    #|
+  let result = @markdown.parse(mdx)
+  let blocks = parse_mdx_blocks(result.document)
+  assert_eq(blocks.length(), 1)
+  match blocks[0] {
+    JsxElement(tag~, children~, ..) => {
+      assert_eq(tag, "my-comp")
+      // Children should not be empty
+      assert_true(children.length() > 0)
+      assert_true(children.contains("Child content"))
+      assert_true(children.contains("More content"))
+    }
+    _ => fail("Expected JsxElement")
+  }
+}
+
+///|
+test "multi-line JSX with nested components" {
+  let mdx =
+    #|<Wrapper>
+    #|  <Header />
+    #|  <Content>
+    #|    <p>Nested text</p>
+    #|  </Content>
+    #|  <Footer />
+    #|</Wrapper>
+    #|
+  let result = @markdown.parse(mdx)
+  let blocks = parse_mdx_blocks(result.document)
+  assert_eq(blocks.length(), 1)
+  match blocks[0] {
+    JsxElement(tag~, children~, ..) => {
+      assert_eq(tag, "Wrapper")
+      assert_true(children.contains("Header"))
+      assert_true(children.contains("Content"))
+      assert_true(children.contains("Footer"))
+      assert_true(children.contains("Nested text"))
+    }
+    _ => fail("Expected JsxElement")
+  }
+}
+
+///|
+test "web component with multi-line children" {
+  let mdx =
+    #|<my-component>
+    #|  <div>Content here</div>
+    #|  <p>More content</p>
+    #|</my-component>
+    #|
+  let result = @markdown.parse(mdx)
+  let blocks = parse_mdx_blocks(result.document)
+  assert_eq(blocks.length(), 1)
+  match blocks[0] {
+    JsxElement(tag~, children~, self_closing~, ..) => {
+      assert_eq(tag, "my-component")
+      assert_eq(self_closing, false)
+      assert_true(children.contains("Content here"))
+      assert_true(children.contains("More content"))
+    }
+    _ => fail("Expected JsxElement")
+  }
+}
