@@ -429,3 +429,68 @@ test "serialize task list roundtrip" {
   inspect(output.contains("[ ] foo"), content="true")
   inspect(output.contains("[x] bar"), content="true")
 }
+
+///|
+test "parse custom element single line" {
+  let result = parse("<my-component>content</my-component>\n")
+  inspect(result.document.children.length(), content="1")
+  match result.document.children[0] {
+    Block::HtmlBlock(html~, ..) => {
+      inspect(html.contains("my-component"), content="true")
+      inspect(html.contains("content"), content="true")
+    }
+    _ => fail("Expected HtmlBlock")
+  }
+}
+
+///|
+test "parse custom element multi-line" {
+  let source =
+    #|<my-component>
+    #|  <div>Content here</div>
+    #|  <p>More content</p>
+    #|</my-component>
+    #|
+  let result = parse(source)
+  inspect(result.document.children.length(), content="1")
+  match result.document.children[0] {
+    Block::HtmlBlock(html~, ..) => {
+      inspect(html.contains("<my-component>"), content="true")
+      inspect(html.contains("</my-component>"), content="true")
+      inspect(html.contains("Content here"), content="true")
+    }
+    _ => fail("Expected HtmlBlock for multi-line custom element")
+  }
+}
+
+///|
+test "parse custom element self-closing" {
+  let result = parse("<my-component attr=\"value\" />\n")
+  inspect(result.document.children.length(), content="1")
+  match result.document.children[0] {
+    Block::HtmlBlock(html~, ..) => {
+      inspect(html.contains("my-component"), content="true")
+      inspect(html.contains("/>"), content="true")
+    }
+    _ => fail("Expected HtmlBlock for self-closing custom element")
+  }
+}
+
+///|
+test "parse custom element with attributes" {
+  let source =
+    #|<custom-button class="primary" data-id="123">
+    #|  Click me
+    #|</custom-button>
+    #|
+  let result = parse(source)
+  inspect(result.document.children.length(), content="1")
+  match result.document.children[0] {
+    Block::HtmlBlock(html~, ..) => {
+      inspect(html.contains("custom-button"), content="true")
+      inspect(html.contains("class=\"primary\""), content="true")
+      inspect(html.contains("data-id=\"123\""), content="true")
+    }
+    _ => fail("Expected HtmlBlock")
+  }
+}

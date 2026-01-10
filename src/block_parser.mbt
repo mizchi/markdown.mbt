@@ -1037,6 +1037,28 @@ fn is_html_block_tag(tag : String) -> Bool {
 }
 
 ///|
+/// Check if a tag name is a custom element (Web Component)
+/// Custom elements must contain at least one hyphen and start with a letter
+fn is_custom_element_tag(tag : String) -> Bool {
+  if tag.is_empty() {
+    return false
+  }
+  // Must start with a letter
+  let chars = tag.to_array()
+  let first = chars[0]
+  if not((first >= 'a' && first <= 'z') || (first >= 'A' && first <= 'Z')) {
+    return false
+  }
+  // Must contain a hyphen
+  for c in chars {
+    if c == '-' {
+      return true
+    }
+  }
+  false
+}
+
+///|
 /// Try to parse HTML block
 fn BlockParser::try_parse_html_block(self : BlockParser, start : Int) -> Block? {
   let saved = self.scanner.pos
@@ -1058,13 +1080,14 @@ fn BlockParser::try_parse_html_block(self : BlockParser, start : Int) -> Block? 
     self.scanner.advance(1)
   }
 
-  // Read tag name
+  // Read tag name (including hyphen for custom elements)
   let tag_buf = StringBuilder::new()
   while not(self.scanner.is_eof()) {
     match self.scanner.peek() {
       Some(c) if (c >= 'a' && c <= 'z') ||
         (c >= 'A' && c <= 'Z') ||
-        (c >= '0' && c <= '9') => {
+        (c >= '0' && c <= '9') ||
+        c == '-' => {
         tag_buf.write_char(c)
         self.scanner.advance(1)
       }
@@ -1077,8 +1100,9 @@ fn BlockParser::try_parse_html_block(self : BlockParser, start : Int) -> Block? 
     return None
   }
 
-  // Check if this is a block-level tag
-  if not(is_html_block_tag(tag_name)) {
+  // Check if this is a block-level tag or custom element
+  let is_custom = is_custom_element_tag(tag_name)
+  if not(is_html_block_tag(tag_name)) && not(is_custom) {
     self.scanner.restore(saved)
     return None
   }
@@ -1087,7 +1111,14 @@ fn BlockParser::try_parse_html_block(self : BlockParser, start : Int) -> Block? 
   self.scanner.restore(peek_pos)
   let content_buf = StringBuilder::new()
 
-  // Read lines until blank line or end of document
+  // For custom elements, we need to find the closing tag
+  let closing_tag = if is_custom && not(is_closing) {
+    Some("</\{tag_name}>")
+  } else {
+    None
+  }
+
+  // Read lines until closing tag (for custom elements) or blank line
   while not(self.scanner.is_eof()) {
     let line = self.scanner.read_line()
     content_buf.write_string(line)
@@ -1096,9 +1127,26 @@ fn BlockParser::try_parse_html_block(self : BlockParser, start : Int) -> Block? 
       self.scanner.advance(1)
     }
 
-    // Check for blank line (end of HTML block type 6/7)
-    if self.scanner.is_blank_line() {
-      break
+    // For custom elements, check if line contains closing tag
+    match closing_tag {
+      Some(close) => {
+        if line.contains(close) {
+          break
+        }
+        // Also check for self-closing tag on first line
+        if content_buf.to_string().char_length() == line.char_length() + 1 {
+          // First line - check for self-closing />
+          if line.contains("/>") {
+            break
+          }
+        }
+      }
+      None => {
+        // Standard HTML block: end on blank line
+        if self.scanner.is_blank_line() {
+          break
+        }
+      }
     }
   }
   let html = content_buf.to_string()

@@ -1,4 +1,4 @@
-target/
+target
 .mooncakes/
 node_modules/
 src/cmark_tests/
@@ -8,3 +8,4 @@ wrangler.json
 bench_results.csv
 playwright-report
 test-results/
+_build

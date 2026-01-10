@@ -13,7 +13,7 @@ import {
   md_parse_with_source,
   md_parse_incremental,
   md_free,
-} from "../target/js/release/build/api/api.js";
+} from "../_build/js/release/build/api/api.js";
 
 // =============================================================================
 // Stateless One-shot APIs (recommended for most use cases)

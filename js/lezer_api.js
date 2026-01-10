@@ -12,7 +12,7 @@ import {
   highlight_css,
   highlight_bash,
   highlight_rust,
-} from "../target/js/release/build/lezer_api/lezer_api.js";
+} from "../_build/js/release/build/lezer_api/lezer_api.js";
 
 export {
   highlight_typescript as highlightTypeScript,

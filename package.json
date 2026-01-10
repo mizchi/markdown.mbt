@@ -39,6 +39,6 @@
   },
   "files": [
     "js",
-    "target/js/release/build"
+    "_build/js/release/build"
   ]
 }
