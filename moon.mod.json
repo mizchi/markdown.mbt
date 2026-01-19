@@ -3,7 +3,8 @@
   "version": "0.4.2",
   "deps": {
     "moonbitlang/parser": "0.1.12",
-    "moonbitlang/x": "0.4.38"
+    "moonbitlang/x": "0.4.38",
+    "moonbitlang/yacc": "0.7.8"
   },
   "readme": "README.md",
   "repository": "https://github.com/mizchi/markdown.mbt",
