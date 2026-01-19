@@ -1026,7 +1026,12 @@ let html_block_tags : Array[String] = [
 
 ///|
 /// Check if a tag name is a block-level HTML tag
+/// Also recognizes custom elements (Web Components) as block tags
 fn is_html_block_tag(tag : String) -> Bool {
+  // Custom elements (Web Components) are always block-level
+  if is_custom_element_tag(tag) {
+    return true
+  }
   let lower = tag.to_lower()
   for t in html_block_tags {
     if lower == t {
