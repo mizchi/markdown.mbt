@@ -481,31 +481,18 @@ fn extract_refs_from_func(
   local_bindings : Array[String],
   refs : Array[String],
 ) -> Unit {
-  match func {
-    Lambda(parameters~, body~, ..) => {
-      let new_bindings = local_bindings.copy()
-      // Add function parameters to local scope
-      for param in parameters {
-        match param {
-          Positional(binder~, ..) => new_bindings.push(binder.name)
-          Labelled(binder~, ..) => new_bindings.push(binder.name)
-          Optional(binder~, ..) => new_bindings.push(binder.name)
-          QuestionOptional(binder~, ..) => new_bindings.push(binder.name)
-          DiscardPositional(..) => ()
-        }
-      }
-      extract_refs_from_expr(body, new_bindings, refs)
+  let new_bindings = local_bindings.copy()
+  // Add function parameters to local scope
+  for param in func.parameters {
+    match param {
+      @syntax.Positional(binder~, ..) => new_bindings.push(binder.name)
+      @syntax.Labelled(binder~, ..) => new_bindings.push(binder.name)
+      @syntax.Optional(binder~, ..) => new_bindings.push(binder.name)
+      @syntax.QuestionOptional(binder~, ..) => new_bindings.push(binder.name)
+      @syntax.DiscardPositional(..) => ()
     }
-    Match(cases~, ..) =>
-      // For fn { pattern => expr } style
-      for case in cases {
-        let new_bindings = local_bindings.copy()
-        for pattern in case.patterns {
-          extract_bindings_from_pattern(pattern, new_bindings)
-        }
-        extract_refs_from_expr(case.body, new_bindings, refs)
-      }
   }
+  extract_refs_from_expr(func.body, new_bindings, refs)
 }
 
 ///|

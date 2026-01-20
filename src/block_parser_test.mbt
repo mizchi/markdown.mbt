@@ -494,3 +494,40 @@ test "parse custom element with attributes" {
     _ => fail("Expected HtmlBlock")
   }
 }
+
+///|
+test "parse custom element with BEM class names (double underscore)" {
+  // BEM naming: block__element--modifier
+  // The __ should NOT be interpreted as markdown strong syntax
+  let source =
+    #|<styled-checkbox-demo>
+    #|  <div class="checkbox__control">
+    #|    <span class="checkbox__icon--check"></span>
+    #|  </div>
+    #|</styled-checkbox-demo>
+    #|
+  let result = parse(source)
+  inspect(result.document.children.length(), content="1")
+  match result.document.children[0] {
+    Block::HtmlBlock(html~, ..) => {
+      // Verify the double underscores are preserved
+      inspect(html.contains("checkbox__control"), content="true")
+      inspect(html.contains("checkbox__icon--check"), content="true")
+    }
+    _ => fail("Expected HtmlBlock for custom element with BEM classes")
+  }
+}
+
+///|
+test "parse custom element single line with BEM classes" {
+  let source = "<my-demo><span class=\"switch__thumb\"></span></my-demo>\n"
+  let result = parse(source)
+  inspect(result.document.children.length(), content="1")
+  match result.document.children[0] {
+    Block::HtmlBlock(html~, ..) => {
+      // __ must be preserved, not treated as strong/bold markdown
+      inspect(html.contains("switch__thumb"), content="true")
+    }
+    _ => fail("Expected HtmlBlock")
+  }
+}
