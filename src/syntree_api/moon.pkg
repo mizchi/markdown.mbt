@@ -1,4 +1,4 @@
-import { "mizchi/markdown/lezer/shiki" }
+import { "mizchi/syntree/highlight" }
 
 options(
   link: {

@@ -9,8 +9,8 @@ import type {
   AlignType,
 } from "mdast";
 import type { Position } from "unist";
-// @ts-ignore - no type declarations for lezer_api.js
-import { highlight } from "../js/lezer_api.js";
+// @ts-ignore - no type declarations for syntree_api.js
+import { highlight } from "../js/syntree_api.js";
 
 // =============================================================================
 // SVG Sanitizer
@@ -130,7 +130,7 @@ const langMap: Record<string, string> = {
 
 const supportedLangs = ["typescript", "moonbit", "json", "html", "css", "bash", "rust"];
 
-// Highlight code using lezer
+// Highlight code using syntree
 function highlightCode(code: string, lang: string): string | null {
   const mappedLang = langMap[lang] || lang;
   if (!supportedLangs.includes(mappedLang)) {
@@ -193,7 +193,7 @@ export function renderBlock(
       const highlighted = lang ? highlightCode(block.value, lang) : null;
 
       if (highlighted) {
-        // Use highlighted HTML from lezer (shiki format)
+        // Use highlighted HTML from syntree (highlight format)
         return (
           <RawHtml
             key={key}

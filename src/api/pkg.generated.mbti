@@ -1,9 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "mizchi/markdown/api"
 
-import(
-  "mizchi/markdown"
-)
+import {
+  "mizchi/markdown",
+}
 
 // Values
 pub fn document_to_json(@markdown.Document) -> String

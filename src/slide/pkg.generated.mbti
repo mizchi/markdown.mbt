@@ -1,9 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "mizchi/markdown/slide"
 
-import(
-  "mizchi/markdown"
-)
+import {
+  "mizchi/markdown",
+}
 
 // Values
 pub fn parse(String) -> SlideDocument

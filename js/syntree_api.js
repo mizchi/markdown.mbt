@@ -1,5 +1,5 @@
 /**
- * @moonbit/lezer - Syntax highlighting API wrapper
+ * @mizchi/syntree - Syntax highlighting API wrapper
  *
  * Provides syntax highlighting for multiple languages.
  */
@@ -12,7 +12,7 @@ import {
   highlight_css,
   highlight_bash,
   highlight_rust,
-} from "../_build/js/release/build/lezer_api/lezer_api.js";
+} from "../_build/js/release/build/syntree_api/syntree_api.js";
 
 export {
   highlight_typescript as highlightTypeScript,
@@ -28,7 +28,7 @@ export {
  * Highlight code based on language identifier.
  * @param {string} source - Source code to highlight
  * @param {string} lang - Language identifier (ts, typescript, mbt, moonbit, json, html, css, bash, sh)
- * @returns {string} Shiki-compatible HTML
+ * @returns {string} Highlight HTML
  */
 export function highlight(source, lang) {
   switch (lang.toLowerCase()) {
@@ -62,8 +62,8 @@ export function highlight(source, lang) {
     case "rs":
       return highlight_rust(source);
     default:
-      // Return plain text wrapped in shiki format
-      return `<pre class="shiki" style="background-color: #0d1117; color: #c9d1d9"><code><span class="line"><span style="color: #c9d1d9">${escapeHtml(source)}</span></span></code></pre>`;
+      // Return plain text wrapped in highlight format
+      return `<pre class="highlight" style="background-color: #0d1117; color: #c9d1d9"><code><span class="line"><span style="color: #c9d1d9">${escapeHtml(source)}</span></span></code></pre>`;
   }
 }
 

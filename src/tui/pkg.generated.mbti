@@ -1,9 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "mizchi/markdown/tui"
 
-import(
-  "mizchi/markdown"
-)
+import {
+  "mizchi/markdown",
+}
 
 // Values
 pub let bg_black : String

@@ -115,7 +115,7 @@
       padding: 0;
     }
 
-    .output pre.shiki {
+    .output pre.highlight {
       margin: 0;
       padding: 16px;
       border-radius: 0;
@@ -125,7 +125,7 @@
       overflow-x: auto;
     }
 
-    .output pre.shiki code {
+    .output pre.highlight code {
       font-family: inherit;
       white-space: pre;
     }
@@ -451,7 +451,7 @@ fn main() {
     async function init() {
       try {
         console.log('Loading module...');
-        const module = await import('../js/lezer_api.js');
+        const module = await import('../js/syntree_api.js');
         console.log('Module loaded:', Object.keys(module));
         highlight = module.highlight;
         console.log('highlight function:', typeof highlight);

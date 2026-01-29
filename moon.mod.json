@@ -4,7 +4,10 @@
   "deps": {
     "moonbitlang/parser": "0.1.13",
     "moonbitlang/x": "0.4.38",
-    "moonbitlang/yacc": "0.7.8"
+    "moonbitlang/yacc": "0.7.8",
+    "mizchi/syntree": {
+      "path": "../syntree.mbt"
+    }
   },
   "readme": "README.md",
   "repository": "https://github.com/mizchi/markdown.mbt",

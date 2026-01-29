@@ -1,1 +1,4 @@
-import { "mizchi/markdown" as @md }
+import {
+  "mizchi/markdown" as @md,
+  "moonbitlang/core/strconv",
+}

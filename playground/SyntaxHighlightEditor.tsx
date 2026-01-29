@@ -1,6 +1,6 @@
 import { createEffect, onMount, createSignal, createMemo, For } from "@luna_ui/luna";
-// @ts-ignore - no type declarations for lezer_api.js
-import { highlight } from "../js/lezer_api.js";
+// @ts-ignore - no type declarations for syntree_api.js
+import { highlight } from "../js/syntree_api.js";
 
 interface SyntaxHighlightEditorProps {
   value: () => string;  // Always accessor for fine-grained reactivity
@@ -177,7 +177,7 @@ function highlightCodeBlockLines(lines: string[], lang: string): string[] {
   else if (supportedLangs.includes(mappedLang)) {
     try {
       const html = highlight(code, mappedLang);
-      // Extract content from shiki output
+      // Extract content from highlight output
       const match = html.match(/<code>([\s\S]*)<\/code>/);
       if (match) {
         const content = match[1]!;

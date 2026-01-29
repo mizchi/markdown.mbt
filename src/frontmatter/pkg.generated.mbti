@@ -1,9 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "mizchi/markdown/frontmatter"
 
-import(
-  "mizchi/markdown"
-)
+import {
+  "mizchi/markdown",
+}
 
 // Values
 pub fn get_bool(@markdown.Frontmatter, String) -> Bool?

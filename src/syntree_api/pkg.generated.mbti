@@ -1,5 +1,5 @@
 // Generated using `moon info`, DON'T EDIT IT
-package "mizchi/markdown/lezer_api"
+package "mizchi/markdown/syntree_api"
 
 // Values
 pub fn highlight_bash(String) -> String

@@ -32,10 +32,10 @@ fn trim_trailing_space_from_last_text(inlines : Array[Inline]) -> Unit {
   let len = content.length()
   guard len > 0 else { return }
   // Quick check: does it end with space?
-  guard content.unsafe_charcode_at(len - 1) == ' ' else { return }
+  guard content.unsafe_get(len - 1) == ' ' else { return }
   // Find last non-space character
   let mut end = len - 1
-  while end > 0 && content.unsafe_charcode_at(end - 1) == ' ' {
+  while end > 0 && content.unsafe_get(end - 1) == ' ' {
     end = end - 1
   }
   // Now trim

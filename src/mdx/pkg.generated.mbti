@@ -1,9 +1,9 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "mizchi/markdown/mdx"
 
-import(
-  "mizchi/markdown"
-)
+import {
+  "mizchi/markdown",
+}
 
 // Values
 pub fn extract_component_names(@markdown.Document) -> Array[String]
