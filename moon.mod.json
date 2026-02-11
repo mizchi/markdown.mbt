@@ -1,11 +1,11 @@
 {
   "name": "mizchi/markdown",
-  "version": "0.4.6",
+  "version": "0.4.7",
   "deps": {
     "moonbitlang/parser": "0.1.15",
     "moonbitlang/x": "0.4.40",
     "moonbitlang/yacc": "0.7.9",
-    "mizchi/syntree": "0.2.2"
+    "mizchi/syntree": "0.2.3"
   },
   "readme": "README.md",
   "repository": "https://github.com/mizchi/markdown.mbt",
