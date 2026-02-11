@@ -164,7 +164,6 @@ pub fn detect_cycles(graph : DependencyGraph) -> Array[Array[String]] {
   for id, _ in graph.cells {
     if not(visited.get(id).unwrap_or(false)) {
       let _ = dfs(id)
-
     }
   }
   cycles

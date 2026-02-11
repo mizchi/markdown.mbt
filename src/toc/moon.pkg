@@ -1,1 +1,4 @@
-import { "mizchi/markdown" as @md, "mizchi/markdown/slug" as @slug }
+import {
+  "mizchi/markdown" @md,
+  "mizchi/markdown/slug" @slug,
+}

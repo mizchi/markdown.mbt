@@ -344,11 +344,11 @@ fn serialize_inline(inline : Inline, buf : StringBuilder) -> Unit {
       // Add padding space if content starts/ends with backtick
       // (Spaces at both ends need padding only if NOT all spaces, to prevent trimming)
       let needs_padding = content.length() > 0 &&
-        {
+        ({
           let first = content.get_char(0)
           let last = content.get_char(content.length() - 1)
           first == Some('`') || last == Some('`')
-        }
+        })
       if needs_padding {
         buf.write_char(' ')
       }
