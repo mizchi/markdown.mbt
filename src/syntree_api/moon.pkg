@@ -1,4 +1,6 @@
-import { "mizchi/syntree/highlight" }
+import {
+  "mizchi/syntree/highlight",
+}
 
 options(
   link: {

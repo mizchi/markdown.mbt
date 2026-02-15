@@ -524,10 +524,9 @@ test "parse custom element single line with BEM classes" {
   let result = parse(source)
   inspect(result.document.children.length(), content="1")
   match result.document.children[0] {
-    Block::HtmlBlock(html~, ..) => {
+    Block::HtmlBlock(html~, ..) =>
       // __ must be preserved, not treated as strong/bold markdown
       inspect(html.contains("switch__thumb"), content="true")
-    }
     _ => fail("Expected HtmlBlock")
   }
 }

@@ -11,10 +11,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Setup Moon
-        uses: illusory0x0/setup-moonbit@v0.1.0
-        with:
-          version: pre-release
+      - name: Install MoonBit CLI
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
       - name: Set up pnpm
         uses: pnpm/action-setup@v4
         with:
@@ -50,3 +50,7 @@ jobs:
           moon test src/tui --target all
       - name: Test Bench
         run: moon bench
+      - name: Component build (wasm)
+        run: |
+          cd component
+          moon build --target wasm --release

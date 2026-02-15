@@ -1314,7 +1314,6 @@ fn BlockParser::try_parse_link_definition(
   if char_is(self.scanner.peek(), '\n') {
     self.scanner.advance(1)
     let _ = self.scanner.skip_spaces()
-
   }
 
   // Read URL
@@ -1637,7 +1636,6 @@ fn split_table_cells(line : String) -> Array[String] {
     match cells[0].trim(chars=" \t\n\r").to_string() {
       "" => {
         let _ = cells.remove(0)
-
       }
       _ => ()
     }

@@ -714,7 +714,6 @@ test "crdt: LogicalId generation 1000x" (b : @bench.T) {
   b.bench(fn() {
     for i = 0; i < 1000; i = i + 1 {
       let _ = gen.next()
-
     }
     b.keep(gen)
   })
@@ -750,7 +749,6 @@ test "crdt: CrdtDocument insert 100 runs" (b : @bench.T) {
     let doc = CrdtDocument::new(AgentId(1))
     for i = 0; i < 100; i = i + 1 {
       let _ = doc.insert("Hello World ")
-
     }
     b.keep(doc)
   })
@@ -764,7 +762,6 @@ test "crdt: CrdtDocument with 50% tombstones" (b : @bench.T) {
   // 200 runs作成、半分を削除
   for i = 0; i < 200; i = i + 1 {
     let _ = doc.insert("Text ")
-
   }
   for i = 0; i < 100; i = i + 1 {
     doc.delete(i * 2) // 偶数インデックスを削除

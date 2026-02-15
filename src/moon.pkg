@@ -1,4 +1,6 @@
-import { "moonbitlang/core/bench" }
+import {
+  "moonbitlang/core/bench",
+}
 
 options(
   link: {
