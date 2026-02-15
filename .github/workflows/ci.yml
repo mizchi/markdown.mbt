@@ -50,3 +50,17 @@ jobs:
           moon test src/tui --target all
       - name: Test Bench
         run: moon bench
+      - name: Install moon-component
+        run: |
+          curl -fsSL -o /tmp/moon-component.tar.gz \
+            https://github.com/mizchi/moon-component/releases/download/v0.3.0/moon-component-linux-x64.tar.gz
+          tar -xzf /tmp/moon-component.tar.gz -C /usr/local/bin
+          chmod +x /usr/local/bin/moon-component
+      - name: Component build and test
+        run: |
+          cd component
+          moon-component generate wit --out-dir . --no-impl
+          moon build --target wasm --release
+          moon-component componentize _build/wasm/release/build/impl/impl.wasm --wit-dir wit -o markdown-component.wasm
+          npx jco transpile markdown-component.wasm -o test/gen
+          node test/test.mjs
