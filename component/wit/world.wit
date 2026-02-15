@@ -1,0 +1,11 @@
+package mizchi:markdown@0.1.0;
+
+interface markdown {
+    md-to-html: func(source: string) -> string;
+    md-to-ast-json: func(source: string) -> string;
+    md-serialize: func(source: string) -> string;
+}
+
+world markdown-world {
+    export markdown;
+}

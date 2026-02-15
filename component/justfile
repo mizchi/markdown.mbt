@@ -1,0 +1,27 @@
+moon_component := env("MOON_COMPONENT", "moon-component")
+wasm := "_build/wasm/release/build/impl/impl.wasm"
+out := "markdown-component.wasm"
+
+default:
+    @just --list
+
+generate:
+    cd {{justfile_directory()}} && {{moon_component}} generate wit --out-dir . --no-impl
+
+build-wasm:
+    cd {{justfile_directory()}} && moon build --target wasm --release
+
+build: build-wasm
+    cd {{justfile_directory()}} && {{moon_component}} componentize {{wasm}} --wit-dir wit -o {{out}}
+
+transpile: build
+    npx jco transpile {{out}} -o test/gen
+
+test: transpile
+    node test/test.mjs
+
+wit: build
+    wasm-tools component wit {{out}}
+
+clean:
+    rm -rf _build {{out}} test/gen

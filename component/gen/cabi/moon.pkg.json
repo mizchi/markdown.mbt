@@ -1,0 +1,17 @@
+{
+  "import": [
+    "moonbitlang/core/encoding/utf8"
+  ],
+  "link": {
+    "wasm": {
+      "exports": [
+        "cabi_realloc:cabi_realloc"
+      ]
+    },
+    "wasm-gc": {
+      "exports": [
+        "cabi_realloc:cabi_realloc"
+      ]
+    }
+  }
+}
