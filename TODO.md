@@ -1,6 +1,6 @@
 # TODO
 
-- [x] 複数行の WebComponents customElements 要素がパースできてない
+- [x] Multi-line WebComponents customElements elements are not being parsed correctly
 
 ## Current Status
 

@@ -1,91 +1,91 @@
-# Moonlight を Markdown Editor に組み込む指示書
+# Guide for Integrating Moonlight into the Markdown Editor
 
-Luna ベースの Markdown Editor に Moonlight SVG エディタを組み込むためのガイド。
+A guide for integrating the Moonlight SVG editor into the Luna-based Markdown Editor.
 
-## 概要
+## Overview
 
-Moonlight は以下の2つの組み込み方式を提供:
+Moonlight provides two integration methods:
 
-1. **JavaScript API (推奨)**: `MoonlightEditor.create()` で動的にエディタを生成
-2. **WebComponent**: `<moonlight-editor>` カスタム要素として使用
+1. **JavaScript API (recommended)**: Dynamically create editors with `MoonlightEditor.create()`
+2. **WebComponent**: Use as a `<moonlight-editor>` custom element
 
-Markdown Editor との統合では **JavaScript API** を推奨。理由:
-- Luna の Signal システムと直接連携可能
-- イベントコールバックで双方向同期が容易
-- SVG のインポート/エクスポートが柔軟
+For Markdown Editor integration, the **JavaScript API** is recommended. Reasons:
+- Direct integration with Luna's Signal system
+- Easy bidirectional sync via event callbacks
+- Flexible SVG import/export
 
 ---
 
-## 1. 依存関係のセットアップ
+## 1. Dependency Setup
 
-### 1.1 MoonBit パッケージとして追加
+### 1.1 Add as a MoonBit Package
 
 ```bash
 moon add mizchi/moonlight
 ```
 
-### 1.2 JavaScript エントリポイントで読み込み
+### 1.2 Load in the JavaScript Entry Point
 
 ```typescript
 // editor.ts
 import 'mbt:mizchi/moonlight/embed';
 ```
 
-これにより `window.MoonlightEditor` がグローバルに登録される。
+This registers `window.MoonlightEditor` globally.
 
 ---
 
-## 2. 基本的な組み込み
+## 2. Basic Integration
 
-### 2.1 エディタの作成
+### 2.1 Creating an Editor
 
 ```typescript
 const container = document.getElementById('svg-editor');
 
 const editor = MoonlightEditor.create(container, {
-  width: 600,          // キャンバス幅 (px)
-  height: 400,         // キャンバス高さ (px)
-  docWidth: 600,       // SVG viewBox 幅
-  docHeight: 400,      // SVG viewBox 高さ
-  zoom: 1.0,           // 初期ズーム
+  width: 600,          // Canvas width (px)
+  height: 400,         // Canvas height (px)
+  docWidth: 600,       // SVG viewBox width
+  docHeight: 400,      // SVG viewBox height
+  zoom: 1.0,           // Initial zoom
   theme: 'light',      // 'light' | 'dark'
-  readonly: false,     // 読み取り専用モード
-  initialSvg: null,    // 初期 SVG 文字列 (オプション)
+  readonly: false,     // Read-only mode
+  initialSvg: null,    // Initial SVG string (optional)
 });
 ```
 
-### 2.2 SVG のインポート/エクスポート
+### 2.2 SVG Import/Export
 
 ```typescript
-// Markdown から抽出した SVG を読み込み
+// Load SVG extracted from Markdown
 editor.importSvg(svgString);
 
-// 編集結果を SVG として取得
+// Get the editing result as SVG
 const svg = editor.exportSvg();
 
-// エディタをクリア
+// Clear the editor
 editor.clear();
 ```
 
 ---
 
-## 3. Luna との統合パターン
+## 3. Integration Patterns with Luna
 
-### 3.1 Signal で SVG 状態を管理
+### 3.1 Managing SVG State with Signals
 
 ```moonbit
-// Markdown ドキュメント内の SVG を Signal で管理
+// Manage SVG within a Markdown document using Signals
 let svg_content : @luna.Signal[String] = @luna.signal("")
 
-// エディタから変更を受け取る
+// Receive changes from the editor
 fn setup_editor_sync(editor : @js.Any) -> Unit {
-  // 変更イベントを購読
+  // Subscribe to change events
   let _ = editor.onChange(fn() {
     let new_svg = editor.exportSvg()
     svg_content.set(new_svg)
   })
 
-  // Signal 変更時にエディタを更新（双方向バインディング）
+  // Update the editor when Signal changes (bidirectional binding)
   let _ = @luna.effect(fn() {
     let svg = svg_content.get()
     if svg.length() > 0 {
@@ -95,27 +95,27 @@ fn setup_editor_sync(editor : @js.Any) -> Unit {
 }
 ```
 
-### 3.2 Markdown ブロックとして埋め込み
+### 3.2 Embedding as a Markdown Block
 
 ```moonbit
 fn svg_block(svg_signal : @luna.Signal[String]) -> @luna.Node[@luna.DomEvent] {
   let container_ref : Ref[@js.Any?] = { val: None }
   let editor_ref : Ref[@js.Any?] = { val: None }
 
-  // コンテナ div を作成
+  // Create container div
   let container = @element.div(
     id="svg-editor-container",
     [],
   )
 
-  // マウント後にエディタを初期化
+  // Initialize the editor after mounting
   let _ = @luna.effect(fn() {
     match container_ref.val {
       Some(el) => {
         let editor = create_moonlight_editor(el, svg_signal.get())
         editor_ref.val = Some(editor)
 
-        // 変更を Signal に反映
+        // Reflect changes to Signal
         editor.onChange(fn() {
           svg_signal.set(editor.exportSvg())
         })
@@ -130,126 +130,126 @@ fn svg_block(svg_signal : @luna.Signal[String]) -> @luna.Node[@luna.DomEvent] {
 
 ---
 
-## 4. イベント API
+## 4. Event API
 
-### 4.1 利用可能なイベント
+### 4.1 Available Events
 
 ```typescript
-// 要素が変更された時
+// When an element is changed
 editor.onChange(callback: () => void): () => void
 
-// 要素が選択された時
+// When an element is selected
 editor.onSelect(callback: (ids: string[]) => void): () => void
 
-// 選択が解除された時
+// When selection is cleared
 editor.onDeselect(callback: () => void): () => void
 
-// エディタがフォーカスを得た時
+// When the editor gains focus
 editor.onFocus(callback: () => void): () => void
 
-// エディタがフォーカスを失った時
+// When the editor loses focus
 editor.onBlur(callback: () => void): () => void
 
-// ツールモードが変更された時 ('select' | 'freedraw')
+// When the tool mode changes ('select' | 'freedraw')
 editor.onModeChange(callback: (mode: string) => void): () => void
 
-// 要素が追加された時
+// When an element is added
 editor.onElementAdd(callback: (id: string) => void): () => void
 
-// 要素が削除された時
+// When an element is deleted
 editor.onElementDelete(callback: (id: string) => void): () => void
 ```
 
-### 4.2 購読解除
+### 4.2 Unsubscribing
 
-各イベントメソッドは解除関数を返す:
+Each event method returns an unsubscribe function:
 
 ```typescript
 const unsubscribe = editor.onChange(() => {
   console.log('changed');
 });
 
-// 後で解除
+// Unsubscribe later
 unsubscribe();
 ```
 
 ---
 
-## 5. 操作 API
+## 5. Operation API
 
-### 5.1 選択操作
+### 5.1 Selection Operations
 
 ```typescript
-// 特定の要素を選択
+// Select specific elements
 editor.select(['el-1', 'el-2']);
 
-// 全要素を選択
+// Select all elements
 editor.selectAll();
 
-// 選択解除
+// Deselect
 editor.deselect();
 
-// 選択中の要素 ID を取得
+// Get selected element IDs
 const ids = editor.getSelectedIds();
 ```
 
-### 5.2 要素操作
+### 5.2 Element Operations
 
 ```typescript
-// 全要素を取得
+// Get all elements
 const elements = editor.getElements();
 
-// ID で要素を取得
+// Get an element by ID
 const element = editor.getElementById('el-1');
 
-// 要素を削除
+// Delete elements
 editor.deleteElements(['el-1', 'el-2']);
 ```
 
-### 5.3 モード切替
+### 5.3 Mode Switching
 
 ```typescript
-// フリードローモードに切替
+// Switch to freedraw mode
 editor.setMode('freedraw');
 
-// 選択モードに切替
+// Switch to select mode
 editor.setMode('select');
 
-// 現在のモードを取得
+// Get current mode
 const mode = editor.getMode(); // 'select' | 'freedraw'
 ```
 
-### 5.4 読み取り専用
+### 5.4 Read-Only
 
 ```typescript
-// 読み取り専用に設定
+// Set to read-only
 editor.setReadonly(true);
 
-// 編集可能に戻す
+// Make editable again
 editor.setReadonly(false);
 
-// 現在の状態を取得
+// Get current state
 const isReadonly = editor.isReadonly();
 ```
 
-### 5.5 フォーカス
+### 5.5 Focus
 
 ```typescript
-// フォーカス状態を確認
+// Check focus state
 const hasFocus = editor.hasFocus();
 
-// プログラムからフォーカス
+// Programmatically focus
 editor.focus();
 
-// フォーカスを外す
+// Remove focus
 editor.blur();
 ```
 
 ---
 
-## 6. Markdown Editor 統合例
+## 6. Markdown Editor Integration Example
 
-### 6.1 コードブロック拡張
+### 6.1 Code Block Extension
 
 ````markdown
 ```moonlight-svg
@@ -259,46 +259,46 @@ editor.blur();
 ```
 ````
 
-### 6.2 パーサー拡張 (MoonBit)
+### 6.2 Parser Extension (MoonBit)
 
 ```moonbit
-/// SVG コードブロックを検出してエディタに置換
+/// Detect SVG code blocks and replace with editors
 fn parse_svg_blocks(markdown : String) -> Array[Block] {
   let blocks : Array[Block] = []
-  // moonlight-svg コードブロックを検出
+  // Detect moonlight-svg code blocks
   let pattern = "```moonlight-svg\n"
-  // ... パース処理
+  // ... parsing logic
   blocks
 }
 
-/// ブロックをレンダリング
+/// Render a block
 fn render_block(block : Block) -> @luna.Node[@luna.DomEvent] {
   match block {
     SvgBlock(svg_content) => {
-      // Moonlight エディタとして表示
+      // Display as Moonlight editor
       svg_editor_component(svg_content)
     }
     TextBlock(text) => {
-      // 通常のテキスト
+      // Normal text
       @element.p([], [text(text)])
     }
   }
 }
 ```
 
-### 6.3 編集モードの切り替え
+### 6.3 Edit Mode Toggle
 
 ```moonbit
-/// プレビュー/編集モード切り替え
+/// Preview/edit mode toggle
 fn svg_block_with_toggle(
   svg : @luna.Signal[String],
   is_editing : @luna.Signal[Bool],
 ) -> @luna.Node[@luna.DomEvent] {
   @luna.show(
     is_editing.get(),
-    // 編集モード: Moonlight エディタ
+    // Edit mode: Moonlight editor
     then_=fn() { moonlight_editor(svg) },
-    // プレビューモード: 静的 SVG 表示
+    // Preview mode: Static SVG display
     else_=fn() { svg_preview(svg) },
   )
 }
@@ -306,25 +306,25 @@ fn svg_block_with_toggle(
 
 ---
 
-## 7. スタイリング
+## 7. Styling
 
-### 7.1 コンテナサイズ
+### 7.1 Container Size
 
-エディタはコンテナのサイズに依存しない。`width`/`height` オプションで指定:
+The editor does not depend on the container size. Specify via `width`/`height` options:
 
 ```css
 #svg-editor-container {
-  /* コンテナ自体のスタイル */
+  /* Container styles */
   border: 1px solid #ccc;
   border-radius: 8px;
   overflow: hidden;
 }
 ```
 
-### 7.2 テーマ
+### 7.2 Theme
 
 ```typescript
-// ダークテーマ
+// Dark theme
 const editor = MoonlightEditor.create(container, {
   theme: 'dark',
   // ...
@@ -333,22 +333,22 @@ const editor = MoonlightEditor.create(container, {
 
 ---
 
-## 8. 注意点
+## 8. Important Notes
 
-### 8.1 破棄処理
+### 8.1 Cleanup
 
-コンポーネントがアンマウントされる際は `destroy()` を呼ぶ:
+Call `destroy()` when the component is unmounted:
 
 ```typescript
 editor.destroy();
 ```
 
-### 8.2 フォーカス競合
+### 8.2 Focus Conflicts
 
-Markdown Editor と Moonlight Editor でキーボードフォーカスが競合する場合:
+When keyboard focus conflicts between the Markdown Editor and Moonlight Editor:
 
 ```typescript
-// Moonlight がフォーカスを持っている間は Markdown Editor のショートカットを無効化
+// Disable Markdown Editor shortcuts while Moonlight has focus
 editor.onFocus(() => {
   markdownEditor.disableShortcuts();
 });
@@ -358,9 +358,9 @@ editor.onBlur(() => {
 });
 ```
 
-### 8.3 SVG フォーマット
+### 8.3 SVG Format
 
-Moonlight が出力する SVG は `data-moonlight-*` 属性を含む。これにより再編集が可能:
+SVG output from Moonlight includes `data-moonlight-*` attributes. This enables re-editing:
 
 ```xml
 <svg viewBox="0 0 400 300" data-moonlight-version="1">
@@ -368,27 +368,27 @@ Moonlight が出力する SVG は `data-moonlight-*` 属性を含む。これに
 </svg>
 ```
 
-プレーン SVG（`data-moonlight` 属性なし）も読み込めるが、移動のみ可能でリサイズ不可。
+Plain SVG (without `data-moonlight` attributes) can also be loaded, but only moving is supported -- resizing is not available.
 
 ---
 
-## 9. 実装チェックリスト
+## 9. Implementation Checklist
 
-- [ ] `mizchi/moonlight` パッケージを追加
-- [ ] embed モジュールをインポート
-- [ ] SVG ブロックの Signal 管理を実装
-- [ ] `MoonlightEditor.create()` でエディタ初期化
-- [ ] `onChange` で Markdown ドキュメントと同期
-- [ ] フォーカス管理（ショートカット競合対策）
-- [ ] 破棄処理 (`destroy()`) を実装
-- [ ] プレビュー/編集モード切り替え UI
+- [ ] Add `mizchi/moonlight` package
+- [ ] Import embed module
+- [ ] Implement Signal management for SVG blocks
+- [ ] Initialize editor with `MoonlightEditor.create()`
+- [ ] Sync with Markdown document via `onChange`
+- [ ] Focus management (shortcut conflict mitigation)
+- [ ] Implement cleanup (`destroy()`)
+- [ ] Preview/edit mode toggle UI
 
 ---
 
-## 10. 参考ファイル
+## 10. Reference Files
 
-- `examples/embed.html` - 基本的な組み込み例
-- `examples/preview.html` - プレビューモード例
-- `embed.ts` - JavaScript エントリポイント
-- `src/embed/entry.mbt` - MoonBit エントリポイント
-- `src/main.mbt` - API 実装詳細
+- `examples/embed.html` - Basic integration example
+- `examples/preview.html` - Preview mode example
+- `embed.ts` - JavaScript entry point
+- `src/embed/entry.mbt` - MoonBit entry point
+- `src/main.mbt` - API implementation details
