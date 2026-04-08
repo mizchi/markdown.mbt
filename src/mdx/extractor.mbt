@@ -23,7 +23,7 @@ pub fn extract_mdx_metadata(doc : @markdown.Document) -> MdxMetadata {
       ExportDecl(..) => exports.push(block)
       JsxElement(tag~, ..) =>
         // Add component name if not already seen
-        if not(array_contains(seen_components, tag)) {
+        if !(array_contains(seen_components, tag)) {
           seen_components.push(tag)
           components.push(tag)
         }
@@ -82,7 +82,7 @@ pub fn extract_component_names(doc : @markdown.Document) -> Array[String] {
   for block in blocks {
     match block {
       JsxElement(tag~, ..) =>
-        if not(array_contains(names, tag)) {
+        if !(array_contains(names, tag)) {
           names.push(tag)
         }
       _ => ()
@@ -99,7 +99,7 @@ pub fn extract_import_sources(doc : @markdown.Document) -> Array[String] {
   for block in blocks {
     match block {
       ImportDecl(source~, ..) =>
-        if not(array_contains(sources, source)) {
+        if !(array_contains(sources, source)) {
           sources.push(source)
         }
       _ => ()

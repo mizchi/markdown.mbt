@@ -36,6 +36,22 @@ test "plugin: parse_code_block_info with meta" {
 }
 
 ///|
+test "plugin: parse_code_block_info preserves emoji filename" {
+  let info = @markdown.parse_code_block_info("ts:src/😀.ts")
+  inspect(info.lang, content="ts")
+  inspect(info.filename, content="src/😀.ts")
+  inspect(info.meta, content="")
+}
+
+///|
+test "plugin: parse_code_block_info preserves emoji meta" {
+  let info = @markdown.parse_code_block_info("ts:index.ts {title=😀}")
+  inspect(info.lang, content="ts")
+  inspect(info.filename, content="index.ts")
+  inspect(info.meta, content="{title=😀}")
+}
+
+///|
 test "plugin: parse_code_block_info empty" {
   let info = @markdown.parse_code_block_info("")
   inspect(info.lang, content="")
@@ -60,7 +76,7 @@ fn reference_keyword_highlighter(
   buf.write_string(bright_cyan)
   buf.write_string("─── ")
   buf.write_string(info.lang)
-  if not(info.filename.is_empty()) {
+  if !info.filename.is_empty() {
     buf.write_string(": ")
     buf.write_string(info.filename)
   }
@@ -146,7 +162,7 @@ fn reference_file_header_highlighter(
   code : String,
 ) -> String {
   let buf = StringBuilder::new()
-  if not(info.filename.is_empty()) {
+  if !info.filename.is_empty() {
     buf.write_string(dim)
     buf.write_string("// ")
     buf.write_string(info.filename)
@@ -182,7 +198,7 @@ fn reference_line_number_highlighter(
   let lines = code.split("\n").collect()
 
   // Header
-  if not(info.lang.is_empty()) {
+  if !info.lang.is_empty() {
     buf.write_string(bold)
     buf.write_string("[")
     buf.write_string(info.lang)
@@ -193,7 +209,7 @@ fn reference_line_number_highlighter(
 
   // Code with line numbers
   for i, line in lines {
-    if i < lines.length() - 1 || not(line.to_string().is_empty()) {
+    if i < lines.length() - 1 || !line.to_string().is_empty() {
       buf.write_string(dim)
       let num = (i + 1).to_string()
       // Right-align line numbers
@@ -258,7 +274,7 @@ test "plugin: non-code blocks unaffected" {
 test "plugin: meta in info string" {
   fn meta_highlighter(info : @markdown.CodeBlockInfo, code : String) -> String {
     let buf = StringBuilder::new()
-    if not(info.meta.is_empty()) {
+    if !info.meta.is_empty() {
       buf.write_string("META: ")
       buf.write_string(info.meta)
       buf.write_string("\n")

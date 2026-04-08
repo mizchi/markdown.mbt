@@ -23,35 +23,8 @@ pub struct CodeBlockInfo {
 ///|
 /// Parse code block info string into components
 pub fn parse_code_block_info(info : String) -> CodeBlockInfo {
-  let trimmed = info.trim(chars=" \t\n\r").to_string()
-  if trimmed.is_empty() {
-    return { lang: "", filename: "", meta: "" }
-  }
-
-  // Find meta section (starts with space + {)
-  let trimmed_len = trimmed.iter().count()
-  let (main_part, meta) = match trimmed.find(" {") {
-    Some(idx) => {
-      let main = trimmed.unsafe_substring(start=0, end=idx)
-      let meta_str = trimmed
-        .unsafe_substring(start=idx + 1, end=trimmed_len)
-        .trim(chars=" \t\n\r")
-        .to_string()
-      (main, meta_str)
-    }
-    None => (trimmed, "")
-  }
-
-  // Split lang:filename
-  let main_len = main_part.iter().count()
-  match main_part.find(":") {
-    Some(idx) => {
-      let lang = main_part.unsafe_substring(start=0, end=idx)
-      let filename = main_part.unsafe_substring(start=idx + 1, end=main_len)
-      { lang, filename, meta }
-    }
-    None => { lang: main_part, filename: "", meta }
-  }
+  let parsed = @info_string.parse(info)
+  { lang: parsed.lang, filename: parsed.filename, meta: parsed.meta }
 }
 
 ///|

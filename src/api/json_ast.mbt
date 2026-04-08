@@ -109,7 +109,7 @@ fn block_to_json(block : @markdown.Block) -> Json? {
       Some({
         "type": "list",
         "ordered": false.to_json(),
-        "spread": not(tight).to_json(),
+        "spread": (!tight).to_json(),
         "children": Json::array(list_items),
         "position": position_to_json(span),
       })
@@ -123,7 +123,7 @@ fn block_to_json(block : @markdown.Block) -> Json? {
         "type": "list",
         "ordered": true.to_json(),
         "start": start.to_json(),
-        "spread": not(tight).to_json(),
+        "spread": (!tight).to_json(),
         "children": Json::array(list_items),
         "position": position_to_json(span),
       })
@@ -238,7 +238,7 @@ fn list_item_to_json(item : @markdown.ListItem, tight : Bool) -> Json {
   }
   {
     "type": "listItem",
-    "spread": not(tight).to_json(),
+    "spread": (!tight).to_json(),
     "checked": checked,
     "children": Json::array(blocks),
     "position": position_to_json(item.span),

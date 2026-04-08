@@ -89,7 +89,7 @@ fn build_context_json(context : EvalContext) -> String {
   buf.write_string("{")
   let mut first = true
   for key, value in context.variables {
-    if not(first) {
+    if !(first) {
       buf.write_string(",")
     }
     first = false

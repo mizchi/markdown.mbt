@@ -11,34 +11,34 @@ pub fn extract_from_document(doc : @md.Document) -> Array[TocItem] {
 /// Extract table of contents from Block array
 pub fn extract_from_blocks(blocks : Array[@md.Block]) -> Array[TocItem] {
   let toc : Array[TocItem] = []
-  extract_recursive(blocks, toc)
+  collect_toc_items(blocks, toc)
   toc
 }
 
 ///|
 /// Extract headings recursively
-fn extract_recursive(blocks : Array[@md.Block], toc : Array[TocItem]) -> Unit {
+fn collect_toc_items(blocks : Array[@md.Block], toc : Array[TocItem]) -> Unit {
   for block in blocks {
     match block {
-      @md.Block::Heading(level~, children~, ..) =>
-        // Only include h2-h4 in TOC (skip h1 which is usually the title)
-        if level >= 2 && level <= 4 {
-          let text = extract_text_from_inlines(children)
-          let id = @slug.generate_heading_id(text)
-          toc.push(TocItem::{ level, text, id })
-        }
-      @md.Block::Blockquote(children~, ..) => extract_recursive(children, toc)
-      @md.Block::BulletList(items~, ..) =>
-        for item in items {
-          extract_recursive(item.children, toc)
-        }
-      @md.Block::OrderedList(items~, ..) =>
-        for item in items {
-          extract_recursive(item.children, toc)
-        }
+      @md.Block::Heading(level~, children~, ..) if should_include_heading(level) =>
+        toc.push(build_toc_item(level, children))
+      @md.Block::Blockquote(children~, ..) => collect_toc_items(children, toc)
+      @md.Block::BulletList(items~, ..) | @md.Block::OrderedList(items~, ..) =>
+        items.each(fn(item) { collect_toc_items(item.children, toc) })
       _ => ()
     }
   }
+}
+
+///|
+fn should_include_heading(level : Int) -> Bool {
+  level >= 2 && level <= 4
+}
+
+///|
+fn build_toc_item(level : Int, children : Array[@md.Inline]) -> TocItem {
+  let text = extract_text_from_inlines(children)
+  TocItem::{ level, text, id: @slug.generate_heading_id(text) }
 }
 
 // =============================================================================
@@ -49,39 +49,33 @@ fn extract_recursive(blocks : Array[@md.Block], toc : Array[TocItem]) -> Unit {
 /// Extract plain text from Inline array
 pub fn extract_text_from_inlines(inlines : Array[@md.Inline]) -> String {
   let buf = StringBuilder::new()
-  for inline in inlines {
-    extract_text_recursive(inline, buf)
-  }
+  append_inline_texts(inlines, buf)
   buf.to_string()
 }
 
 ///|
 /// Extract text recursively
-fn extract_text_recursive(inline : @md.Inline, buf : StringBuilder) -> Unit {
+fn append_inline_texts(inlines : Array[@md.Inline], buf : StringBuilder) -> Unit {
+  for inline in inlines {
+    append_inline_text(inline, buf)
+  }
+}
+
+///|
+fn append_inline_text(inline : @md.Inline, buf : StringBuilder) -> Unit {
   match inline {
-    @md.Inline::Text(content~, ..) => buf.write_string(content)
+    @md.Inline::Text(content~, ..) | @md.Inline::Code(content~, ..) =>
+      buf.write_string(content)
     @md.Inline::SoftBreak(..) => buf.write_string(" ")
     @md.Inline::HardBreak(..) => buf.write_string("\n")
-    @md.Inline::Emphasis(children~, ..) | @md.Inline::Strong(children~, ..) =>
-      for child in children {
-        extract_text_recursive(child, buf)
-      }
-    @md.Inline::Strikethrough(children~, ..) =>
-      for child in children {
-        extract_text_recursive(child, buf)
-      }
-    @md.Inline::Code(content~, ..) => buf.write_string(content)
-    @md.Inline::Link(children~, ..) =>
-      for child in children {
-        extract_text_recursive(child, buf)
-      }
-    @md.Inline::RefLink(children~, ..) =>
-      for child in children {
-        extract_text_recursive(child, buf)
-      }
+    @md.Inline::Emphasis(children~, ..)
+    | @md.Inline::Strong(children~, ..)
+    | @md.Inline::Strikethrough(children~, ..)
+    | @md.Inline::Link(children~, ..)
+    | @md.Inline::RefLink(children~, ..) => append_inline_texts(children, buf)
     @md.Inline::Autolink(url~, ..) => buf.write_string(url)
-    @md.Inline::Image(alt~, ..) => buf.write_string(alt)
-    @md.Inline::RefImage(alt~, ..) => buf.write_string(alt)
+    @md.Inline::Image(alt~, ..) | @md.Inline::RefImage(alt~, ..) =>
+      buf.write_string(alt)
     @md.Inline::HtmlInline(..) => () // Skip HTML
     @md.Inline::FootnoteReference(label~, ..) => buf.write_string("[^\{label}]")
   }

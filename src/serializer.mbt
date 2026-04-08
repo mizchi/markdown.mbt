@@ -21,7 +21,7 @@ pub fn serialize(doc : Document) -> String {
     }
 
     // Add blank line between blocks (except for first block)
-    if not(first) {
+    if !(first) {
       buf.write_char('\n')
     }
     first = false
@@ -35,7 +35,7 @@ pub fn serialize(doc : Document) -> String {
 fn serialize_frontmatter(fm : Frontmatter, buf : StringBuilder) -> Unit {
   buf.write_string("---\n")
   buf.write_string(fm.raw)
-  if not(fm.raw.has_suffix("\n")) {
+  if !(fm.raw.has_suffix("\n")) {
     buf.write_char('\n')
   }
   buf.write_string("---\n")
@@ -128,7 +128,7 @@ fn serialize_block(block : Block, buf : StringBuilder) -> Unit {
       match style {
         HeadingStyle::Atx => {
           write_chars(buf, '#', level)
-          if not(children.is_empty()) {
+          if !(children.is_empty()) {
             buf.write_char(' ')
             serialize_inlines(children, buf)
           }
@@ -151,12 +151,12 @@ fn serialize_block(block : Block, buf : StringBuilder) -> Unit {
       // GFM style: always use ``` (remark default)
       let fence_len = calc_fence_length(code)
       write_chars(buf, '`', fence_len)
-      if not(info.is_empty()) {
+      if !(info.is_empty()) {
         buf.write_string(info)
       }
       buf.write_char('\n')
       buf.write_string(code)
-      if not(code.is_empty()) && not(code.has_suffix("\n")) {
+      if !(code.is_empty()) && !(code.has_suffix("\n")) {
         buf.write_char('\n')
       }
       write_chars(buf, '`', fence_len)
@@ -168,7 +168,7 @@ fn serialize_block(block : Block, buf : StringBuilder) -> Unit {
       write_chars(buf, '`', fence_len)
       buf.write_char('\n')
       buf.write_string(code)
-      if not(code.is_empty()) && not(code.has_suffix("\n")) {
+      if !(code.is_empty()) && !(code.has_suffix("\n")) {
         buf.write_char('\n')
       }
       write_chars(buf, '`', fence_len)
@@ -182,7 +182,7 @@ fn serialize_block(block : Block, buf : StringBuilder) -> Unit {
         let child_str = child_buf.to_string()
         for line in child_str.split("\n") {
           let line_str = line.to_string()
-          if not(line_str.is_empty()) {
+          if !(line_str.is_empty()) {
             buf.write_string("> ")
             buf.write_string(line_str)
             buf.write_char('\n')
@@ -197,7 +197,7 @@ fn serialize_block(block : Block, buf : StringBuilder) -> Unit {
       serialize_ordered_list_items(items, buf, 0, start)
     Block::HtmlBlock(html~, ..) => {
       buf.write_string(html)
-      if not(html.has_suffix("\n")) {
+      if !(html.has_suffix("\n")) {
         buf.write_char('\n')
       }
     }
@@ -259,7 +259,7 @@ fn serialize_block(block : Block, buf : StringBuilder) -> Unit {
       // Serialize children (usually a paragraph)
       let mut first = true
       for child in children {
-        if not(first) {
+        if !(first) {
           buf.write_string("\n    ") // Indent continuation
         }
         let child_buf = StringBuilder::new()
@@ -363,7 +363,7 @@ fn serialize_inline(inline : Inline, buf : StringBuilder) -> Unit {
       serialize_inlines(children, buf)
       buf.write_string("](")
       buf.write_string(url)
-      if not(title.is_empty()) {
+      if !(title.is_empty()) {
         buf.write_string(" \"")
         buf.write_string(title)
         buf.write_char('"')
@@ -387,7 +387,7 @@ fn serialize_inline(inline : Inline, buf : StringBuilder) -> Unit {
       buf.write_string(alt)
       buf.write_string("](")
       buf.write_string(url)
-      if not(title.is_empty()) {
+      if !(title.is_empty()) {
         buf.write_string(" \"")
         buf.write_string(title)
         buf.write_char('"')
@@ -419,7 +419,7 @@ pub fn serialize_definitions(defs : Array[LinkDefinition]) -> String {
     buf.write_string(def.label)
     buf.write_string("]: ")
     buf.write_string(def.url)
-    if not(def.title.is_empty()) {
+    if !(def.title.is_empty()) {
       buf.write_string(" \"")
       buf.write_string(def.title)
       buf.write_char('"')

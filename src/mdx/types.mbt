@@ -17,7 +17,7 @@ pub(all) struct ImportSpecifier {
   local_name : String? // as X (renamed from alias)
   is_default : Bool
   is_star : Bool // import * as X (renamed from is_namespace)
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Create a named import specifier
@@ -54,7 +54,7 @@ pub(all) enum ExportKind {
   Function
   Default
   Named // export { x, y }
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 // =============================================================================
 // Attribute Types
@@ -66,14 +66,14 @@ pub(all) enum MdxAttrValue {
   StringValue(String) // prop="value" or prop='value'
   ExpressionValue(String) // prop={expression}
   BooleanValue // prop (true)
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// JSX/Web Component attribute
 pub(all) struct MdxAttribute {
   name : String
   value : MdxAttrValue
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Create a string attribute
@@ -123,7 +123,7 @@ pub(all) enum MdxBlock {
     self_closing~ : Bool,
     span~ : @markdown.Span
   )
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Check if a block is an import declaration
@@ -181,7 +181,7 @@ pub(all) struct MdxMetadata {
   imports : Array[MdxBlock]
   exports : Array[MdxBlock]
   components : Array[String]
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Create empty metadata
@@ -195,6 +195,48 @@ pub fn MdxMetadata::is_empty(self : MdxMetadata) -> Bool {
   self.imports.is_empty() &&
   self.exports.is_empty() &&
   self.components.is_empty()
+}
+
+pub impl Show for ImportSpecifier with output(
+  self : ImportSpecifier,
+  logger : &Logger,
+) -> Unit {
+  logger.write_string(@debug.to_string(self))
+}
+
+pub impl Show for ExportKind with output(
+  self : ExportKind,
+  logger : &Logger,
+) -> Unit {
+  logger.write_string(@debug.to_string(self))
+}
+
+pub impl Show for MdxAttrValue with output(
+  self : MdxAttrValue,
+  logger : &Logger,
+) -> Unit {
+  logger.write_string(@debug.to_string(self))
+}
+
+pub impl Show for MdxAttribute with output(
+  self : MdxAttribute,
+  logger : &Logger,
+) -> Unit {
+  logger.write_string(@debug.to_string(self))
+}
+
+pub impl Show for MdxBlock with output(
+  self : MdxBlock,
+  logger : &Logger,
+) -> Unit {
+  logger.write_string(@debug.to_string(self))
+}
+
+pub impl Show for MdxMetadata with output(
+  self : MdxMetadata,
+  logger : &Logger,
+) -> Unit {
+  logger.write_string(@debug.to_string(self))
 }
 
 // =============================================================================

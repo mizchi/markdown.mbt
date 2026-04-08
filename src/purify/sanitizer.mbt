@@ -13,7 +13,7 @@
 pub fn sanitize(html : String, config? : SanitizeConfig) -> SanitizeResult {
   let cfg = config.unwrap_or(SanitizeConfig::default())
   let removed : Array[RemovedItem] = []
-  if not(cfg.allow_html) {
+  if !(cfg.allow_html) {
     // Strip all HTML - return text only
     let text = strip_all_html(html)
     return {
@@ -44,7 +44,7 @@ pub fn sanitize_url(url : String, config? : SanitizeConfig) -> String? {
 pub fn is_safe_html(html : String, config? : SanitizeConfig) -> Bool {
   let cfg = config.unwrap_or(SanitizeConfig::default())
   let result = sanitize(html, config=cfg)
-  not(result.was_modified)
+  !(result.was_modified)
 }
 
 // =============================================================================
@@ -126,7 +126,7 @@ fn try_skip_forbidden_tag_with_content(
   let lower_tag = to_lowercase_san(tag_name)
 
   // Check if this is a forbidden tag that has content to skip
-  if not(is_content_forbidden_tag(lower_tag)) {
+  if !(is_content_forbidden_tag(lower_tag)) {
     return ("", start)
   }
 
@@ -240,7 +240,7 @@ fn parse_and_sanitize_tag(
   }
 
   // Check for comment
-  if not(is_closing) &&
+  if !(is_closing) &&
     pos + 2 < len &&
     chars[pos] == '!' &&
     chars[pos + 1] == '-' &&
@@ -249,7 +249,7 @@ fn parse_and_sanitize_tag(
   }
 
   // Check for doctype
-  if not(is_closing) && pos < len && chars[pos] == '!' {
+  if !(is_closing) && pos < len && chars[pos] == '!' {
     return skip_doctype(chars, start)
   }
 
@@ -266,7 +266,7 @@ fn parse_and_sanitize_tag(
   let lower_tag = to_lowercase_san(tag_name)
 
   // Check if tag is allowed
-  if not(is_allowed_tag(lower_tag, config)) {
+  if !(is_allowed_tag(lower_tag, config)) {
     // Find end of tag and skip it
     while pos < len && chars[pos] != '>' {
       pos += 1
@@ -446,7 +446,7 @@ fn parse_attribute_value(chars : Array[Char], start : Int) -> (String, Int) {
     // Note: '/' is valid in unquoted values (e.g., data:image/jpeg)
     // Only stop on '/>' which indicates self-closing tag
     let value_start = pos
-    while pos < len && not(is_whitespace_char(chars[pos])) && chars[pos] != '>' {
+    while pos < len && !(is_whitespace_char(chars[pos])) && chars[pos] != '>' {
       // Check for self-closing tag '/>'
       if chars[pos] == '/' && pos + 1 < len && chars[pos + 1] == '>' {
         break
@@ -474,7 +474,7 @@ fn strip_all_html(html : String) -> String {
       in_tag = true
     } else if chars[pos] == '>' {
       in_tag = false
-    } else if not(in_tag) {
+    } else if !(in_tag) {
       output.write_char(chars[pos])
     }
     pos += 1

@@ -101,7 +101,7 @@ fn is_left_flanking(prev_char : Char, next_char : Char) -> Bool {
     return false
   }
   // Either not followed by punctuation, or preceded by whitespace/punctuation
-  not(is_unicode_punctuation(next_char)) ||
+  !(is_unicode_punctuation(next_char)) ||
   is_unicode_whitespace(prev_char) ||
   is_unicode_punctuation(prev_char)
 }
@@ -114,7 +114,7 @@ fn is_right_flanking(prev_char : Char, next_char : Char) -> Bool {
     return false
   }
   // Either not preceded by punctuation, or followed by whitespace/punctuation
-  not(is_unicode_punctuation(prev_char)) ||
+  !(is_unicode_punctuation(prev_char)) ||
   is_unicode_whitespace(next_char) ||
   is_unicode_punctuation(next_char)
 }
@@ -133,12 +133,12 @@ fn tokenize_with_index(scanner : Scanner) -> (Array[InlineToken], CloserIndex) {
   let idx = CloserIndex::new()
   let mut prev_char : Char = ' ' // Start of line treated as whitespace
   let mut prev_backslash = false
-  while not(scanner.is_eof()) {
+  while !(scanner.is_eof()) {
     let start = scanner.pos
     let c = scanner.peek().unwrap()
     match c {
       '\\' => {
-        prev_backslash = not(prev_backslash)
+        prev_backslash = !(prev_backslash)
         scanner.advance(1)
         prev_char = '\\'
       }
@@ -155,7 +155,7 @@ fn tokenize_with_index(scanner : Scanner) -> (Array[InlineToken], CloserIndex) {
         prev_backslash = false
       }
       '*' | '_' => {
-        if not(prev_backslash) {
+        if !(prev_backslash) {
           let marker = c
           let count = scanner.count_char(marker)
           let next_char = scanner.peek_at(count).unwrap_or(' ')
@@ -169,9 +169,9 @@ fn tokenize_with_index(scanner : Scanner) -> (Array[InlineToken], CloserIndex) {
             // _ has additional word boundary constraints
             (
               left_flank &&
-              (not(right_flank) || is_unicode_punctuation(prev_char)),
+              (!(right_flank) || is_unicode_punctuation(prev_char)),
               right_flank &&
-              (not(left_flank) || is_unicode_punctuation(next_char)),
+              (!(left_flank) || is_unicode_punctuation(next_char)),
             )
           }
           if may_open || may_close {
@@ -198,7 +198,7 @@ fn tokenize_with_index(scanner : Scanner) -> (Array[InlineToken], CloserIndex) {
         prev_backslash = false
       }
       '[' => {
-        if not(prev_backslash) {
+        if !(prev_backslash) {
           tokens.push(InlineToken::LinkStart(start))
         }
         scanner.advance(1)
@@ -206,7 +206,7 @@ fn tokenize_with_index(scanner : Scanner) -> (Array[InlineToken], CloserIndex) {
         prev_backslash = false
       }
       '!' => {
-        if not(prev_backslash) {
+        if !(prev_backslash) {
           let next = scanner.peek_at(1)
           if next == Some('[') {
             tokens.push(InlineToken::ImageStart(start))
@@ -237,7 +237,7 @@ fn tokenize_with_index(scanner : Scanner) -> (Array[InlineToken], CloserIndex) {
         prev_backslash = false
       }
       '<' => {
-        if not(prev_backslash) {
+        if !(prev_backslash) {
           tokens.push(InlineToken::AngleStart(start))
         }
         scanner.advance(1)
@@ -245,12 +245,12 @@ fn tokenize_with_index(scanner : Scanner) -> (Array[InlineToken], CloserIndex) {
         prev_backslash = false
       }
       '~' => {
-        if not(prev_backslash) {
+        if !(prev_backslash) {
           let count = scanner.count_char('~')
           if count == 2 {
             let next_char = scanner.peek_at(2).unwrap_or(' ')
-            let may_open = not(is_unicode_whitespace(next_char))
-            let may_close = not(is_unicode_whitespace(prev_char))
+            let may_open = !(is_unicode_whitespace(next_char))
+            let may_close = !(is_unicode_whitespace(prev_char))
             tokens.push(InlineToken::Strikethrough(start, may_open, may_close))
             if may_close {
               idx.strikethrough.push(start)
@@ -486,7 +486,7 @@ fn emphasis_mod3_match(
   closer_can_open : Bool,
 ) -> Bool {
   // If neither can act as the opposite, they always match
-  if not(opener_can_close) && not(closer_can_open) {
+  if !(opener_can_close) && !(closer_can_open) {
     return true
   }
   // Rule 9, 10: sum must not be divisible by 3, unless one is divisible by 3
@@ -509,7 +509,7 @@ fn MultiPassParser::parse_code_span(
   guard opener is Backticks(opener_start, backtick_count, escaped) else {
     return None
   }
-  guard not(escaped) else { return None }
+  guard !(escaped) else { return None }
 
   // Find matching closing backticks (same count)
   let content_start = opener_start + backtick_count
@@ -528,7 +528,7 @@ fn MultiPassParser::parse_code_span(
           let last = content.get_char(content.length() - 1)
           if first == Some(' ') &&
             last == Some(' ') &&
-            not(is_all_spaces_mp(content)) {
+            !(is_all_spaces_mp(content)) {
             content.unsafe_substring(start=1, end=content.length() - 1)
           } else {
             content
@@ -1041,7 +1041,7 @@ fn MultiPassParser::parse_autolink(
       pos += 1
 
       // Check if it's an email
-      let is_email = url.contains("@") && not(url.has_prefix("http"))
+      let is_email = url.contains("@") && !(url.has_prefix("http"))
       let inline = Inline::Autolink(url~, is_email~, span=Span::new(start, pos))
       return Some((inline, pos))
     } else if c == ' ' || c == '\t' || c == '\n' {
@@ -1284,7 +1284,7 @@ fn MultiPassParser::parse_range(
         // Process token
         match tok {
           Backticks(_, count, escaped) =>
-            if not(escaped) {
+            if !(escaped) {
               match self.parse_code_span(idx, text_end) {
                 Some((inline, next_pos)) => {
                   result.push(inline)

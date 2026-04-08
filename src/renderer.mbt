@@ -59,7 +59,7 @@ fn render_block_html(block : Block, buf : StringBuilder) -> Unit {
     }
     Block::BulletList(items~, tight~, ..) => {
       // Check if this list contains task items
-      let has_task = items.iter().any(fn(item) { not(item.checked is None) })
+      let has_task = items.iter().any(fn(item) { !(item.checked is None) })
       if has_task {
         buf.write_string("<ul class=\"contains-task-list\">\n")
       } else {
@@ -71,7 +71,7 @@ fn render_block_html(block : Block, buf : StringBuilder) -> Unit {
       buf.write_string("</ul>\n")
     }
     Block::OrderedList(items~, start~, tight~, ..) => {
-      let has_task = items.iter().any(fn(item) { not(item.checked is None) })
+      let has_task = items.iter().any(fn(item) { !(item.checked is None) })
       if start == 1 {
         if has_task {
           buf.write_string("<ol class=\"contains-task-list\">\n")
@@ -94,7 +94,7 @@ fn render_block_html(block : Block, buf : StringBuilder) -> Unit {
     }
     Block::HtmlBlock(html~, ..) => {
       buf.write_string(html)
-      if not(html.has_suffix("\n")) {
+      if !(html.has_suffix("\n")) {
         buf.write_char('\n')
       }
     }
@@ -149,7 +149,7 @@ fn render_list_item_html(
   is_task_list : Bool,
 ) -> Unit {
   // Task list items get a special class
-  if is_task_list && not(item.checked is None) {
+  if is_task_list && !(item.checked is None) {
     buf.write_string("<li class=\"task-list-item\">")
   } else {
     buf.write_string("<li>")
@@ -240,7 +240,7 @@ fn render_inline_html(inline : Inline, buf : StringBuilder) -> Unit {
       buf.write_string("<a href=\"")
       buf.write_string(escape_html_attr(url))
       buf.write_char('"')
-      if not(title.is_empty()) {
+      if !(title.is_empty()) {
         buf.write_string(" title=\"")
         buf.write_string(escape_html_attr(title))
         buf.write_char('"')
@@ -274,7 +274,7 @@ fn render_inline_html(inline : Inline, buf : StringBuilder) -> Unit {
       buf.write_string("\" alt=\"")
       buf.write_string(escape_html_attr(alt))
       buf.write_char('"')
-      if not(title.is_empty()) {
+      if !(title.is_empty()) {
         buf.write_string(" title=\"")
         buf.write_string(escape_html_attr(title))
         buf.write_char('"')

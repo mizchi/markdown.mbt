@@ -116,10 +116,7 @@ pub fn SlideDocument::get_slide_source(
       if start >= end {
         ""
       } else {
-        // Use try to handle potential slice errors
-        self.source[start:end].to_string() catch {
-          _ => ""
-        }
+        self.source[start:end].to_string()
       }
     }
     None => ""

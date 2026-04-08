@@ -462,7 +462,7 @@ test "scanner: read_line 100x" (b : @bench.T) {
   b.bench(fn() {
     let scanner = Scanner::new(text)
     let mut count = 0
-    while not(scanner.is_eof()) {
+    while !(scanner.is_eof()) {
       let _ = scanner.read_line()
       if char_is(scanner.peek(), '\n') {
         scanner.advance(1)
@@ -479,7 +479,7 @@ test "scanner: peek/advance intensive" (b : @bench.T) {
   b.bench(fn() {
     let scanner = Scanner::new(text)
     let mut count = 0
-    while not(scanner.is_eof()) {
+    while !(scanner.is_eof()) {
       let _ = scanner.peek()
       scanner.advance(1)
       count += 1

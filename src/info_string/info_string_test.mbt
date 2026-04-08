@@ -39,6 +39,22 @@ test "parse: lang, filename, and meta" {
 }
 
 ///|
+test "parse: preserves emoji filename" {
+  let info = parse("ts:src/😀.ts")
+  inspect(info.lang, content="ts")
+  inspect(info.filename, content="src/😀.ts")
+  inspect(info.meta, content="")
+}
+
+///|
+test "parse: preserves emoji meta" {
+  let info = parse("ts:index.ts {title=😀}")
+  inspect(info.lang, content="ts")
+  inspect(info.filename, content="index.ts")
+  inspect(info.meta, content="{title=😀}")
+}
+
+///|
 test "parse: empty string" {
   let info = parse("")
   inspect(info.lang, content="")

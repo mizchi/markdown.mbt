@@ -85,7 +85,7 @@ fn InlineParser::new(scanner : Scanner) -> InlineParser {
 /// Parse all inline content
 fn InlineParser::parse(self : InlineParser) -> Array[Inline] {
   let inlines : Array[Inline] = []
-  while not(self.scanner.is_eof()) {
+  while !(self.scanner.is_eof()) {
     match self.parse_inline() {
       Some(inline) => {
         // For soft/hard breaks, trim trailing whitespace from previous text
@@ -233,7 +233,7 @@ fn InlineParser::try_parse_code_span(
 
   // Find closing backticks
   let content_buf = StringBuilder::new()
-  while not(self.scanner.is_eof()) {
+  while !(self.scanner.is_eof()) {
     let closing_count = self.scanner.count_char('`')
     if closing_count == backtick_count {
       // Found matching closing backticks
@@ -247,7 +247,7 @@ fn InlineParser::try_parse_code_span(
         let last = content.get_char(content.length() - 1)
         if first == Some(' ') &&
           last == Some(' ') &&
-          not(is_all_spaces(content)) {
+          !(is_all_spaces(content)) {
           content.unsafe_substring(start=1, end=content.length() - 1)
         } else {
           content
@@ -349,7 +349,7 @@ fn InlineParser::parse_until_closing_marker(
   let children : Array[Inline] = []
   let text_buf = StringBuilder::new()
   let text_start = self.scanner.pos
-  while not(self.scanner.is_eof()) {
+  while !(self.scanner.is_eof()) {
     // Check for closing marker
     let closing_count = self.scanner.count_char(marker_char)
     if closing_count >= marker_count {
@@ -359,7 +359,7 @@ fn InlineParser::parse_until_closing_marker(
         Some(' ') | Some('\t') | Some('\n') => () // Not valid closer
         _ => {
           // Valid closer - flush text and consume markers
-          if not(text_buf.is_empty()) {
+          if !(text_buf.is_empty()) {
             children.push(
               Inline::Text(
                 content=text_buf.to_string(),
@@ -377,7 +377,7 @@ fn InlineParser::parse_until_closing_marker(
     match self.scanner.peek() {
       Some('`') => {
         // Flush text before inline
-        if not(text_buf.is_empty()) {
+        if !(text_buf.is_empty()) {
           children.push(
             Inline::Text(
               content=text_buf.to_string(),
@@ -395,7 +395,7 @@ fn InlineParser::parse_until_closing_marker(
         }
       }
       Some('[') => {
-        if not(text_buf.is_empty()) {
+        if !(text_buf.is_empty()) {
           children.push(
             Inline::Text(
               content=text_buf.to_string(),
@@ -444,7 +444,7 @@ fn InlineParser::try_parse_strikethrough(
   // Parse content until closing ~~
   let content_buf = StringBuilder::new()
   let content_start = self.scanner.pos
-  while not(self.scanner.is_eof()) {
+  while !(self.scanner.is_eof()) {
     if self.scanner.count_char('~') >= 2 {
       // Found closing
       let content = content_buf.to_string()
@@ -484,7 +484,7 @@ fn InlineParser::try_parse_link(self : InlineParser, start : Int) -> Inline? {
   // Parse link text
   let text_buf = StringBuilder::new()
   let mut bracket_depth = 1
-  while not(self.scanner.is_eof()) && bracket_depth > 0 {
+  while !(self.scanner.is_eof()) && bracket_depth > 0 {
     match self.scanner.peek() {
       Some('[') => {
         bracket_depth += 1
@@ -529,7 +529,7 @@ fn InlineParser::try_parse_link(self : InlineParser, start : Int) -> Inline? {
     if char_is(self.scanner.peek(), '<') {
       self.scanner.advance(1)
       let mut angle_url_has_newline = false
-      while not(self.scanner.is_eof()) {
+      while !(self.scanner.is_eof()) {
         match self.scanner.peek() {
           Some('>') => {
             self.scanner.advance(1)
@@ -553,7 +553,7 @@ fn InlineParser::try_parse_link(self : InlineParser, start : Int) -> Inline? {
       }
     } else {
       let mut url_has_newline = false
-      while not(self.scanner.is_eof()) {
+      while !(self.scanner.is_eof()) {
         match self.scanner.peek() {
           Some('(') => {
             paren_depth += 1
@@ -590,7 +590,7 @@ fn InlineParser::try_parse_link(self : InlineParser, start : Int) -> Inline? {
     let url = url_buf.to_string()
 
     // Skip whitespace (including newlines) before title
-    while not(self.scanner.is_eof()) {
+    while !(self.scanner.is_eof()) {
       match self.scanner.peek() {
         Some(' ') | Some('\t') | Some('\n') => self.scanner.advance(1)
         _ => break
@@ -605,7 +605,7 @@ fn InlineParser::try_parse_link(self : InlineParser, start : Int) -> Inline? {
           None => '"'
         }
         let title_buf = StringBuilder::new()
-        while not(self.scanner.is_eof()) {
+        while !(self.scanner.is_eof()) {
           match self.scanner.peek() {
             Some(c) if c == quote => {
               self.scanner.advance(1)
@@ -631,7 +631,7 @@ fn InlineParser::try_parse_link(self : InlineParser, start : Int) -> Inline? {
         self.scanner.advance(1) // Skip opening (
         let title_buf = StringBuilder::new()
         let mut paren_depth = 1
-        while not(self.scanner.is_eof()) && paren_depth > 0 {
+        while !(self.scanner.is_eof()) && paren_depth > 0 {
           match self.scanner.peek() {
             Some(')') => {
               paren_depth -= 1
@@ -695,7 +695,7 @@ fn InlineParser::try_parse_link(self : InlineParser, start : Int) -> Inline? {
   if char_is(self.scanner.peek(), '[') {
     self.scanner.advance(1)
     let label_buf = StringBuilder::new()
-    while not(self.scanner.is_eof()) {
+    while !(self.scanner.is_eof()) {
       match self.scanner.peek() {
         Some(']') => {
           self.scanner.advance(1)
@@ -737,7 +737,7 @@ fn InlineParser::try_parse_footnote_reference(
   start : Int,
 ) -> Inline? {
   self.scanner.advance(1) // Skip [
-  if not(char_is(self.scanner.peek(), '^')) {
+  if !(char_is(self.scanner.peek(), '^')) {
     self.scanner.restore(start)
     return None
   }
@@ -745,7 +745,7 @@ fn InlineParser::try_parse_footnote_reference(
 
   // Read label (alphanumeric, -, _)
   let label_buf = StringBuilder::new()
-  while not(self.scanner.is_eof()) {
+  while !(self.scanner.is_eof()) {
     match self.scanner.peek() {
       Some(']') => break
       Some(c) if (c >= 'a' && c <= 'z') ||
@@ -767,7 +767,7 @@ fn InlineParser::try_parse_footnote_reference(
     self.scanner.restore(start)
     return None
   }
-  if not(char_is(self.scanner.peek(), ']')) {
+  if !(char_is(self.scanner.peek(), ']')) {
     self.scanner.restore(start)
     return None
   }
@@ -781,7 +781,7 @@ fn InlineParser::try_parse_footnote_reference(
 /// Try to parse image
 fn InlineParser::try_parse_image(self : InlineParser, start : Int) -> Inline? {
   self.scanner.advance(1) // Skip !
-  if not(char_is(self.scanner.peek(), '[')) {
+  if !(char_is(self.scanner.peek(), '[')) {
     self.scanner.restore(start)
     return None
   }
@@ -789,7 +789,7 @@ fn InlineParser::try_parse_image(self : InlineParser, start : Int) -> Inline? {
 
   // Parse alt text
   let alt_buf = StringBuilder::new()
-  while not(self.scanner.is_eof()) {
+  while !(self.scanner.is_eof()) {
     match self.scanner.peek() {
       Some(']') => {
         self.scanner.advance(1)
@@ -820,7 +820,7 @@ fn InlineParser::try_parse_image(self : InlineParser, start : Int) -> Inline? {
     let _ = self.scanner.skip_spaces()
     if char_is(self.scanner.peek(), '<') {
       self.scanner.advance(1)
-      while not(self.scanner.is_eof()) {
+      while !(self.scanner.is_eof()) {
         match self.scanner.peek() {
           Some('>') => {
             self.scanner.advance(1)
@@ -834,7 +834,7 @@ fn InlineParser::try_parse_image(self : InlineParser, start : Int) -> Inline? {
         }
       }
     } else {
-      while not(self.scanner.is_eof()) {
+      while !(self.scanner.is_eof()) {
         match self.scanner.peek() {
           Some(')') | Some(' ') | Some('\t') => break
           Some(c) => {
@@ -856,7 +856,7 @@ fn InlineParser::try_parse_image(self : InlineParser, start : Int) -> Inline? {
           None => '"'
         }
         let title_buf = StringBuilder::new()
-        while not(self.scanner.is_eof()) {
+        while !(self.scanner.is_eof()) {
           match self.scanner.peek() {
             Some(c) if c == quote => {
               self.scanner.advance(1)
@@ -891,7 +891,7 @@ fn InlineParser::try_parse_image(self : InlineParser, start : Int) -> Inline? {
   if char_is(self.scanner.peek(), '[') {
     self.scanner.advance(1)
     let label_buf = StringBuilder::new()
-    while not(self.scanner.is_eof()) {
+    while !(self.scanner.is_eof()) {
       match self.scanner.peek() {
         Some(']') => {
           self.scanner.advance(1)
@@ -925,14 +925,14 @@ fn InlineParser::try_parse_autolink(
   self.scanner.advance(1) // Skip <
   let url_buf = StringBuilder::new()
   let mut is_email = false
-  while not(self.scanner.is_eof()) {
+  while !(self.scanner.is_eof()) {
     match self.scanner.peek() {
       Some('>') => {
         self.scanner.advance(1)
         let url = url_buf.to_string()
 
         // Check if it's an email
-        if url.contains("@") && not(url.has_prefix("http")) {
+        if url.contains("@") && !(url.has_prefix("http")) {
           is_email = true
         }
         return Some(
@@ -1059,18 +1059,18 @@ fn parse_inlines_with_delimiter_stack(text : String) -> Array[Inline] {
 
       // Left-flanking: not followed by whitespace, and either
       // (a) not followed by punctuation, or (b) preceded by whitespace or punctuation
-      let left_flanking = not(after_is_whitespace) &&
+      let left_flanking = !(after_is_whitespace) &&
         (
-          not(after_is_punctuation) ||
+          !(after_is_punctuation) ||
           before_is_whitespace ||
           before_is_punctuation
         )
 
       // Right-flanking: not preceded by whitespace, and either
       // (a) not preceded by punctuation, or (b) followed by whitespace or punctuation
-      let right_flanking = not(before_is_whitespace) &&
+      let right_flanking = !(before_is_whitespace) &&
         (
-          not(before_is_punctuation) ||
+          !(before_is_punctuation) ||
           after_is_whitespace ||
           after_is_punctuation
         )
@@ -1080,8 +1080,8 @@ fn parse_inlines_with_delimiter_stack(text : String) -> Array[Inline] {
         // _ can open if left-flanking and (not right-flanking or preceded by punctuation)
         // _ can close if right-flanking and (not left-flanking or followed by punctuation)
         (
-          left_flanking && (not(right_flanking) || before_is_punctuation),
-          right_flanking && (not(left_flanking) || after_is_punctuation),
+          left_flanking && (!(right_flanking) || before_is_punctuation),
+          right_flanking && (!(left_flanking) || after_is_punctuation),
         )
       } else {
         // * can open if left-flanking
@@ -1113,7 +1113,7 @@ fn parse_inlines_with_delimiter_stack(text : String) -> Array[Inline] {
       closer_idx < delimiters.length()
       closer_idx = closer_idx + 1 {
     let closer = delimiters[closer_idx]
-    if not(closer.can_close) || closer.remaining == 0 {
+    if !(closer.can_close) || closer.remaining == 0 {
       continue
     }
 
@@ -1122,7 +1122,7 @@ fn parse_inlines_with_delimiter_stack(text : String) -> Array[Inline] {
         opener_idx >= 0
         opener_idx = opener_idx - 1 {
       let opener = delimiters[opener_idx]
-      if not(opener.can_open) || opener.remaining == 0 || not(opener.active) {
+      if !(opener.can_open) || opener.remaining == 0 || !(opener.active) {
         continue
       }
       if opener.marker != closer.marker {
@@ -1316,7 +1316,7 @@ fn parse_segment_simple(text : String, offset : Int) -> Array[Inline] {
   let result : Array[Inline] = []
   let text_buf = StringBuilder::new()
   let mut text_start = 0
-  while not(scanner.is_eof()) {
+  while !(scanner.is_eof()) {
     let pos = scanner.pos
     match scanner.peek() {
       Some('`') => {
@@ -1327,7 +1327,7 @@ fn parse_segment_simple(text : String, offset : Int) -> Array[Inline] {
         // Find closing backticks
         let content_buf = StringBuilder::new()
         let mut found_closing = false
-        while not(scanner.is_eof()) {
+        while !(scanner.is_eof()) {
           let closing_count = scanner.count_char('`')
           if closing_count == backtick_count {
             found_closing = true
@@ -1335,7 +1335,7 @@ fn parse_segment_simple(text : String, offset : Int) -> Array[Inline] {
             scanner.advance(closing_count)
 
             // Flush text buffer
-            if not(text_buf.is_empty()) {
+            if !(text_buf.is_empty()) {
               result.push(
                 Inline::Text(
                   content=text_buf.to_string(),
@@ -1350,7 +1350,7 @@ fn parse_segment_simple(text : String, offset : Int) -> Array[Inline] {
               let chars = content.to_array()
               if chars[0] == ' ' &&
                 chars[chars.length() - 1] == ' ' &&
-                not(is_all_spaces(content)) {
+                !(is_all_spaces(content)) {
                 content.unsafe_substring(start=1, end=content.length() - 1)
               } else {
                 content
@@ -1379,7 +1379,7 @@ fn parse_segment_simple(text : String, offset : Int) -> Array[Inline] {
             }
           }
         }
-        if not(found_closing) {
+        if !(found_closing) {
           // No closing backticks, include opening backticks in text
           for j = 0; j < backtick_count; j = j + 1 {
             text_buf.write_char('`')
@@ -1394,7 +1394,7 @@ fn parse_segment_simple(text : String, offset : Int) -> Array[Inline] {
         match link_parser.try_parse_link(pos) {
           Some(link) => {
             // Flush text buffer
-            if not(text_buf.is_empty()) {
+            if !(text_buf.is_empty()) {
               result.push(
                 Inline::Text(
                   content=text_buf.to_string(),
@@ -1419,7 +1419,7 @@ fn parse_segment_simple(text : String, offset : Int) -> Array[Inline] {
           match img_parser.try_parse_image(pos) {
             Some(img) => {
               // Flush text buffer
-              if not(text_buf.is_empty()) {
+              if !(text_buf.is_empty()) {
                 result.push(
                   Inline::Text(
                     content=text_buf.to_string(),
@@ -1446,7 +1446,7 @@ fn parse_segment_simple(text : String, offset : Int) -> Array[Inline] {
         match auto_parser.try_parse_autolink(pos) {
           Some(autolink) => {
             // Flush text buffer
-            if not(text_buf.is_empty()) {
+            if !(text_buf.is_empty()) {
               result.push(
                 Inline::Text(
                   content=text_buf.to_string(),
@@ -1470,7 +1470,7 @@ fn parse_segment_simple(text : String, offset : Int) -> Array[Inline] {
         let trimmed = content.trim_end(chars=" ").to_string()
         let trailing_spaces = content.length() - trimmed.length()
         let is_hard_break = trailing_spaces >= 2
-        if not(trimmed.is_empty()) {
+        if !(trimmed.is_empty()) {
           result.push(
             Inline::Text(
               content=trimmed,
@@ -1515,7 +1515,7 @@ fn parse_segment_simple(text : String, offset : Int) -> Array[Inline] {
   }
 
   // Flush remaining text
-  if not(text_buf.is_empty()) {
+  if !(text_buf.is_empty()) {
     result.push(
       Inline::Text(
         content=text_buf.to_string(),

@@ -6,7 +6,7 @@
 
 ///|
 /// Agent identifier (simplified version: Int)
-pub(all) struct AgentId(Int) derive(Eq, Show)
+pub(all) struct AgentId(Int) derive(Eq, Debug)
 
 ///|
 /// Logical ID: (agent, seq) pair
@@ -14,7 +14,18 @@ pub(all) struct AgentId(Int) derive(Eq, Show)
 pub(all) struct LogicalId {
   agent : AgentId
   seq : Int
-} derive(Eq, Show)
+} derive(Eq, Debug)
+
+pub impl Show for AgentId with output(self : AgentId, logger : &Logger) -> Unit {
+  logger.write_string(@debug.to_string(self))
+}
+
+pub impl Show for LogicalId with output(
+  self : LogicalId,
+  logger : &Logger,
+) -> Unit {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///|
 /// LogicalId generator
@@ -97,7 +108,7 @@ pub fn CrdtDocument::delete(self : CrdtDocument, idx : Int) -> Unit {
 pub fn CrdtDocument::get_text(self : CrdtDocument) -> String {
   let buf = StringBuilder::new()
   for run in self.runs {
-    if not(run.deleted) {
+    if !(run.deleted) {
       buf.write_string(run.content)
     }
   }
@@ -109,7 +120,7 @@ pub fn CrdtDocument::get_text(self : CrdtDocument) -> String {
 pub fn CrdtDocument::active_count(self : CrdtDocument) -> Int {
   let mut count = 0
   for run in self.runs {
-    if not(run.deleted) {
+    if !(run.deleted) {
       count += 1
     }
   }

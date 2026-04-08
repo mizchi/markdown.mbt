@@ -127,7 +127,7 @@ pub fn parse_attributes(
         // Unquoted value (not standard JSX but handle it)
         let value_start = pos
         while pos < len &&
-              not(is_whitespace(chars[pos])) &&
+              !(is_whitespace(chars[pos])) &&
               chars[pos] != '>' &&
               chars[pos] != '/' {
           pos += 1

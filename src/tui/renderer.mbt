@@ -51,7 +51,7 @@ fn render_block_tui(block : @markdown.Block, buf : StringBuilder) -> Unit {
       let lines = code.split("\n").collect()
       let mut max_width = 0
       for i, line in lines {
-        if i < lines.length() - 1 || not(line.to_string().is_empty()) {
+        if i < lines.length() - 1 || !line.to_string().is_empty() {
           let w = line.to_string().iter().count()
           if w > max_width {
             max_width = w
@@ -70,7 +70,7 @@ fn render_block_tui(block : @markdown.Block, buf : StringBuilder) -> Unit {
 
       // Top border
       buf.write_string(dim)
-      if not(info.is_empty()) {
+      if !info.is_empty() {
         buf.write_string("┌─ ")
         buf.write_string(info)
         buf.write_string(" ")
@@ -87,7 +87,7 @@ fn render_block_tui(block : @markdown.Block, buf : StringBuilder) -> Unit {
 
       // Code content with right border
       for i, line in lines {
-        if i < lines.length() - 1 || not(line.to_string().is_empty()) {
+        if i < lines.length() - 1 || !line.to_string().is_empty() {
           buf.write_string(dim)
           buf.write_string("│")
           buf.write_string(reset)
@@ -117,7 +117,7 @@ fn render_block_tui(block : @markdown.Block, buf : StringBuilder) -> Unit {
       buf.write_string(cyan)
       let lines = code.split("\n").collect()
       for i, line in lines {
-        if i < lines.length() - 1 || not(line.to_string().is_empty()) {
+        if i < lines.length() - 1 || !line.to_string().is_empty() {
           buf.write_string("    ")
           buf.write_string(line.to_string())
           buf.write_string("\n")
@@ -154,7 +154,7 @@ fn render_block_tui(block : @markdown.Block, buf : StringBuilder) -> Unit {
       buf.write_string(dim)
       buf.write_string(html)
       buf.write_string(reset)
-      if not(html.has_suffix("\n")) {
+      if !html.has_suffix("\n") {
         buf.write_string("\n")
       }
     }

@@ -153,7 +153,7 @@ pub fn Notebook::validate(self : Notebook) -> Array[NotebookError] {
           break
         }
       }
-      if not(found) {
+      if !(found) {
         errors.push(UndefinedReference(cell.id, ref_var))
       }
     }
@@ -191,4 +191,11 @@ pub(all) enum NotebookError {
   CyclicDependency(Array[String])
   /// Reference to undefined variable
   UndefinedReference(String, String)
-} derive(Show)
+} derive(Debug)
+
+pub impl Show for NotebookError with output(
+  self : NotebookError,
+  logger : &Logger,
+) -> Unit {
+  logger.write_string(@debug.to_string(self))
+}

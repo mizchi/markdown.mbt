@@ -21,7 +21,7 @@ pub fn strip_mdx_blocks(doc : @markdown.Document) -> @markdown.Document {
   let new_children : Array[@markdown.Block] = []
   for block in doc.children {
     let block_span = get_block_span(block)
-    if not(span_in_list(block_span, mdx_spans)) {
+    if !(span_in_list(block_span, mdx_spans)) {
       new_children.push(block)
     }
   }
@@ -42,7 +42,7 @@ pub fn strip_imports(doc : @markdown.Document) -> @markdown.Document {
   let new_children : Array[@markdown.Block] = []
   for block in doc.children {
     let block_span = get_block_span(block)
-    if not(span_in_list(block_span, import_spans)) {
+    if !(span_in_list(block_span, import_spans)) {
       new_children.push(block)
     }
   }
@@ -63,7 +63,7 @@ pub fn strip_exports(doc : @markdown.Document) -> @markdown.Document {
   let new_children : Array[@markdown.Block] = []
   for block in doc.children {
     let block_span = get_block_span(block)
-    if not(span_in_list(block_span, export_spans)) {
+    if !(span_in_list(block_span, export_spans)) {
       new_children.push(block)
     }
   }
@@ -84,7 +84,7 @@ pub fn strip_jsx_elements(doc : @markdown.Document) -> @markdown.Document {
   let new_children : Array[@markdown.Block] = []
   for block in doc.children {
     let block_span = get_block_span(block)
-    if not(span_in_list(block_span, jsx_spans)) {
+    if !(span_in_list(block_span, jsx_spans)) {
       new_children.push(block)
     }
   }

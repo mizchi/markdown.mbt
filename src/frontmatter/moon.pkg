@@ -1,4 +1,4 @@
 import {
   "mizchi/markdown" @md,
-  "moonbitlang/core/strconv",
+  "moonbitlang/core/string",
 }
