@@ -150,4 +150,11 @@ pub(all) enum RemovedKind {
   Attribute
   Url
   Protocol
-} derive(Eq, Show)
+} derive(Eq, Debug)
+
+pub impl Show for RemovedKind with output(
+  self : RemovedKind,
+  logger : &Logger,
+) -> Unit {
+  logger.write_string(@debug.to_string(self))
+}

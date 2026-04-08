@@ -58,7 +58,7 @@ pub fn build_dependency_graph_with_cell_deps(
         let edge_exists = graph.edges
           .iter()
           .any(fn(e) { e.from == dep_cell_id && e.to == cell_id })
-        if not(edge_exists) {
+        if !(edge_exists) {
           graph.edges.push({
             from: dep_cell_id,
             to: cell_id,
@@ -134,7 +134,7 @@ pub fn detect_cycles(graph : DependencyGraph) -> Array[Array[String]] {
     for edge in graph.edges {
       if edge.from == node {
         let neighbor = edge.to
-        if not(visited.get(neighbor).unwrap_or(false)) {
+        if !(visited.get(neighbor).unwrap_or(false)) {
           if dfs(neighbor) {
             return true
           }
@@ -162,7 +162,7 @@ pub fn detect_cycles(graph : DependencyGraph) -> Array[Array[String]] {
   }
 
   for id, _ in graph.cells {
-    if not(visited.get(id).unwrap_or(false)) {
+    if !(visited.get(id).unwrap_or(false)) {
       let _ = dfs(id)
     }
   }
@@ -328,7 +328,7 @@ fn analyze_moonbit_variables(
   // Remove duplicates from references and filter out local defines
   let unique_refs : Array[String] = []
   for r in references {
-    if not(unique_refs.contains(r)) && not(defines.contains(r)) {
+    if !(unique_refs.contains(r)) && !(defines.contains(r)) {
       unique_refs.push(r)
     }
   }
@@ -348,7 +348,7 @@ fn extract_refs_from_expr(
     Ident(id~, ..) => {
       // Extract variable name from LongIdent
       let name = get_var_name(id)
-      if name.length() > 0 && not(local_bindings.contains(name)) {
+      if name.length() > 0 && !(local_bindings.contains(name)) {
         refs.push(name)
       }
     }

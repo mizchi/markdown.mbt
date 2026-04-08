@@ -1,5 +1,7 @@
 import {
   "moonbitlang/core/bench",
+  "moonbitlang/core/debug" @debug,
+  "mizchi/markdown/info_string" @info_string,
 }
 
 options(

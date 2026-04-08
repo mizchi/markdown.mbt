@@ -1,5 +1,6 @@
 ///| Luna UI renderer for mdast AST
 
+import type { JSX } from "@luna_ui/luna/jsx-runtime";
 import type {
   Root,
   RootContent,
@@ -206,7 +207,7 @@ export function renderBlock(
       // Fallback for unsupported languages
       return (
         <pre key={key} data-span={span}>
-          <code class={lang ? `language-${lang}` : undefined}>{block.value}</code>
+          <code class={lang ? `language-${lang}` : ""}>{block.value}</code>
         </pre>
       );
     }
@@ -225,7 +226,7 @@ export function renderBlock(
           <ol
             key={key}
             start={block.start !== 1 ? block.start ?? undefined : undefined}
-            class={hasTaskItems ? "contains-task-list" : undefined}
+            class={hasTaskItems ? "contains-task-list" : ""}
             data-span={getSpan(block)}
           >
             {block.children.map((item, i) => renderListItem(item, i, callbacks, options)).filter(Boolean)}
@@ -235,7 +236,7 @@ export function renderBlock(
       return (
         <ul
           key={key}
-          class={hasTaskItems ? "contains-task-list" : undefined}
+          class={hasTaskItems ? "contains-task-list" : ""}
           data-span={getSpan(block)}
         >
           {block.children.map((item, i) => renderListItem(item, i, callbacks, options)).filter(Boolean)}
@@ -345,7 +346,7 @@ function renderListItem(
           type="checkbox"
           checked={item.checked ?? false}
           disabled={!callbacks?.onTaskToggle}
-          onChange={handleChange}
+          onChange={handleChange ?? (() => {})}
         />
         {children}
       </li>
@@ -366,7 +367,7 @@ function renderTableCell(
   Tag: "th" | "td",
   align: AlignType | undefined
 ): JSX.Element {
-  const style = align ? { textAlign: align } : undefined;
+  const style = align ? { textAlign: align } : {};
   return (
     <Tag key={key} style={style} data-span={getSpan(cell)}>
       {cell.children.map((child, i) => renderInline(child, i)).filter(Boolean)}
@@ -413,7 +414,7 @@ export function renderInline(inline: PhrasingContent, key?: string | number): JS
 
     case "link":
       return (
-        <a key={key} href={inline.url} title={inline.title ?? undefined}>
+        <a key={key} href={inline.url} title={inline.title ?? ""}>
           {inline.children.map((child, i) => renderInline(child, i)).filter(Boolean)}
         </a>
       );
@@ -432,7 +433,7 @@ export function renderInline(inline: PhrasingContent, key?: string | number): JS
           key={key}
           src={inline.url}
           alt={inline.alt ?? ""}
-          title={inline.title ?? undefined}
+          title={inline.title ?? ""}
         />
       );
 

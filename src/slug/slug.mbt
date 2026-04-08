@@ -20,7 +20,7 @@ pub fn generate_heading_id(text : String) -> String {
       prev_was_separator = false
     } else if c == ' ' || c == '-' || c == '_' {
       // Avoid multiple consecutive separators
-      if not(prev_was_separator) {
+      if !(prev_was_separator) {
         buf.write_char('-')
         prev_was_separator = true
       }

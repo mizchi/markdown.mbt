@@ -14,7 +14,7 @@
 pub(all) struct Span {
   from : Int
   to : Int
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Create a span
@@ -37,14 +37,14 @@ pub fn Span::empty() -> Span {
 pub(all) enum EmphasisMarker {
   Asterisk // *
   Underscore // _
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Fence marker for code blocks: ``` or ~~~
 pub(all) enum FenceMarker {
   Backtick // ```
   Tilde // ~~~
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// List marker for unordered lists: -, *, +
@@ -52,21 +52,21 @@ pub(all) enum BulletMarker {
   Dash // -
   Asterisk // *
   Plus // +
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Ordered list delimiter: . or )
 pub(all) enum OrderedDelimiter {
   Dot // 1.
   Paren // 1)
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 /// Heading style
 pub(all) enum HeadingStyle {
   Atx // # Heading
   Setext // Heading\n======
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 // =============================================================================
 // Trivia (preserved whitespace/formatting)
@@ -76,7 +76,7 @@ pub(all) enum HeadingStyle {
 /// Trivia represents non-semantic characters that should be preserved
 pub(all) struct Trivia {
   content : String
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 ///|
 pub fn Trivia::new(content : String) -> Trivia {
@@ -86,6 +86,49 @@ pub fn Trivia::new(content : String) -> Trivia {
 ///|
 pub fn Trivia::empty() -> Trivia {
   { content: "" }
+}
+
+pub impl Show for Span with output(self : Span, logger : &Logger) -> Unit {
+  logger.write_string(@debug.to_string(self))
+}
+
+pub impl Show for EmphasisMarker with output(
+  self : EmphasisMarker,
+  logger : &Logger,
+) -> Unit {
+  logger.write_string(@debug.to_string(self))
+}
+
+pub impl Show for FenceMarker with output(
+  self : FenceMarker,
+  logger : &Logger,
+) -> Unit {
+  logger.write_string(@debug.to_string(self))
+}
+
+pub impl Show for BulletMarker with output(
+  self : BulletMarker,
+  logger : &Logger,
+) -> Unit {
+  logger.write_string(@debug.to_string(self))
+}
+
+pub impl Show for OrderedDelimiter with output(
+  self : OrderedDelimiter,
+  logger : &Logger,
+) -> Unit {
+  logger.write_string(@debug.to_string(self))
+}
+
+pub impl Show for HeadingStyle with output(
+  self : HeadingStyle,
+  logger : &Logger,
+) -> Unit {
+  logger.write_string(@debug.to_string(self))
+}
+
+pub impl Show for Trivia with output(self : Trivia, logger : &Logger) -> Unit {
+  logger.write_string(@debug.to_string(self))
 }
 
 // =============================================================================
@@ -232,7 +275,7 @@ pub(all) enum TableAlign {
   Center
   Right
   None
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 // =============================================================================
 // Inline-level CST Nodes
@@ -280,7 +323,21 @@ pub(all) enum Inline {
 pub(all) enum HardBreakStyle {
   TwoSpaces // "  \n"
   Backslash // "\\\n"
-} derive(Eq, Show)
+} derive(Eq, Debug)
+
+pub impl Show for TableAlign with output(
+  self : TableAlign,
+  logger : &Logger,
+) -> Unit {
+  logger.write_string(@debug.to_string(self))
+}
+
+pub impl Show for HardBreakStyle with output(
+  self : HardBreakStyle,
+  logger : &Logger,
+) -> Unit {
+  logger.write_string(@debug.to_string(self))
+}
 
 // =============================================================================
 // Reference Definitions

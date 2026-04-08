@@ -98,7 +98,7 @@ pub(all) struct InlineDirective {
   section : String?
   /// Whether to recursively process inlines
   recursive : Bool
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 // =============================================================================
 // Code Block Attributes
@@ -126,7 +126,7 @@ pub(all) enum OutputFormat {
   Html
   Json
   Auto
-} derive(Eq, Show)
+} derive(Eq, Debug)
 
 // =============================================================================
 // Notebook
@@ -213,4 +213,18 @@ pub fn EvalContext::new() -> EvalContext {
 ///|
 pub fn InlineDirective::new(source : String) -> InlineDirective {
   { source, section: None, recursive: true }
+}
+
+pub impl Show for InlineDirective with output(
+  self : InlineDirective,
+  logger : &Logger,
+) -> Unit {
+  logger.write_string(@debug.to_string(self))
+}
+
+pub impl Show for OutputFormat with output(
+  self : OutputFormat,
+  logger : &Logger,
+) -> Unit {
+  logger.write_string(@debug.to_string(self))
 }

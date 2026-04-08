@@ -462,7 +462,7 @@ test "scanner: read_line 100x" (b : @bench.T) {
   b.bench(fn() {
     let scanner = Scanner::new(text)
     let mut count = 0
-    while not(scanner.is_eof()) {
+    while !(scanner.is_eof()) {
       let _ = scanner.read_line()
       if char_is(scanner.peek(), '\n') {
         scanner.advance(1)
@@ -479,7 +479,7 @@ test "scanner: peek/advance intensive" (b : @bench.T) {
   b.bench(fn() {
     let scanner = Scanner::new(text)
     let mut count = 0
-    while not(scanner.is_eof()) {
+    while !(scanner.is_eof()) {
       let _ = scanner.peek()
       scanner.advance(1)
       count += 1
@@ -704,9 +704,9 @@ test "incremental: 50 paragraphs, edit end" (b : @bench.T) {
   })
 }
 
-// === CRDT実験ベンチマーク ===
+// === CRDT experiment benchmarks ===
 
-// LogicalId生成のオーバーヘッド
+// LogicalId generation overhead
 
 ///|
 test "crdt: LogicalId generation 1000x" (b : @bench.T) {
@@ -719,7 +719,7 @@ test "crdt: LogicalId generation 1000x" (b : @bench.T) {
   })
 }
 
-// LogicalId比較のオーバーヘッド
+// LogicalId comparison overhead
 
 ///|
 test "crdt: LogicalId compare 1000x" (b : @bench.T) {
@@ -741,7 +741,7 @@ test "crdt: LogicalId compare 1000x" (b : @bench.T) {
   })
 }
 
-// CrdtDocument挿入のオーバーヘッド
+// CrdtDocument insertion overhead
 
 ///|
 test "crdt: CrdtDocument insert 100 runs" (b : @bench.T) {
@@ -754,17 +754,17 @@ test "crdt: CrdtDocument insert 100 runs" (b : @bench.T) {
   })
 }
 
-// Tombstone蓄積の影響
+// Impact of tombstone accumulation
 
 ///|
 test "crdt: CrdtDocument with 50% tombstones" (b : @bench.T) {
   let doc = CrdtDocument::new(AgentId(1))
-  // 200 runs作成、半分を削除
+  // Create 200 runs, delete half
   for i = 0; i < 200; i = i + 1 {
     let _ = doc.insert("Text ")
   }
   for i = 0; i < 100; i = i + 1 {
-    doc.delete(i * 2) // 偶数インデックスを削除
+    doc.delete(i * 2) // Delete even indices
   }
   b.bench(fn() {
     let text = doc.get_text()
@@ -772,7 +772,7 @@ test "crdt: CrdtDocument with 50% tombstones" (b : @bench.T) {
   })
 }
 
-// Span vs CrdtSpan のサイズ比較用
+// For Span vs CrdtSpan size comparison
 
 ///|
 test "crdt: Span creation 1000x" (b : @bench.T) {

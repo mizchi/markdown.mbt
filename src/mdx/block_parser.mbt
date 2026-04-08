@@ -168,7 +168,7 @@ fn find_jsx_element_end(chars : Array[Char], start : Int, len : Int) -> Int {
   let tag = substring(chars, tag_start, pos)
 
   // Check if JSX component
-  if not(is_mdx_tag(tag)) {
+  if !(is_mdx_tag(tag)) {
     return start
   }
 
@@ -280,7 +280,7 @@ fn try_parse_import(content : String, span : @markdown.Span) -> MdxBlock? {
   }
 
   // Check for 'import'
-  if not(matches_keyword(chars, pos, "import")) {
+  if !(matches_keyword(chars, pos, "import")) {
     return None
   }
   pos += 6
@@ -354,7 +354,7 @@ fn try_parse_import(content : String, span : @markdown.Span) -> MdxBlock? {
   }
 
   // Check for 'from'
-  if not(matches_keyword(chars, pos, "from")) {
+  if !(matches_keyword(chars, pos, "from")) {
     return None
   }
   pos += 4
@@ -523,7 +523,7 @@ fn try_parse_export(content : String, span : @markdown.Span) -> MdxBlock? {
   }
 
   // Check for 'export'
-  if not(matches_keyword(chars, pos, "export")) {
+  if !(matches_keyword(chars, pos, "export")) {
     return None
   }
   pos += 6
@@ -589,7 +589,7 @@ fn try_parse_jsx_element(content : String, span : @markdown.Span) -> MdxBlock? {
   let tag = substring(chars, tag_start, pos)
 
   // Check if this is a JSX component or Web Component
-  if not(is_mdx_tag(tag)) {
+  if !(is_mdx_tag(tag)) {
     return None
   }
 
@@ -751,7 +751,7 @@ fn matches_keyword(chars : Array[Char], pos : Int, keyword : String) -> Bool {
 fn parse_identifier(chars : Array[Char], start : Int) -> (String, Int) {
   let len = chars.length()
   let mut pos = start
-  if pos >= len || not(is_ident_start(chars[pos])) {
+  if pos >= len || !(is_ident_start(chars[pos])) {
     return ("", pos)
   }
   while pos < len && is_ident_char(chars[pos]) {

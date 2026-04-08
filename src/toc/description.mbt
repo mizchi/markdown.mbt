@@ -21,7 +21,7 @@ pub fn extract_description_from_blocks(
     match block {
       @md.Block::Paragraph(children~, ..) => {
         let text = extract_text_from_inlines(children)
-        if not(text.is_empty()) {
+        if !text.is_empty() {
           return Some(truncate_text(text, max_length))
         }
       }
@@ -34,22 +34,36 @@ pub fn extract_description_from_blocks(
 ///|
 /// Truncate text to max_length, adding ellipsis if needed
 fn truncate_text(text : String, max_length : Int) -> String {
-  let chars = text.to_array()
-  if chars.length() <= max_length {
-    return text
+  if max_length <= 0 {
+    return "..."
   }
-  // Find last space before max_length to avoid cutting words
-  let mut cut_point = max_length
-  for i = max_length - 1; i >= max_length - 30 && i >= 0; i = i - 1 {
-    if chars[i] == ' ' {
-      cut_point = i
+  let prefix : Array[Char] = []
+  let search_start = if max_length > 30 { max_length - 30 } else { 0 }
+  let mut last_space = max_length
+  let mut char_count = 0
+  let mut truncated = false
+  for ch in text {
+    if char_count >= max_length {
+      truncated = true
       break
     }
+    if ch == ' ' && char_count >= search_start {
+      last_space = char_count
+    }
+    prefix.push(ch)
+    char_count += 1
   }
-  // Build truncated string
+  if !truncated {
+    return text
+  }
+  let cut_point = if last_space < prefix.length() {
+    last_space
+  } else {
+    prefix.length()
+  }
   let result : Array[Char] = []
   for i = 0; i < cut_point; i = i + 1 {
-    result.push(chars[i])
+    result.push(prefix[i])
   }
   String::from_array(result) + "..."
 }

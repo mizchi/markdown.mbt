@@ -1,6 +1,7 @@
 import {
   "mizchi/markdown",
   "mizchi/markdown/info_string",
+  "moonbitlang/core/debug" @debug,
   "moonbitlang/parser",
   "moonbitlang/parser/syntax",
 }

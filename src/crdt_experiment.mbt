@@ -1,23 +1,34 @@
-///| CRDT初期検証: LogicalId導入のオーバーヘッド測定
+///| CRDT initial validation: Measuring LogicalId introduction overhead
 
 // =============================================================================
-// 実験用型定義
+// Experimental type definitions
 // =============================================================================
 
 ///|
-/// Agent識別子 (簡易版: Int)
-pub(all) struct AgentId(Int) derive(Eq, Show)
+/// Agent identifier (simplified version: Int)
+pub(all) struct AgentId(Int) derive(Eq, Debug)
 
 ///|
-/// 論理ID: (agent, seq) ペア
+/// Logical ID: (agent, seq) pair
 #valtype
 pub(all) struct LogicalId {
   agent : AgentId
   seq : Int
-} derive(Eq, Show)
+} derive(Eq, Debug)
+
+pub impl Show for AgentId with output(self : AgentId, logger : &Logger) -> Unit {
+  logger.write_string(@debug.to_string(self))
+}
+
+pub impl Show for LogicalId with output(
+  self : LogicalId,
+  logger : &Logger,
+) -> Unit {
+  logger.write_string(@debug.to_string(self))
+}
 
 ///|
-/// LogicalId生成器
+/// LogicalId generator
 pub(all) struct IdGenerator {
   agent : AgentId
   mut next_seq : Int
@@ -36,11 +47,11 @@ pub fn IdGenerator::next(self : IdGenerator) -> LogicalId {
 }
 
 ///|
-/// CRDT対応Span (キャッシュ付き)
+/// CRDT-aware Span (with cache)
 pub(all) struct CrdtSpan {
   start_id : LogicalId
   end_id : LogicalId
-  // 絶対位置キャッシュ（高速アクセス用）
+  // Absolute position cache (for fast access)
   cached_from : Int
   cached_to : Int
 }
@@ -56,15 +67,15 @@ pub fn CrdtSpan::new(
 }
 
 ///|
-/// TextRun: 連続テキストの圧縮表現
+/// TextRun: Compressed representation of contiguous text
 pub(all) struct TextRun {
-  id : LogicalId // 開始ID
-  content : String // テキスト内容
-  deleted : Bool // Tombstone
+  id : LogicalId // Start ID
+  content : String // Text content
+  deleted : Bool // Tombstone flag
 }
 
 ///|
-/// 実験用ドキュメント構造
+/// Experimental document structure
 pub(all) struct CrdtDocument {
   runs : Array[TextRun]
   gen : IdGenerator
@@ -76,7 +87,7 @@ pub fn CrdtDocument::new(agent : AgentId) -> CrdtDocument {
 }
 
 ///|
-/// テキスト挿入
+/// Insert text
 pub fn CrdtDocument::insert(self : CrdtDocument, text : String) -> LogicalId {
   let id = self.gen.next()
   self.runs.push({ id, content: text, deleted: false })
@@ -84,7 +95,7 @@ pub fn CrdtDocument::insert(self : CrdtDocument, text : String) -> LogicalId {
 }
 
 ///|
-/// 削除（Tombstone化）
+/// Delete (mark as tombstone)
 pub fn CrdtDocument::delete(self : CrdtDocument, idx : Int) -> Unit {
   if idx < self.runs.length() {
     let run = self.runs[idx]
@@ -93,11 +104,11 @@ pub fn CrdtDocument::delete(self : CrdtDocument, idx : Int) -> Unit {
 }
 
 ///|
-/// アクティブなテキストを取得
+/// Get active (non-deleted) text
 pub fn CrdtDocument::get_text(self : CrdtDocument) -> String {
   let buf = StringBuilder::new()
   for run in self.runs {
-    if not(run.deleted) {
+    if !(run.deleted) {
       buf.write_string(run.content)
     }
   }
@@ -105,11 +116,11 @@ pub fn CrdtDocument::get_text(self : CrdtDocument) -> String {
 }
 
 ///|
-/// アクティブなRun数
+/// Count of active runs
 pub fn CrdtDocument::active_count(self : CrdtDocument) -> Int {
   let mut count = 0
   for run in self.runs {
-    if not(run.deleted) {
+    if !(run.deleted) {
       count += 1
     }
   }
@@ -117,19 +128,19 @@ pub fn CrdtDocument::active_count(self : CrdtDocument) -> Int {
 }
 
 ///|
-/// 全Run数（Tombstone含む）
+/// Total run count (including tombstones)
 pub fn CrdtDocument::total_count(self : CrdtDocument) -> Int {
   self.runs.length()
 }
 
 // =============================================================================
-// LogicalId 比較関数 (CRDT merge用)
+// LogicalId comparison functions (for CRDT merge)
 // =============================================================================
 
 ///|
-/// LogicalId の順序比較 (Lamport順序)
+/// LogicalId ordering comparison (Lamport order)
 pub fn LogicalId::compare(self : LogicalId, other : LogicalId) -> Int {
-  // まずseqで比較、同じならagentで比較
+  // Compare by seq first, then by agent if seq is equal
   if self.seq != other.seq {
     self.seq - other.seq
   } else {
