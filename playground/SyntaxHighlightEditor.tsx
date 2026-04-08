@@ -450,6 +450,9 @@ export function SyntaxHighlightEditor(props: SyntaxHighlightEditorProps) {
   // Track if change came from user input (to skip redundant textarea.value update)
   let isUserInput = false;
 
+  // Track pre-input selection state to detect selection replacements
+  let preInputHadSelection = false;
+
   // Signal for line count - enables efficient updates (only when count changes)
   const [lineCount, setLineCount] = createSignal(1);
 
@@ -573,25 +576,19 @@ export function SyntaxHighlightEditor(props: SyntaxHighlightEditorProps) {
       return;
     }
 
-    // Fast check for line count change:
-    // - If exactly 1 char was added/removed, check if it's a newline
-    // - Otherwise, do full count
     const lengthDiff = valueLen - lastValueLength;
-    let lineCountChanged = false;
-
-    if (lengthDiff === 1) {
-      // Single char added - check if it's newline at cursor-1
-      lineCountChanged = cursorPos > 0 && value[cursorPos - 1] === "\n";
-    } else if (lengthDiff === -1) {
-      // Single char deleted - cursor line changed means newline was deleted
-      lineCountChanged = cursorLine !== lastCursorLine;
-    } else if (lengthDiff !== 0) {
-      // Multiple chars changed (paste, cut, etc.) - must count
-      const newLineCount = countLines(value);
-      lineCountChanged = newLineCount !== prevHighlightedLines.length;
-    }
-
     lastValueLength = valueLen;
+
+    // Always count lines for correct change detection.
+    // The previous ±1 heuristic missed selection replacements that happen to
+    // produce a length diff of exactly ±1 (e.g. select "BC\nD" and type "XY").
+    const newLineCount = countLines(value);
+    const lineCountChanged = newLineCount !== prevHighlightedLines.length;
+
+    // Multi-char edits (paste, cut, selection replacement) may shift content
+    // across multiple lines even when line count stays the same.
+    const isMultiCharChange = Math.abs(lengthDiff) > 1 || preInputHadSelection;
+    preInputHadSelection = false; // reset after use
 
     // Check if cursor is inside a code block by scanning raw text for fence markers
     let inCodeBlock = false;
@@ -612,8 +609,9 @@ export function SyntaxHighlightEditor(props: SyntaxHighlightEditorProps) {
     const currentRawLine = value.slice(lineStart, lineEnd);
     const isOnFenceLine = /^`{3,}/.test(currentRawLine);
 
-    // If line count changed, cursor jumped lines, inside code block, or on fence line, do full re-highlight
-    if (lineCountChanged || Math.abs(cursorLine - lastCursorLine) > 1 || inCodeBlock || isOnFenceLine) {
+    // Full re-highlight when: line count changed, multi-char edit, selection replacement,
+    // code block context, fence line, or cursor jumped multiple lines
+    if (lineCountChanged || isMultiCharChange || Math.abs(cursorLine - lastCursorLine) > 1 || inCodeBlock || isOnFenceLine) {
       const newHighlightedLines = highlightMarkdownLines(value);
       const maxLen = Math.max(lineElements.length, newHighlightedLines.length);
 
@@ -627,7 +625,7 @@ export function SyntaxHighlightEditor(props: SyntaxHighlightEditorProps) {
           highlightRef.appendChild(div);
           lineElements.push(div);
         } else if (prevHighlightedLines[i] !== newHighlightedLines[i]) {
-          setLineContent(lineElements[i], newHighlightedLines[i]!);
+          setLineContent(lineElements[i]!, newHighlightedLines[i]!);
         }
       }
 
@@ -737,6 +735,12 @@ export function SyntaxHighlightEditor(props: SyntaxHighlightEditorProps) {
     }
   };
 
+  const handleBeforeInput = () => {
+    if (editorRef) {
+      preInputHadSelection = editorRef.selectionStart !== editorRef.selectionEnd;
+    }
+  };
+
   const handleInput = (e: Event) => {
     const target = e.target as HTMLTextAreaElement;
     isUserInput = true; // Mark as user input to skip redundant textarea.value update
@@ -770,18 +774,19 @@ export function SyntaxHighlightEditor(props: SyntaxHighlightEditorProps) {
   return (
     <div class="syntax-editor-container">
       {props.showLineNumbers && (
-        <div class="line-numbers" ref={(el) => { lineNumbersRef = el; }}>
+        <div class="line-numbers" ref={(el) => { lineNumbersRef = el as HTMLDivElement; }}>
           <For each={lineNumbersArray}>
             {(num) => <div class="line-number">{num}</div>}
           </For>
         </div>
       )}
-      <div class="editor-wrapper" ref={(el) => { wrapperRef = el; }}>
+      <div class="editor-wrapper" ref={(el) => { wrapperRef = el as HTMLDivElement; }}>
         <div class="editor-content">
-          <div class="editor-highlight" ref={(el) => { highlightRef = el; }}></div>
+          <div class="editor-highlight" ref={(el) => { highlightRef = el as HTMLDivElement; }}></div>
           <textarea
-            ref={setupEditor}
+            ref={(el) => setupEditor(el as HTMLTextAreaElement)}
             class="editor-textarea"
+            onBeforeInput={handleBeforeInput}
             onInput={handleInput}
             onScroll={syncScroll}
             onKeyDown={handleKeyDown}

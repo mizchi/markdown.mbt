@@ -234,7 +234,7 @@ function SimpleEditor(props: {
 
   return (
     <textarea
-      ref={setupTextarea}
+      ref={(el) => setupTextarea(el as HTMLTextAreaElement)}
       class="simple-editor"
       onInput={handleInput}
       onKeyUp={handleCursorUpdate}
@@ -318,6 +318,7 @@ function App() {
   let editorRef: SyntaxHighlightEditorHandle | null = null;
   let simpleEditorRef: HTMLTextAreaElement | null = null;
   let previewRef: HTMLDivElement | null = null;
+  const [previewContainer, setPreviewContainer] = createSignal<HTMLDivElement | null>(null);
 
   // Track if content has been modified since load
   let hasModified = false;
@@ -405,34 +406,38 @@ function App() {
       }
     };
     window.addEventListener("keydown", handleKeyDown);
-    onCleanup(() => window.removeEventListener("keydown", handleKeyDown));
+    onCleanup(() => { window.removeEventListener("keydown", handleKeyDown); });
   });
 
   // Load initial content from IndexedDB
-  onMount(async () => {
-    let content = initialMarkdown;
-    let timestamp = 0;
+  onMount(() => {
+    (async () => {
+      let content = initialMarkdown;
+      let timestamp = 0;
 
-    try {
-      const idbData = await loadFromIDB();
-      if (idbData && idbData.content) {
-        content = idbData.content;
-        timestamp = idbData.timestamp;
+      try {
+        const idbData = await loadFromIDB();
+        if (idbData && idbData.content) {
+          content = idbData.content;
+          timestamp = idbData.timestamp;
+        }
+      } catch (e) {
+        console.error("Failed to load from IndexedDB:", e);
       }
-    } catch (e) {
-      console.error("Failed to load from IndexedDB:", e);
-    }
 
-    setSource(content);
-    lastSyncedTimestamp = timestamp;
-    // Set initialized first so Show renders and refs are set
-    setIsInitialized(true);
+      // Parse AST first, then set all state in batch
+      const parsedAst = parse(content);
+      batch(() => {
+        setSource(content);
+        setAst(parsedAst);
+        setIsInitialized(true);
+      });
+      lastSyncedTimestamp = timestamp;
 
-    // Parse AST after next frame to ensure previewRef is ready
-    requestAnimationFrame(() => {
-      setAst(parse(content));
-      editorRef?.focus();
-    });
+      requestAnimationFrame(() => {
+        editorRef?.focus();
+      });
+    })();
   });
 
   // Handle visibility change for tab sync
@@ -456,7 +461,7 @@ function App() {
     }
 
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    onCleanup(() => document.removeEventListener("visibilitychange", handleVisibilityChange));
+    onCleanup(() => { document.removeEventListener("visibilitychange", handleVisibilityChange); });
   });
 
   // Save content to IndexedDB with debounce
@@ -487,7 +492,7 @@ function App() {
 
   // Handle task checkbox toggle from preview
   const handleTaskToggle = (span: string, checked: boolean) => {
-    const [startStr, endStr] = span.split("-");
+    const [startStr = "0", endStr = "0"] = span.split("-");
     const start = parseInt(startStr, 10);
     const end = parseInt(endStr, 10);
 
@@ -534,7 +539,7 @@ function App() {
   // Note: We only update the source text, NOT the AST, to avoid re-rendering
   // the preview and losing focus on the MoonlightEditor
   const handleSvgChange = (newSvg: string, span: string) => {
-    const [startStr, endStr] = span.split("-");
+    const [startStr = "0", endStr = "0"] = span.split("-");
     const start = parseInt(startStr, 10);
     const end = parseInt(endStr, 10);
 
@@ -570,44 +575,49 @@ function App() {
     onTaskToggle: handleTaskToggle,
   };
 
-  // Options for custom code block rendering
-  const rendererOptions: RendererOptions = {
-    codeBlockHandlers: {
-      // Render ```svg or ```svg:preview blocks as inline SVG
-      // Mode: "preview" (default) = inline preview, "code" = syntax highlighted
-      svg: {
-        render: (code, span, key, mode) => {
-          // If mode is "code", fall through to default syntax highlighting
-          if (mode === "code") {
-            return null;
-          }
-          // Default: render as inline SVG (sanitized for safety)
-          return <RawHtml key={key} data-span={span} html={sanitizeSvg(code)} />;
-        },
-      },
-      // Render ```moonlight-svg blocks as interactive Moonlight editor
-      "moonlight-svg": {
-        render: (code, span, key) => (
-          <MoonlightEditor
-            key={key}
-            initialSvg={code}
-            span={span}
-            onSvgChange={handleSvgChange}
-            width={400}
-            height={300}
-            theme={isDark() ? "dark" : "light"}
-          />
-        ),
-      },
-    },
-  };
-
   // Track last rendered AST for scroll syncing
   createEffect(() => {
     const currentAst = ast();
     if (currentAst) {
       lastRenderedAst = currentAst;
     }
+  });
+
+  // Re-render preview when AST changes. Show() only tracks truthiness, while the
+  // preview needs to refresh when the AST value changes from one truthy object to another.
+  createEffect(() => {
+    const currentAst = ast();
+    const dark = isDark();
+    const container = previewContainer();
+    if (!container || !currentAst) return;
+
+    const previewOptions: RendererOptions = {
+      codeBlockHandlers: {
+        svg: {
+          render: (code, span, key, mode) => {
+            if (mode === "code") {
+              return null;
+            }
+            return <RawHtml key={key} data-span={span} html={sanitizeSvg(code)} />;
+          },
+        },
+        "moonlight-svg": {
+          render: (code, span, key) => (
+            <MoonlightEditor
+              key={key}
+              initialSvg={code}
+              span={span}
+              onSvgChange={handleSvgChange}
+              width={400}
+              height={300}
+              theme={dark ? "dark" : "light"}
+            />
+          ),
+        },
+      },
+    };
+
+    render(container, <MarkdownRenderer ast={currentAst} callbacks={rendererCallbacks} options={previewOptions} />);
   });
 
   // Sync preview scroll with cursor position (debounced to avoid excessive scrolling)
@@ -759,14 +769,13 @@ function App() {
               </div>
             </div>
             {/* Preview panel - reactive rendering with Show */}
-            <div class="preview" ref={(el) => { previewRef = el; }}>
-              <Show when={ast}>
-                {() => {
-                  const currentAst = ast();
-                  return currentAst ? <MarkdownRenderer ast={currentAst} callbacks={rendererCallbacks} options={rendererOptions} /> : null;
-                }}
-              </Show>
-            </div>
+            <div
+              class="preview"
+              ref={(el) => {
+                previewRef = el as HTMLDivElement;
+                setPreviewContainer(previewRef);
+              }}
+            />
           </div>
         </div>
       )}

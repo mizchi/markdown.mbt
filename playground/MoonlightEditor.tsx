@@ -6,6 +6,8 @@ import { createEditor, type EditorHandle } from "@mizchi/moonlight";
 import { sanitizeSvg } from "./ast-renderer";
 
 export interface MoonlightEditorProps {
+  /** JSX key */
+  key?: string | number | undefined;
   /** Initial SVG content */
   initialSvg: string;
   /** Data span for source mapping */
@@ -114,7 +116,7 @@ export function MoonlightEditor(props: MoonlightEditorProps) {
     >
       <div
         ref={(el) => {
-          containerRef = el;
+          containerRef = el as HTMLDivElement;
         }}
         style={{
           width: "100%",
