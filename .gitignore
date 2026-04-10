@@ -9,4 +9,5 @@ wrangler.json
 bench_results.csv
 playwright-report
 test-results/
+.playwright-mcp/
 _build
