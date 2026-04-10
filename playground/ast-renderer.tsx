@@ -194,9 +194,7 @@ export function renderBlock(
       const highlighted = lang ? highlightCode(block.value, lang) : null;
 
       if (highlighted) {
-        // Use highlighted HTML from syntree (highlight format).
-        // PlemolJP is applied to the inner <pre>/<code> via the
-        // ".preview pre, .preview code" CSS rule in index.html.
+        // Use highlighted HTML from syntree (highlight format)
         return (
           <RawHtml
             key={key}
