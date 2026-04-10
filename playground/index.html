@@ -470,6 +470,17 @@
       margin: 16px 0;
     }
 
+    /* preview code uses the same monospace stack as .mono.
+       Kept as a separate selector instead of adding .mono to JSX, because
+       wrapping the syntree-highlighted RawHtml node in a Luna component
+       triggers a renderer freeze. Keep size at 13px (smaller than editor 14px). */
+    .preview code,
+    .preview pre {
+      font-family: 'PlemolJP', ui-monospace, Monaco, Menlo, Consolas, monospace;
+      font-feature-settings: normal;
+      font-variant-ligatures: none;
+      font-kerning: none;
+    }
     .preview code {
       font-size: 13px;
       background: var(--code-bg);

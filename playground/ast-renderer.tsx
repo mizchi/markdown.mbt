@@ -195,23 +195,21 @@ export function renderBlock(
 
       if (highlighted) {
         // Use highlighted HTML from syntree (highlight format).
-        // Wrap with .mono so the inner <pre><code> inherits PlemolJP
-        // via font-family. RawHtml's host element is not directly
-        // class-able, so we use an outer div wrapper.
+        // PlemolJP is applied to the inner <pre>/<code> via the
+        // ".preview pre, .preview code" CSS rule in index.html.
         return (
-          <div class="mono" key={key}>
-            <RawHtml
-              data-span={span}
-              html={highlighted}
-            />
-          </div>
+          <RawHtml
+            key={key}
+            data-span={span}
+            html={highlighted}
+          />
         );
       }
 
       // Fallback for unsupported languages
       return (
         <pre key={key} data-span={span}>
-          <code class={lang ? `language-${lang} mono` : "mono"}>{block.value}</code>
+          <code class={lang ? `language-${lang}` : ""}>{block.value}</code>
         </pre>
       );
     }
@@ -414,7 +412,7 @@ export function renderInline(inline: PhrasingContent, key?: string | number): JS
       );
 
     case "inlineCode":
-      return <code key={key} class="mono">{inline.value}</code>;
+      return <code key={key}>{inline.value}</code>;
 
     case "link":
       return (
