@@ -52,21 +52,20 @@
 
 - [ ] **Step 1: PlemolJP Regular woff2 を入手して配置する**
 
-`yuru7/PlemolJP` の最新リリースから `PlemolJP_HS_NF_v*.zip`（HS = 半角ASCII/全角CJKの 1:2 比率版, NF = Nerd Fonts 無し）をダウンロードし、内部の `PlemolJP_HS/PlemolJP-Regular.ttf` を woff2 に変換して配置する。変換は以下で行う:
+`yuru7/PlemolJP` の最新リリース v3.0.0 から `PlemolJP_HS_v3.0.0.zip`（HS = 半角ASCII/全角CJKの 1:2 比率版）をダウンロードし、内部の `PlemolJP_HS/PlemolJP-Regular.ttf` を woff2 に変換して配置する。変換は以下で行う:
 
 ```bash
 # 一時作業ディレクトリで
 mkdir -p /tmp/plemoljp && cd /tmp/plemoljp
-curl -L -o plemoljp.zip "https://github.com/yuru7/PlemolJP/releases/latest/download/PlemolJP_HS_NF_v3.0.0.zip"
-# ファイル名は最新リリースに合わせて変更。https://github.com/yuru7/PlemolJP/releases で確認すること
-unzip plemoljp.zip
-# ttf を woff2 に変換（pnpm dlx で使い捨て）
-pnpm dlx ttf2woff2 PlemolJP_HS/PlemolJP-Regular.ttf
+curl -L -o plemoljp.zip "https://github.com/yuru7/PlemolJP/releases/download/v3.0.0/PlemolJP_HS_v3.0.0.zip"
+unzip -o plemoljp.zip
+# 展開後 PlemolJP_HS/ 内に ttf 群が存在する。Regular を woff2 化。
+pnpm dlx ttf2woff2 < PlemolJP_HS/PlemolJP-Regular.ttf > PlemolJP-Regular.woff2
 # 結果を repo に配置
-cp PlemolJP_HS/PlemolJP-Regular.woff2 /Users/mz/ghq/github.com/mizchi/markdown.mbt/playground/public/fonts/
+cp PlemolJP-Regular.woff2 /Users/mz/ghq/github.com/mizchi/markdown.mbt/playground/public/fonts/
 ```
 
-**バージョンが見つからない場合**: https://github.com/yuru7/PlemolJP/releases を開いて最新の HS バリアント zip の URL を使う。woff2 出力サイズは 2〜4MB 程度が期待値。
+**バージョンが変わっていた場合**: `gh release list -R yuru7/PlemolJP` または https://github.com/yuru7/PlemolJP/releases で最新の `PlemolJP_HS_v*.zip` を探す。woff2 出力サイズは 2〜4MB 程度が期待値。ttf2woff2 は stdin/stdout で受け渡す CLI なので `<` `>` のリダイレクトが必要。
 
 確認:
 
