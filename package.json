@@ -35,7 +35,8 @@
     "unified": "^11.0.5",
     "vite": "^7.3.1",
     "vite-plugin-moonbit": "0.1.5",
-    "vitest": "^4.0.18"
+    "vitest": "^4.0.18",
+    "wrangler": "^4.81.1"
   },
   "files": [
     "js",

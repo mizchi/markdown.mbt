@@ -16,3 +16,11 @@ vrt:
 # Regenerate screenshot VRT baselines after an intentional UI change.
 vrt-update:
   pnpm playwright test e2e/vrt-width.spec.ts e2e/vrt-screenshot.spec.ts --update-snapshots
+
+playground-build:
+  moon build --target js --release
+  pnpm vite build
+
+playground-deploy:
+  just playground-build
+  pnpm exec wrangler deploy
