@@ -235,7 +235,7 @@ function SimpleEditor(props: {
   return (
     <textarea
       ref={(el) => setupTextarea(el as HTMLTextAreaElement)}
-      class="simple-editor"
+      class="simple-editor mono"
       onInput={handleInput}
       onKeyUp={handleCursorUpdate}
       onClick={handleCursorUpdate}
