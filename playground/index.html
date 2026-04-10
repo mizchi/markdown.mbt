@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Markdown.mbt Playground</title>
+  <link rel="preload" href="/fonts/PlemolJP-Regular.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="stylesheet" href="/styles/editor-font.css">
   <script>
     // Apply theme immediately to prevent flash
     (function() {
@@ -247,7 +249,6 @@
       padding: 16px 0;
       text-align: right;
       user-select: none;
-      font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
       font-size: 14px;
       line-height: 1.5;
       min-width: 50px;
@@ -284,7 +285,6 @@
 
     .editor-textarea,
     .editor-highlight {
-      font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
       font-size: 14px;
       line-height: 1.5;
       padding: 16px 16px 50vh 24px;
@@ -293,7 +293,6 @@
       white-space: pre-wrap;
       word-wrap: break-word;
       overflow-wrap: break-word;
-      tab-size: 2;
     }
 
     .editor-textarea {
@@ -323,6 +322,9 @@
       pointer-events: none;
       z-index: 1;
       color: var(--text-primary);
+      /* Guard: even if a descendant span accidentally applies font-weight,
+         the overlay must stay regular-weight to match the textarea width. */
+      font-weight: 400 !important;
     }
 
     .highlight-line {
@@ -342,7 +344,6 @@
       width: 100%;
       max-width: 900px;
       height: 100%;
-      font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
       font-size: 14px;
       line-height: 1.5;
       padding: 16px;
@@ -358,7 +359,6 @@
       white-space: pre-wrap;
       word-wrap: break-word;
       overflow-wrap: break-word;
-      tab-size: 2;
     }
 
     @media (max-width: 768px) {
@@ -471,7 +471,6 @@
     }
 
     .preview code {
-      font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
       font-size: 13px;
       background: var(--code-bg);
       padding: 0.2em 0.4em;
