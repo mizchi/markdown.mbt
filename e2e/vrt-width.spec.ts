@@ -12,6 +12,9 @@ const DRIFT_TOLERANCE_PX = 0.5;
 
 for (const theme of ["light", "dark"] as const) {
   test(`VRT width: fixture lines align (${theme})`, async ({ page }) => {
+    // Pin viewport so editor max-width (900px) is never tighter than fixture
+    // content, and so geometry matches the screenshot VRT viewport.
+    await page.setViewportSize({ width: 1280, height: 800 });
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await page.evaluate((t) => {
       localStorage.clear();
