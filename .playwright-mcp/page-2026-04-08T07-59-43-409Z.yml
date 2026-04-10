@@ -1,0 +1,77 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - generic [ref=e5]:
+      - generic [ref=e6]:
+        - button "Split view (Ctrl+1)" [ref=e7] [cursor=pointer]:
+          - img [ref=e9]
+        - button "Editor only (Ctrl+2)" [ref=e12] [cursor=pointer]:
+          - img [ref=e14]
+        - button "Preview only (Ctrl+3)" [ref=e16] [cursor=pointer]:
+          - img [ref=e18]
+      - generic [ref=e22]:
+        - button "Syntax highlight editor" [ref=e23] [cursor=pointer]:
+          - img [ref=e25]:
+            - generic [ref=e26]: <
+            - generic [ref=e27]: /
+            - generic [ref=e28]: ">"
+        - button "Simple text editor" [ref=e29] [cursor=pointer]:
+          - img [ref=e31]
+    - generic [ref=e33]:
+      - button "🌙" [ref=e34] [cursor=pointer]
+      - link "View on GitHub" [ref=e35] [cursor=pointer]:
+        - /url: https://github.com/mizchi/markdown.mbt
+        - img [ref=e37]
+  - generic [ref=e44]:
+    - generic:
+      - generic: "# markdown.mbt Playground"
+      - generic: A high-performance Markdown parser written in [MoonBit](https://www.moonbitlang.com/), compiled to WebAssembly.
+      - generic: "## Features"
+      - generic: "- **Blazing Fast**: MoonBit compiles to efficient WASM for near-native performance"
+      - generic: "- **Syntax Highlighting**: Integrated code highlighting powered by Lezer"
+      - generic: "- **Live Preview**: Real-time Markdown rendering as you type"
+      - generic: "- **Auto Save**: Your content is automatically saved to browser storage (IndexedDB)"
+      - generic: "## Code Example"
+      - generic: "```typescript"
+      - generic: // Syntax highlighting works for multiple languages
+      - generic: "function greet(name: string): string {"
+      - generic: "return `Hello, ${name}!`;"
+      - generic: "}"
+      - generic: "```"
+      - generic: "```rust"
+      - generic: "fn main() {"
+      - generic: println!("Hello from Rust!");
+      - generic: "}"
+      - generic: "```"
+      - generic: "## Markdown Support"
+      - generic: "- **Bold** and *italic* text"
+      - generic: "- [Links](https://github.com/mizchi/markdown.mbt)"
+      - generic: "- `inline code`"
+      - generic: "- > Blockquotes"
+      - generic: "## SVG Preview"
+      - generic: "Edit the SVG below and see live preview:"
+      - generic: "```svg"
+      - generic: <svg width="200" height="100" xmlns="http://www.w3.org/2000/svg">
+      - generic: <rect x="10" y="10" width="80" height="80" fill="#4a90d9" rx="8"/>
+      - generic: <circle cx="150" cy="50" r="40" fill="#e74c3c"/>
+      - generic: <text x="100" y="95" text-anchor="middle" fill="#333" font-size="12">Edit me!</text>
+      - generic: </svg>
+      - generic: "```"
+      - generic: "## Moonlight SVG Editor"
+      - generic: "Interactive SVG editing with [Moonlight](https://github.com/mizchi/moonlight):"
+      - generic:
+        - text: "`"
+        - text: "``moonlight-svg"
+      - generic: <svg viewBox="0 0 400 300" xmlns="http://www.w3.org/2000/svg">
+      - generic: <rect x="50" y="50" width="120" height="80" fill="#3498db" rx="10"/>
+      - generic: <circle cx="280" cy="90" r="50" fill="#e74c3c"/>
+      - generic: <polygon points="200,200 150,280 250,280" fill="#2ecc71"/>
+      - generic: </svg>
+      - generic: "```"
+      - generic: "## Interactive Task List"
+      - generic: Click the checkboxes below - they update the source in real-time!
+      - generic: "- [ ] Try clicking this checkbox"
+      - generic: "- [x] This one is already checked"
+      - generic: "- [ ] Interactive editing from preview"
+      - generic: "---"
+      - generic: "Source: [github.com/mizchi/markdown.mbt](https://github.com/mizchi/markdown.mbt)"
+    - textbox [active] [ref=e45]: "# markdown.mbt Playground A high-performance Markdown parser written in [MoonBit](https://www.moonbitlang.com/), compiled to WebAssembly. ## Features - **Blazing Fast**: MoonBit compiles to efficient WASM for near-native performance - **Syntax Highlighting**: Integrated code highlighting powered by Lezer - **Live Preview**: Real-time Markdown rendering as you type - **Auto Save**: Your content is automatically saved to browser storage (IndexedDB) ## Code Example ```typescript // Syntax highlighting works for multiple languages function greet(name: string): string { return `Hello, ${name}!`; } ``` ```rust fn main() { println!(\"Hello from Rust!\"); } ``` ## Markdown Support - **Bold** and *italic* text - [Links](https://github.com/mizchi/markdown.mbt) - `inline code` - > Blockquotes ## SVG Preview Edit the SVG below and see live preview: ```svg <svg width=\"200\" height=\"100\" xmlns=\"http://www.w3.org/2000/svg\"> <rect x=\"10\" y=\"10\" width=\"80\" height=\"80\" fill=\"#4a90d9\" rx=\"8\"/> <circle cx=\"150\" cy=\"50\" r=\"40\" fill=\"#e74c3c\"/> <text x=\"100\" y=\"95\" text-anchor=\"middle\" fill=\"#333\" font-size=\"12\">Edit me!</text> </svg> ``` ## Moonlight SVG Editor Interactive SVG editing with [Moonlight](https://github.com/mizchi/moonlight): ```moonlight-svg <svg viewBox=\"0 0 400 300\" xmlns=\"http://www.w3.org/2000/svg\"> <rect x=\"50\" y=\"50\" width=\"120\" height=\"80\" fill=\"#3498db\" rx=\"10\"/> <circle cx=\"280\" cy=\"90\" r=\"50\" fill=\"#e74c3c\"/> <polygon points=\"200,200 150,280 250,280\" fill=\"#2ecc71\"/> </svg> ``` ## Interactive Task List Click the checkboxes below - they update the source in real-time! - [ ] Try clicking this checkbox - [x] This one is already checked - [ ] Interactive editing from preview --- Source: [github.com/mizchi/markdown.mbt](https://github.com/mizchi/markdown.mbt)"
