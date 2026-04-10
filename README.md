@@ -150,6 +150,10 @@ This parser handles most common Markdown syntax correctly and works well for typ
 
 However, some edge cases (deeply nested structures, unusual delimiter combinations) are not fully CommonMark compliant. If you need strict CommonMark compliance, consider using [cmark.mbt](https://github.com/moonbit-community/cmark.mbt) or other fully compliant parsers.
 
+## Credits
+
+- Fonts: [PlemolJP](https://github.com/yuru7/PlemolJP) (SIL Open Font License 1.1) — bundled in `playground/public/fonts/`
+
 ## License
 
 MIT
