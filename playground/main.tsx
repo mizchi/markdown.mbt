@@ -1,9 +1,9 @@
 import { render, createSignal, createEffect, createMemo, onMount, onCleanup, Show, batch } from "@luna_ui/luna";
 import { parse } from "../js/api.js";
 import type { Root } from "mdast";
-import { MarkdownRenderer, RawHtml, sanitizeSvg, type RendererCallbacks, type RendererOptions } from "./ast-renderer";
+import type { RendererCallbacks } from "./ast-renderer";
 import { SyntaxHighlightEditor, type SyntaxHighlightEditorHandle } from "./SyntaxHighlightEditor";
-import { MoonlightEditor } from "./MoonlightEditor";
+import { PreviewPane } from "./PreviewPane";
 
 // IndexedDB for content (reliable async storage)
 const IDB_NAME = "markdown-editor";
@@ -318,7 +318,6 @@ function App() {
   let editorRef: SyntaxHighlightEditorHandle | null = null;
   let simpleEditorRef: HTMLTextAreaElement | null = null;
   let previewRef: HTMLDivElement | null = null;
-  const [previewContainer, setPreviewContainer] = createSignal<HTMLDivElement | null>(null);
 
   // Track if content has been modified since load
   let hasModified = false;
@@ -421,11 +420,10 @@ function App() {
           content = idbData.content;
           timestamp = idbData.timestamp;
         }
-      } catch (e) {
-        console.error("Failed to load from IndexedDB:", e);
+      } catch {
+        // ignore IndexedDB load errors and fall back to initial content
       }
 
-      // Parse AST first, then set all state in batch
       const parsedAst = parse(content);
       batch(() => {
         setSource(content);
@@ -583,43 +581,6 @@ function App() {
     }
   });
 
-  // Re-render preview when AST changes. Show() only tracks truthiness, while the
-  // preview needs to refresh when the AST value changes from one truthy object to another.
-  createEffect(() => {
-    const currentAst = ast();
-    const dark = isDark();
-    const container = previewContainer();
-    if (!container || !currentAst) return;
-
-    const previewOptions: RendererOptions = {
-      codeBlockHandlers: {
-        svg: {
-          render: (code, span, key, mode) => {
-            if (mode === "code") {
-              return null;
-            }
-            return <RawHtml key={key} data-span={span} html={sanitizeSvg(code)} />;
-          },
-        },
-        "moonlight-svg": {
-          render: (code, span, key) => (
-            <MoonlightEditor
-              key={key}
-              initialSvg={code}
-              span={span}
-              onSvgChange={handleSvgChange}
-              width={400}
-              height={300}
-              theme={dark ? "dark" : "light"}
-            />
-          ),
-        },
-      },
-    };
-
-    render(container, <MarkdownRenderer ast={currentAst} callbacks={rendererCallbacks} options={previewOptions} />);
-  });
-
   // Sync preview scroll with cursor position (debounced to avoid excessive scrolling)
   let scrollTimer: number | undefined;
   createEffect(() => {
@@ -768,12 +729,14 @@ function App() {
                 />
               </div>
             </div>
-            {/* Preview panel - reactive rendering with Show */}
-            <div
-              class="preview"
-              ref={(el) => {
-                previewRef = el as HTMLDivElement;
-                setPreviewContainer(previewRef);
+            {/* Preview panel */}
+            <PreviewPane
+              ast={ast}
+              isDark={isDark}
+              callbacks={rendererCallbacks}
+              onSvgChange={handleSvgChange}
+              containerRef={(el) => {
+                previewRef = el;
               }}
             />
           </div>

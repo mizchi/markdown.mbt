@@ -1,0 +1,29 @@
+/* PlemolJP — Japanese monospace font used by the playground editor.
+   Bundled in playground/public/fonts/. License: SIL OFL 1.1 (see OFL.txt). */
+@font-face {
+  font-family: 'PlemolJP';
+  src: url('/fonts/PlemolJP-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  /* block: always paint with this font. swap/fallback would let the system
+     font render first and VRT screenshots would race the font load. */
+  font-display: block;
+  unicode-range: U+0000-FFFF, U+10000-1FFFF;
+}
+
+/* Single source of truth for monospace typography in the playground.
+   Apply this class to every element whose width must line up pixel-perfect
+   with .editor-textarea (the transparent cursor layer). Do NOT add
+   font-weight, font-style, letter-spacing, or font-feature-settings in
+   downstream selectors — it WILL cause cursor drift. font-size and
+   line-height are intentionally NOT set here: callers own their own sizes. */
+.mono {
+  font-family: 'PlemolJP', ui-monospace, Monaco, Menlo, Consolas, monospace;
+  font-weight: 400;
+  font-style: normal;
+  letter-spacing: 0;
+  font-feature-settings: normal;
+  font-variant-ligatures: none;
+  font-kerning: none;
+  tab-size: 2;
+}

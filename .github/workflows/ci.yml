@@ -54,3 +54,43 @@ jobs:
         run: |
           cd component
           moon build --target wasm --release
+
+  vrt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install MoonBit CLI
+        run: |
+          curl -fsSL https://cli.moonbitlang.com/install/unix.sh | bash
+          echo "$HOME/.moon/bin" >> "$GITHUB_PATH"
+      - name: Set up pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          run_install: false
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: "pnpm"
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Build MoonBit JS artifacts
+        run: |
+          moon update
+          moon build --target js --release
+      - name: Install Playwright browsers
+        run: pnpm playwright install --with-deps chromium
+      - name: Run VRT (width geometry gate)
+        # Screenshot VRT (e2e/vrt-screenshot.spec.ts) is intentionally NOT
+        # included here yet: its PNG baselines must first be generated on a
+        # Linux Chromium runner and committed in a follow-up change. Until
+        # then, the width geometry spec is the authoritative gate.
+        run: pnpm playwright test e2e/vrt-width.spec.ts --reporter=line
+      - name: Upload Playwright report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-report
+          path: |
+            playwright-report/
+            test-results/
+          retention-days: 7
