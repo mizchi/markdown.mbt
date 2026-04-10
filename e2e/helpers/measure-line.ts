@@ -54,6 +54,13 @@ export async function measureLineDrift(page: Page): Promise<LineMeasurement[]> {
         overlayWidth = rect.width;
         overlayHeight = rect.height;
         range.detach?.();
+
+        // Empty source lines are rendered with NBSP in the overlay so the line
+        // box keeps its height. Treat that placeholder as zero-width content.
+        const overlayText = (lineEl.textContent ?? "").replace(/\u00A0/g, "").trim();
+        if (src.trim() === "" && overlayText === "") {
+          overlayWidth = 0;
+        }
       }
 
       // A wrapped line renders taller than one line-height. Allow 1px of

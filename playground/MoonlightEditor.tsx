@@ -2,8 +2,90 @@
 ///| Uses the ESM API for bidirectional editing of SVG in markdown code blocks
 
 import { createSignal, onMount, onCleanup } from "@luna_ui/luna";
-import { createEditor, type EditorHandle } from "@mizchi/moonlight";
 import { sanitizeSvg } from "./ast-renderer";
+
+interface EditorHandle {
+  exportSvg(): string;
+  destroy(): void;
+  onChange(callback: () => void): () => void;
+}
+
+interface EditorOptions {
+  width: number;
+  height: number;
+  theme: "light" | "dark";
+  readonly: boolean;
+  initialSvg: string;
+}
+
+interface MoonlightEditorModule {
+  createEditor(container: HTMLDivElement, options: EditorOptions): EditorHandle | null | undefined;
+}
+
+const MOONLIGHT_EDITOR_URL = "/moonlight-editor.editor.js";
+let moonlightModulePromise: Promise<MoonlightEditorModule> | null = null;
+
+declare global {
+  interface Window {
+    __moonlightEditorModule?: MoonlightEditorModule;
+  }
+}
+
+function loadMoonlightEditorModule(): Promise<MoonlightEditorModule> {
+  const existingModule = window.__moonlightEditorModule;
+  if (existingModule) {
+    return Promise.resolve(existingModule);
+  }
+
+  if (!moonlightModulePromise) {
+    moonlightModulePromise = new Promise((resolve, reject) => {
+      const resolveModule = () => {
+        const module = window.__moonlightEditorModule;
+        if (!module) {
+          moonlightModulePromise = null;
+          reject(new Error("Moonlight editor bundle loaded without module export"));
+          return;
+        }
+        resolve(module);
+      };
+
+      const existingScript = document.querySelector(
+        'script[data-moonlight-editor="true"]',
+      ) as HTMLScriptElement | null;
+
+      if (existingScript) {
+        existingScript.addEventListener("load", resolveModule, { once: true });
+        existingScript.addEventListener(
+          "error",
+          () => {
+            moonlightModulePromise = null;
+            reject(new Error("Failed to load Moonlight editor bundle"));
+          },
+          { once: true },
+        );
+        return;
+      }
+
+      const script = document.createElement("script");
+      script.type = "module";
+      script.src = MOONLIGHT_EDITOR_URL;
+      script.dataset.moonlightEditor = "true";
+      script.addEventListener("load", resolveModule, { once: true });
+      script.addEventListener(
+        "error",
+        () => {
+          moonlightModulePromise = null;
+          script.remove();
+          reject(new Error("Failed to load Moonlight editor bundle"));
+        },
+        { once: true },
+      );
+      document.head.appendChild(script);
+    });
+  }
+
+  return moonlightModulePromise;
+}
 
 export interface MoonlightEditorProps {
   /** JSX key */
@@ -42,20 +124,31 @@ export function MoonlightEditor(props: MoonlightEditorProps) {
   let containerRef: HTMLDivElement | null = null;
   let editor: EditorHandle | null = null;
   let isInitialized = false;
+  let isUnmounted = false;
   const [isLoaded, setIsLoaded] = createSignal(false);
   const [isError, setIsError] = createSignal(false);
 
   // Initialize moonlight editor (only once)
-  const initEditor = () => {
+  const initEditor = async () => {
     if (!containerRef || isInitialized) return;
     isInitialized = true;
+    setIsLoaded(false);
+    setIsError(false);
 
     try {
       // Sanitize the initial SVG
       const sanitized = sanitizeSvg(initialSvg);
+      const { createEditor } = await loadMoonlightEditorModule();
+
+      if (!containerRef || isUnmounted) {
+        isInitialized = false;
+        return;
+      }
+
+      containerRef.innerHTML = "";
 
       // Create the editor using ESM API
-      editor = createEditor(containerRef, {
+      const createdEditor = createEditor(containerRef, {
         width,
         height,
         theme,
@@ -63,10 +156,11 @@ export function MoonlightEditor(props: MoonlightEditorProps) {
         initialSvg: sanitized,
       });
 
-      if (!editor) {
+      if (!createdEditor) {
         isInitialized = false;
         throw new Error("createEditor returned null/undefined");
       }
+      editor = createdEditor;
 
       // Subscribe to changes - skip initial change event
       if (!readonly && onSvgChange) {
@@ -76,28 +170,33 @@ export function MoonlightEditor(props: MoonlightEditorProps) {
             skipInitial = false;
             return;
           }
-          if (editor) {
+          if (editor && !isUnmounted) {
             const svg = editor.exportSvg();
             onSvgChange(svg, span);
           }
         });
       }
 
-      setIsLoaded(true);
+      if (!isUnmounted) {
+        setIsLoaded(true);
+      }
     } catch (e) {
       console.error("Failed to initialize MoonlightEditor:", e);
       isInitialized = false;
-      setIsError(true);
+      if (!isUnmounted) {
+        setIsError(true);
+      }
     }
   };
 
   // Initialize on mount
   onMount(() => {
-    initEditor();
+    void initEditor();
   });
 
   // Cleanup
   onCleanup(() => {
+    isUnmounted = true;
     if (editor) {
       editor.destroy();
       editor = null;
@@ -161,8 +260,7 @@ export function MoonlightEditor(props: MoonlightEditorProps) {
             <span>Failed to load Moonlight Editor</span>
             <button
               onClick={() => {
-                setIsError(false);
-                initEditor();
+                void initEditor();
               }}
               style={{
                 padding: "4px 12px",

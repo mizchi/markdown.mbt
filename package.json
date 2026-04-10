@@ -21,7 +21,6 @@
   "packageManager": "pnpm@10.23.0",
   "devDependencies": {
     "@luna_ui/luna": "^0.11.0",
-    "@mizchi/moonlight": "link:/Users/mz/ghq/github.com/mizchi/moonlight",
     "@playwright/test": "^1.58.2",
     "@types/mdast": "^4.0.4",
     "@types/unist": "^3.0.3",

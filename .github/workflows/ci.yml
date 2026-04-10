@@ -76,7 +76,7 @@ jobs:
       - name: Build MoonBit JS artifacts
         run: |
           moon update
-          moon build --target js
+          moon build --target js --release
       - name: Install Playwright browsers
         run: pnpm playwright install --with-deps chromium
       - name: Run VRT (width geometry gate)

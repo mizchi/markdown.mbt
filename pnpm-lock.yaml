@@ -11,9 +11,6 @@ importers:
       '@luna_ui/luna':
         specifier: ^0.11.0
         version: 0.11.0
-      '@mizchi/moonlight':
-        specifier: link:/Users/mz/ghq/github.com/mizchi/moonlight
-        version: link:../moonlight
       '@playwright/test':
         specifier: ^1.58.2
         version: 1.58.2
