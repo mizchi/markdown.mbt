@@ -1,6 +1,10 @@
 // Generated using `moon info`, DON'T EDIT IT
 package "mizchi/markdown"
 
+import {
+  "moonbitlang/core/debug",
+}
+
 // Values
 pub fn char_is(Char?, Char) -> Bool
 
@@ -20,25 +24,27 @@ pub fn md_free(Int) -> Unit
 
 pub fn md_parse(String) -> Int
 
-pub fn md_parse_and_render(String, strict? : Bool) -> String
+pub fn md_parse_and_render(String, strict? : Bool, wikilinks? : Bool) -> String
 
 pub fn md_parse_incremental(Int, String, Int, Int, Int) -> Int
+
+pub fn md_parse_with_wikilinks(String) -> Int
 
 pub fn md_render_to_html(Int) -> String
 
 pub fn md_render_to_string(Int) -> String
 
-pub fn md_to_html(String) -> String
+pub fn md_to_html(String, wikilinks? : Bool) -> String
 
-pub fn md_to_html_strict(String) -> String
+pub fn md_to_html_strict(String, wikilinks? : Bool) -> String
 
-pub fn parse(String, strict? : Bool) -> ParseResult
+pub fn parse(String, strict? : Bool, wikilinks? : Bool) -> ParseResult
 
 pub fn parse_code_block_info(String) -> CodeBlockInfo
 
-pub fn parse_incremental(Document, String, String, EditInfo) -> IncrementalResult
+pub fn parse_incremental(Document, String, String, EditInfo, wikilinks? : Bool) -> IncrementalResult
 
-pub fn parse_inlines(String, strict? : Bool) -> Array[Inline]
+pub fn parse_inlines(String, strict? : Bool, wikilinks? : Bool) -> Array[Inline]
 
 pub fn parse_inlines_multipass(String) -> Array[Inline]
 
@@ -51,10 +57,9 @@ pub fn serialize_definitions(Array[LinkDefinition]) -> String
 // Errors
 
 // Types and methods
-pub(all) struct AgentId(Int)
+pub(all) struct AgentId(Int) derive(Eq, @debug.Debug)
 #deprecated
 pub fn AgentId::inner(Self) -> Int
-pub impl Eq for AgentId
 pub impl Show for AgentId
 
 pub(all) enum Block {
@@ -76,8 +81,7 @@ pub(all) enum BulletMarker {
   Dash
   Asterisk
   Plus
-}
-pub impl Eq for BulletMarker
+} derive(Eq, @debug.Debug)
 pub impl Show for BulletMarker
 
 pub struct CodeBlockInfo {
@@ -123,15 +127,13 @@ pub fn EditInfo::replace(Int, Int, Int) -> Self
 pub(all) enum EmphasisMarker {
   Asterisk
   Underscore
-}
-pub impl Eq for EmphasisMarker
+} derive(Eq, @debug.Debug)
 pub impl Show for EmphasisMarker
 
 pub(all) enum FenceMarker {
   Backtick
   Tilde
-}
-pub impl Eq for FenceMarker
+} derive(Eq, @debug.Debug)
 pub impl Show for FenceMarker
 
 pub(all) struct Frontmatter {
@@ -143,15 +145,13 @@ pub(all) struct Frontmatter {
 pub(all) enum HardBreakStyle {
   TwoSpaces
   Backslash
-}
-pub impl Eq for HardBreakStyle
+} derive(Eq, @debug.Debug)
 pub impl Show for HardBreakStyle
 
 pub(all) enum HeadingStyle {
   Atx
   Setext
-}
-pub impl Eq for HeadingStyle
+} derive(Eq, @debug.Debug)
 pub impl Show for HeadingStyle
 
 pub(all) struct IdGenerator {
@@ -176,6 +176,7 @@ pub(all) enum Inline {
   Strong(marker~ : EmphasisMarker, children~ : Array[Inline], span~ : Span)
   Strikethrough(children~ : Array[Inline], span~ : Span)
   Code(content~ : String, backtick_count~ : Int, span~ : Span)
+  WikiLink(target~ : String, label~ : String, fragment~ : String, span~ : Span)
   Link(children~ : Array[Inline], url~ : String, title~ : String, span~ : Span)
   RefLink(children~ : Array[Inline], label~ : String, span~ : Span)
   Autolink(url~ : String, is_email~ : Bool, span~ : Span)
@@ -203,18 +204,16 @@ pub(all) struct ListItem {
 pub(all) struct LogicalId {
   agent : AgentId
   seq : Int
-}
+} derive(Eq, @debug.Debug)
 pub fn LogicalId::compare(Self, Self) -> Int
 pub fn LogicalId::le(Self, Self) -> Bool
 pub fn LogicalId::lt(Self, Self) -> Bool
-pub impl Eq for LogicalId
 pub impl Show for LogicalId
 
 pub(all) enum OrderedDelimiter {
   Dot
   Paren
-}
-pub impl Eq for OrderedDelimiter
+} derive(Eq, @debug.Debug)
 pub impl Show for OrderedDelimiter
 
 pub(all) struct ParseResult {
@@ -258,10 +257,9 @@ pub fn Scanner::substring(Self, Int, Int) -> String
 pub(all) struct Span {
   from : Int
   to : Int
-}
+} derive(Eq, @debug.Debug)
 pub fn Span::empty() -> Self
 pub fn Span::new(Int, Int) -> Self
-pub impl Eq for Span
 pub impl Show for Span
 
 pub(all) enum TableAlign {
@@ -269,8 +267,7 @@ pub(all) enum TableAlign {
   Center
   Right
   None
-}
-pub impl Eq for TableAlign
+} derive(Eq, @debug.Debug)
 pub impl Show for TableAlign
 
 pub(all) struct TableCell {
@@ -286,10 +283,9 @@ pub(all) struct TextRun {
 
 pub(all) struct Trivia {
   content : String
-}
+} derive(Eq, @debug.Debug)
 pub fn Trivia::empty() -> Self
 pub fn Trivia::new(String) -> Self
-pub impl Eq for Trivia
 pub impl Show for Trivia
 
 // Type aliases

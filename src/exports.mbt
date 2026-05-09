@@ -11,6 +11,7 @@
 priv struct StoredDocument {
   result : ParseResult
   source : String
+  wikilinks : Bool
 }
 
 ///|
@@ -23,10 +24,14 @@ let next_handle : Ref[Int] = Ref::new(1)
 
 ///|
 /// Allocate a new handle for a document
-fn alloc_handle(result : ParseResult, source : String) -> Int {
+fn alloc_handle(
+  result : ParseResult,
+  source : String,
+  wikilinks? : Bool = false,
+) -> Int {
   let handle = next_handle.val
   next_handle.val = handle + 1
-  documents[handle] = { result, source }
+  documents[handle] = { result, source, wikilinks }
   handle
 }
 
@@ -47,6 +52,13 @@ fn get_stored(handle : Int) -> StoredDocument? {
 pub fn md_parse(source : String) -> Int {
   let result = parse(source)
   alloc_handle(result, source)
+}
+
+///|
+/// Parse markdown source with wikilinks enabled and return a document handle
+pub fn md_parse_with_wikilinks(source : String) -> Int {
+  let result = parse(source, wikilinks=true)
+  alloc_handle(result, source, wikilinks=true)
 }
 
 ///| Render document to markdown string
@@ -83,12 +95,13 @@ pub fn md_parse_incremental(
         stored.source,
         new_source,
         edit,
+        wikilinks=stored.wikilinks,
       )
       let new_parse_result : ParseResult = {
         document: inc_result.document,
         definitions: stored.result.definitions,
       }
-      alloc_handle(new_parse_result, new_source)
+      alloc_handle(new_parse_result, new_source, wikilinks=stored.wikilinks)
     }
     None => 0
   }
@@ -104,8 +117,12 @@ pub fn md_free(handle : Int) -> Unit {
 
 ///|
 /// When strict=true, uses full CommonMark compliance (slower)
-pub fn md_parse_and_render(source : String, strict? : Bool = false) -> String {
-  let result = parse(source, strict~)
+pub fn md_parse_and_render(
+  source : String,
+  strict? : Bool = false,
+  wikilinks? : Bool = false,
+) -> String {
+  let result = parse(source, strict~, wikilinks~)
   serialize(result.document)
 }
 

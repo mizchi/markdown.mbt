@@ -56,6 +56,29 @@ export interface EditInfo {
   newEnd: number;
 }
 
+/**
+ * Parser extension options.
+ */
+export interface MarkdownOptions {
+  /**
+   * Enable Obsidian-style wikilinks: [[target]] and [[target|label]].
+   * Disabled by default to keep CommonMark-compatible behavior.
+   */
+  wikilinks?: boolean;
+}
+
+/**
+ * mdast extension node emitted when MarkdownOptions.wikilinks is enabled.
+ */
+export interface WikiLink {
+  type: "wikiLink";
+  value: string;
+  data: {
+    label: string;
+    fragment: string;
+  };
+}
+
 // =============================================================================
 // Document Handle
 // =============================================================================
@@ -94,7 +117,7 @@ export interface DocumentHandle {
  * const ast = parse("# Hello\n\nWorld");
  * console.log(ast.children[0].type); // "heading"
  */
-export function parse(source: string): import("mdast").Root;
+export function parse(source: string, options?: MarkdownOptions): import("mdast").Root;
 
 /**
  * Convert markdown to HTML.
@@ -103,7 +126,7 @@ export function parse(source: string): import("mdast").Root;
  * const html = toHtml("# Hello\n\n**Bold** text");
  * // => "<h1>Hello</h1>\n<p><strong>Bold</strong> text</p>\n"
  */
-export function toHtml(source: string): string;
+export function toHtml(source: string, options?: MarkdownOptions): string;
 
 /**
  * Normalize/serialize markdown source.
@@ -112,7 +135,7 @@ export function toHtml(source: string): string;
  * const normalized = toMarkdown("# Hello\n\n\n\nWorld");
  * // => "# Hello\n\nWorld\n"
  */
-export function toMarkdown(source: string): string;
+export function toMarkdown(source: string, options?: MarkdownOptions): string;
 
 /**
  * Create a new document handle from markdown source.
@@ -131,7 +154,7 @@ export function toMarkdown(source: string): string;
  *
  * doc.dispose(); // Free resources
  */
-export function createDocument(source: string): DocumentHandle;
+export function createDocument(source: string, options?: MarkdownOptions): DocumentHandle;
 
 /**
  * Create an EditInfo for insertion.

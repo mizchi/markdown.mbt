@@ -46,6 +46,12 @@ pub fn md_to_html(source : String) -> String {
 }
 
 ///|
+/// Parse markdown with wikilinks enabled and return HTML directly
+pub fn md_to_html_with_wikilinks(source : String) -> String {
+  @markdown.md_to_html(source, wikilinks=true)
+}
+
+///|
 /// Parse markdown and return serialized markdown (normalized)
 pub fn md_to_markdown(source : String) -> String {
   let result = @markdown.parse(source)
@@ -53,9 +59,23 @@ pub fn md_to_markdown(source : String) -> String {
 }
 
 ///|
+/// Parse markdown with wikilinks enabled and return serialized markdown.
+pub fn md_to_markdown_with_wikilinks(source : String) -> String {
+  let result = @markdown.parse(source, wikilinks=true)
+  @markdown.serialize(result.document)
+}
+
+///|
 /// Parse markdown and return JSON AST directly (no handle)
 pub fn md_to_ast_json(source : String) -> String {
   let result = @markdown.parse(source)
+  document_to_json(result.document)
+}
+
+///|
+/// Parse markdown with wikilinks enabled and return JSON AST directly.
+pub fn md_to_ast_json_with_wikilinks(source : String) -> String {
+  let result = @markdown.parse(source, wikilinks=true)
   document_to_json(result.document)
 }
 
@@ -90,6 +110,10 @@ pub fn md_serialize(handle : Int) -> String {
 let ast_sources : Map[Int, String] = {}
 
 ///|
+/// Per-handle extension flags.
+let ast_wikilinks : Map[Int, Bool] = {}
+
+///|
 /// Parse markdown and store source for incremental updates
 pub fn md_parse_with_source(source : String) -> Int {
   let result = @markdown.parse(source)
@@ -97,6 +121,19 @@ pub fn md_parse_with_source(source : String) -> Int {
   ast_next_handle.val = handle + 1
   ast_documents[handle] = result.document
   ast_sources[handle] = source
+  ast_wikilinks[handle] = false
+  handle
+}
+
+///|
+/// Parse markdown with wikilinks enabled and store source for incremental updates
+pub fn md_parse_with_source_with_wikilinks(source : String) -> Int {
+  let result = @markdown.parse(source, wikilinks=true)
+  let handle = ast_next_handle.val
+  ast_next_handle.val = handle + 1
+  ast_documents[handle] = result.document
+  ast_sources[handle] = source
+  ast_wikilinks[handle] = true
   handle
 }
 
@@ -112,18 +149,27 @@ pub fn md_parse_incremental(
 ) -> Int {
   match (ast_documents.get(handle), ast_sources.get(handle)) {
     (Some(doc), Some(old_source)) => {
+      let wikilinks = match ast_wikilinks.get(handle) {
+        Some(value) => value
+        None => false
+      }
       let edit = @markdown.EditInfo::replace(
         change_start,
         old_end - change_start,
         new_end - change_start,
       )
       let inc_result = @markdown.parse_incremental(
-        doc, old_source, new_source, edit,
+        doc,
+        old_source,
+        new_source,
+        edit,
+        wikilinks~,
       )
       let new_handle = ast_next_handle.val
       ast_next_handle.val = new_handle + 1
       ast_documents[new_handle] = inc_result.document
       ast_sources[new_handle] = new_source
+      ast_wikilinks[new_handle] = wikilinks
       new_handle
     }
     _ => 0
@@ -135,4 +181,5 @@ pub fn md_parse_incremental(
 pub fn md_free(handle : Int) -> Unit {
   ast_documents.remove(handle)
   ast_sources.remove(handle)
+  ast_wikilinks.remove(handle)
 }

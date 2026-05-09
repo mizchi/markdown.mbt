@@ -21,6 +21,23 @@ describe("parse", () => {
     const ast = parse("**Bold** text");
     expect(ast.children[0].type).toBe("paragraph");
   });
+
+  it("parses wikilinks only when enabled", () => {
+    const defaultAst = parse("[[MoonBit]]");
+    expect(defaultAst.children[0].children[0]).toMatchObject({
+      type: "text",
+      value: "[[MoonBit]]",
+    });
+
+    const ast = parse("[[MoonBit#syntax|MoonBit syntax]]", {
+      wikilinks: true,
+    });
+    expect(ast.children[0].children[0]).toMatchObject({
+      type: "wikiLink",
+      value: "MoonBit",
+      data: { label: "MoonBit syntax", fragment: "syntax" },
+    });
+  });
 });
 
 describe("toHtml", () => {
@@ -33,12 +50,24 @@ describe("toHtml", () => {
     const html = toHtml("**Bold** text");
     expect(html).toBe("<p><strong>Bold</strong> text</p>\n");
   });
+
+  it("renders wikilinks only when enabled", () => {
+    expect(toHtml("[[MoonBit]]")).toBe("<p>[[MoonBit]]</p>\n");
+    expect(toHtml("[[MoonBit|MoonBit notes]]", { wikilinks: true })).toBe(
+      '<p><a href="MoonBit">MoonBit notes</a></p>\n'
+    );
+  });
 });
 
 describe("toMarkdown", () => {
   it("normalizes markdown", () => {
     const md = toMarkdown("# Hello\n\n\n\nWorld");
     expect(md).toBe("# Hello\n\nWorld\n");
+  });
+
+  it("serializes wikilinks when enabled", () => {
+    const md = toMarkdown("[[MoonBit|MoonBit notes]]", { wikilinks: true });
+    expect(md).toBe("[[MoonBit|MoonBit notes]]\n");
   });
 });
 
@@ -101,6 +130,13 @@ describe("createDocument", () => {
   it("provides toMarkdown method", () => {
     const doc = createDocument("# Hello");
     expect(doc.toMarkdown()).toBe("# Hello\n");
+    doc.dispose();
+  });
+
+  it("keeps wikilink option on document handles", () => {
+    const doc = createDocument("[[MoonBit]]", { wikilinks: true });
+    expect(doc.ast.children[0].children[0].type).toBe("wikiLink");
+    expect(doc.toHtml()).toBe('<p><a href="MoonBit">MoonBit</a></p>\n');
     doc.dispose();
   });
 

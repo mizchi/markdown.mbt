@@ -340,6 +340,13 @@ fn inline_to_json(inline : @markdown.Inline) -> Json? {
         "value": content.to_json(),
         "position": position_to_json(span),
       })
+    @markdown.Inline::WikiLink(target~, label~, fragment~, span~) =>
+      Some({
+        "type": "wikiLink",
+        "value": target.to_json(),
+        "data": { "label": label.to_json(), "fragment": fragment.to_json() },
+        "position": position_to_json(span),
+      })
     @markdown.Inline::Link(children~, url~, title~, span~) => {
       let inlines : Array[Json] = []
       for child in children {

@@ -20,15 +20,23 @@ pub fn md_parse_to_ast(String) -> Int
 
 pub fn md_parse_with_source(String) -> Int
 
+pub fn md_parse_with_source_with_wikilinks(String) -> Int
+
 pub fn md_render_html(Int) -> String
 
 pub fn md_serialize(Int) -> String
 
 pub fn md_to_ast_json(String) -> String
 
+pub fn md_to_ast_json_with_wikilinks(String) -> String
+
 pub fn md_to_html(String) -> String
 
+pub fn md_to_html_with_wikilinks(String) -> String
+
 pub fn md_to_markdown(String) -> String
+
+pub fn md_to_markdown_with_wikilinks(String) -> String
 
 // Errors
 

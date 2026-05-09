@@ -51,6 +51,7 @@ pub fn parse_incremental(
   old_source : String,
   new_source : String,
   edit : EditInfo,
+  wikilinks? : Bool = false,
 ) -> IncrementalResult {
   let old_blocks = old_doc.children
 
@@ -83,7 +84,7 @@ pub fn parse_incremental(
   )
 
   // Re-parse just this region
-  let region_result = parse(reparse_region)
+  let region_result = parse(reparse_region, wikilinks~)
   let new_blocks_raw = region_result.document.children
 
   // Adjust spans in re-parsed blocks

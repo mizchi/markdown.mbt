@@ -88,10 +88,12 @@ pub fn Trivia::empty() -> Trivia {
   { content: "" }
 }
 
+///|
 pub impl Show for Span with output(self : Span, logger : &Logger) -> Unit {
   logger.write_string(@debug.to_string(self))
 }
 
+///|
 pub impl Show for EmphasisMarker with output(
   self : EmphasisMarker,
   logger : &Logger,
@@ -99,13 +101,12 @@ pub impl Show for EmphasisMarker with output(
   logger.write_string(@debug.to_string(self))
 }
 
-pub impl Show for FenceMarker with output(
-  self : FenceMarker,
-  logger : &Logger,
-) -> Unit {
+///|
+pub impl Show for FenceMarker with output(self : FenceMarker, logger : &Logger) -> Unit {
   logger.write_string(@debug.to_string(self))
 }
 
+///|
 pub impl Show for BulletMarker with output(
   self : BulletMarker,
   logger : &Logger,
@@ -113,6 +114,7 @@ pub impl Show for BulletMarker with output(
   logger.write_string(@debug.to_string(self))
 }
 
+///|
 pub impl Show for OrderedDelimiter with output(
   self : OrderedDelimiter,
   logger : &Logger,
@@ -120,6 +122,7 @@ pub impl Show for OrderedDelimiter with output(
   logger.write_string(@debug.to_string(self))
 }
 
+///|
 pub impl Show for HeadingStyle with output(
   self : HeadingStyle,
   logger : &Logger,
@@ -127,6 +130,7 @@ pub impl Show for HeadingStyle with output(
   logger.write_string(@debug.to_string(self))
 }
 
+///|
 pub impl Show for Trivia with output(self : Trivia, logger : &Logger) -> Unit {
   logger.write_string(@debug.to_string(self))
 }
@@ -302,6 +306,8 @@ pub(all) enum Inline {
     backtick_count~ : Int, // Number of backticks used
     span~ : Span
   )
+  /// Wiki link [[target]] or [[target|label]] (opt-in extension)
+  WikiLink(target~ : String, label~ : String, fragment~ : String, span~ : Span)
   /// Link [text](url "title")
   Link(children~ : Array[Inline], url~ : String, title~ : String, span~ : Span)
   /// Reference link [text][ref]
@@ -325,13 +331,12 @@ pub(all) enum HardBreakStyle {
   Backslash // "\\\n"
 } derive(Eq, Debug)
 
-pub impl Show for TableAlign with output(
-  self : TableAlign,
-  logger : &Logger,
-) -> Unit {
+///|
+pub impl Show for TableAlign with output(self : TableAlign, logger : &Logger) -> Unit {
   logger.write_string(@debug.to_string(self))
 }
 
+///|
 pub impl Show for HardBreakStyle with output(
   self : HardBreakStyle,
   logger : &Logger,

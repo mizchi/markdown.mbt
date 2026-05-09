@@ -15,9 +15,13 @@ pub(all) struct ParseResult {
 
 ///|
 /// When strict=false (default), uses fast single-pass parser
-pub fn parse(source : String, strict? : Bool = false) -> ParseResult {
+pub fn parse(
+  source : String,
+  strict? : Bool = false,
+  wikilinks? : Bool = false,
+) -> ParseResult {
   let scanner = Scanner::new(source)
-  let parser = BlockParser::new(scanner, strict)
+  let parser = BlockParser::new(scanner, strict, wikilinks)
   parser.parse_document()
 }
 
@@ -27,11 +31,16 @@ priv struct BlockParser {
   scanner : Scanner
   definitions : Array[LinkDefinition]
   strict : Bool
+  wikilinks : Bool
 }
 
 ///|
-fn BlockParser::new(scanner : Scanner, strict : Bool) -> BlockParser {
-  { scanner, definitions: [], strict }
+fn BlockParser::new(
+  scanner : Scanner,
+  strict : Bool,
+  wikilinks : Bool,
+) -> BlockParser {
+  { scanner, definitions: [], strict, wikilinks }
 }
 
 ///|
@@ -56,11 +65,11 @@ fn BlockParser::parse_document(self : BlockParser) -> ParseResult {
 /// Parse sequence of blocks
 fn BlockParser::parse_blocks(self : BlockParser) -> Array[Block] {
   let blocks : Array[Block] = []
-  while !(self.scanner.is_eof()) {
+  while !self.scanner.is_eof() {
     // Skip and collect blank lines
     let blank_start = self.scanner.pos
     let mut blank_count = 0
-    while !(self.scanner.is_eof()) && self.scanner.is_blank_line() {
+    while !self.scanner.is_eof() && self.scanner.is_blank_line() {
       blank_count += 1
       self.scanner.skip_line()
     }
@@ -179,7 +188,7 @@ fn BlockParser::try_parse_thematic_break(
     _ => return None
   }
   let mut count = 0
-  while !(self.scanner.is_eof()) {
+  while !self.scanner.is_eof() {
     match self.scanner.peek() {
       Some('\n') => break
       Some(c) if c == marker => {
@@ -242,7 +251,11 @@ fn BlockParser::try_parse_atx_heading(
   let trailing = Trivia::empty()
 
   // Parse inline content
-  let children = parse_inlines(content, strict=self.strict)
+  let children = parse_inlines(
+    content,
+    strict=self.strict,
+    wikilinks=self.wikilinks,
+  )
   Some(
     Block::Heading(
       level~,
@@ -329,7 +342,7 @@ fn BlockParser::try_parse_fenced_code(
 
   // Read code content until closing fence
   let code_buf = StringBuilder::new()
-  while !(self.scanner.is_eof()) {
+  while !self.scanner.is_eof() {
     let line_indent = self.scanner.count_leading_spaces()
 
     // Check for closing fence
@@ -403,12 +416,12 @@ fn BlockParser::try_parse_indented_code(
 ) -> Block? {
   let leading = Trivia::empty()
   let code_buf = StringBuilder::new()
-  while !(self.scanner.is_eof()) {
+  while !self.scanner.is_eof() {
     let line_start = self.scanner.pos
 
     // Check if line starts with 4+ spaces
     let indent = self.scanner.count_leading_spaces()
-    if indent < 4 && !(self.scanner.is_blank_line()) {
+    if indent < 4 && !self.scanner.is_blank_line() {
       self.scanner.restore(line_start)
       break
     }
@@ -444,14 +457,14 @@ fn BlockParser::try_parse_indented_code(
 /// Try to parse blockquote
 fn BlockParser::try_parse_blockquote(self : BlockParser, start : Int) -> Block? {
   let leading = self.read_leading_trivia()
-  if !(char_is(self.scanner.peek(), '>')) {
+  if !char_is(self.scanner.peek(), '>') {
     return None
   }
 
   // Collect all lines of blockquote
   let content_buf = StringBuilder::new()
   let mut first = true
-  while !(self.scanner.is_eof()) {
+  while !self.scanner.is_eof() {
     let line_start = self.scanner.pos
     let _ = self.scanner.skip_spaces()
     if char_is(self.scanner.peek(), '>') {
@@ -461,7 +474,7 @@ fn BlockParser::try_parse_blockquote(self : BlockParser, start : Int) -> Block? 
         self.scanner.advance(1)
       }
       let line = self.scanner.read_line()
-      if !(first) {
+      if !first {
         content_buf.write_char('\n')
       }
       content_buf.write_string(line)
@@ -480,7 +493,11 @@ fn BlockParser::try_parse_blockquote(self : BlockParser, start : Int) -> Block? 
   // Parse blockquote content recursively
   let content = content_buf.to_string()
   let inner_scanner = Scanner::new(content)
-  let inner_parser = BlockParser::new(inner_scanner, self.strict)
+  let inner_parser = BlockParser::new(
+    inner_scanner,
+    self.strict,
+    self.wikilinks,
+  )
   let inner_result = inner_parser.parse_document()
 
   // Merge definitions
@@ -631,7 +648,7 @@ fn BlockParser::parse_bullet_list(
 ) -> Block? {
   let items : Array[ListItem] = []
   let mut tight = true
-  while !(self.scanner.is_eof()) {
+  while !self.scanner.is_eof() {
     let item_start = self.scanner.pos
     let marker_offset = self.scanner.skip_spaces()
 
@@ -655,9 +672,9 @@ fn BlockParser::parse_bullet_list(
     items.push(item)
 
     // Check for blank lines (affects tight/loose)
-    if !(self.scanner.is_eof()) && self.scanner.is_blank_line() {
+    if !self.scanner.is_eof() && self.scanner.is_blank_line() {
       tight = false
-      while !(self.scanner.is_eof()) && self.scanner.is_blank_line() {
+      while !self.scanner.is_eof() && self.scanner.is_blank_line() {
         self.scanner.skip_line()
       }
     }
@@ -689,7 +706,7 @@ fn BlockParser::parse_ordered_list(
 ) -> Block? {
   let items : Array[ListItem] = []
   let mut tight = true
-  while !(self.scanner.is_eof()) {
+  while !self.scanner.is_eof() {
     let item_start = self.scanner.pos
     let marker_offset = self.scanner.skip_spaces()
 
@@ -715,9 +732,9 @@ fn BlockParser::parse_ordered_list(
     items.push(item)
 
     // Check for blank lines
-    if !(self.scanner.is_eof()) && self.scanner.is_blank_line() {
+    if !self.scanner.is_eof() && self.scanner.is_blank_line() {
       tight = false
-      while !(self.scanner.is_eof()) && self.scanner.is_blank_line() {
+      while !self.scanner.is_eof() && self.scanner.is_blank_line() {
         self.scanner.skip_line()
       }
     }
@@ -760,8 +777,12 @@ fn BlockParser::parse_list_item(
 
   // Check for task list checkbox: [ ], [x], or [X]
   let (checked, actual_content) = parse_task_checkbox(content)
-  if !(actual_content.is_empty()) {
-    let inline_content = parse_inlines(actual_content, strict=self.strict)
+  if !actual_content.is_empty() {
+    let inline_content = parse_inlines(
+      actual_content,
+      strict=self.strict,
+      wikilinks=self.wikilinks,
+    )
     children.push(
       Block::Paragraph(
         children=inline_content,
@@ -775,7 +796,7 @@ fn BlockParser::parse_list_item(
   // Check for nested content (indented continuation)
   // Nested list requires at least 2 spaces of indentation
   let min_indent = marker_offset + 1 + content_offset // marker position + marker char + spaces after
-  while !(self.scanner.is_eof()) && !(self.scanner.is_blank_line()) {
+  while !self.scanner.is_eof() && !self.scanner.is_blank_line() {
     let saved = self.scanner.pos
     let indent = self.scanner.skip_spaces()
 
@@ -826,7 +847,7 @@ fn BlockParser::parse_nested_bullet_list(
 ) -> Block? {
   let items : Array[ListItem] = []
   let mut tight = true
-  while !(self.scanner.is_eof()) {
+  while !self.scanner.is_eof() {
     let item_start = self.scanner.pos
     let marker_offset = self.scanner.skip_spaces()
 
@@ -858,9 +879,9 @@ fn BlockParser::parse_nested_bullet_list(
     items.push(item)
 
     // Check for blank lines
-    if !(self.scanner.is_eof()) && self.scanner.is_blank_line() {
+    if !self.scanner.is_eof() && self.scanner.is_blank_line() {
       tight = false
-      while !(self.scanner.is_eof()) && self.scanner.is_blank_line() {
+      while !self.scanner.is_eof() && self.scanner.is_blank_line() {
         self.scanner.skip_line()
       }
     }
@@ -897,8 +918,12 @@ fn BlockParser::parse_nested_list_item(
   let content = content_buf.to_string()
   let children : Array[Block] = []
   let (checked, actual_content) = parse_task_checkbox(content)
-  if !(actual_content.is_empty()) {
-    let inline_content = parse_inlines(actual_content, strict=self.strict)
+  if !actual_content.is_empty() {
+    let inline_content = parse_inlines(
+      actual_content,
+      strict=self.strict,
+      wikilinks=self.wikilinks,
+    )
     children.push(
       Block::Paragraph(
         children=inline_content,
@@ -990,7 +1015,7 @@ fn BlockParser::try_parse_setext_heading(
 
   // Rest of line must be empty
   let _ = self.scanner.skip_spaces()
-  if !(char_is(self.scanner.peek(), '\n')) && !(self.scanner.is_eof()) {
+  if !char_is(self.scanner.peek(), '\n') && !self.scanner.is_eof() {
     self.scanner.restore(saved)
     return None
   }
@@ -998,7 +1023,11 @@ fn BlockParser::try_parse_setext_heading(
     self.scanner.advance(1)
   }
   let content_str = content.trim(chars=" \t\n\r").to_string()
-  let children = parse_inlines(content_str, strict=self.strict)
+  let children = parse_inlines(
+    content_str,
+    strict=self.strict,
+    wikilinks=self.wikilinks,
+  )
   Some(
     Block::Heading(
       level~,
@@ -1070,7 +1099,7 @@ fn BlockParser::try_parse_html_block(self : BlockParser, start : Int) -> Block? 
   let leading = self.read_leading_trivia()
 
   // HTML blocks must start with <
-  if !(char_is(self.scanner.peek(), '<')) {
+  if !char_is(self.scanner.peek(), '<') {
     self.scanner.restore(saved)
     return None
   }
@@ -1078,6 +1107,35 @@ fn BlockParser::try_parse_html_block(self : BlockParser, start : Int) -> Block? 
   // Peek ahead to check for valid HTML block start
   let peek_pos = self.scanner.pos
   self.scanner.advance(1) // Skip <
+
+  // HTML comments are raw HTML blocks, but they do not have a tag name.
+  if char_is(self.scanner.peek(), '!') &&
+    char_is(self.scanner.peek_at(1), '-') &&
+    char_is(self.scanner.peek_at(2), '-') {
+    self.scanner.restore(peek_pos)
+    let content_buf = StringBuilder::new()
+    while !self.scanner.is_eof() {
+      let line = self.scanner.read_line()
+      content_buf.write_string(line)
+      let is_closed = line.contains("-->")
+      if char_is(self.scanner.peek(), '\n') {
+        content_buf.write_char('\n')
+        self.scanner.advance(1)
+      }
+      if is_closed {
+        break
+      }
+    }
+    let html = content_buf.to_string()
+    return Some(
+      Block::HtmlBlock(
+        html~,
+        span=Span::new(start, self.scanner.pos),
+        leading_trivia=leading,
+        trailing_trivia=Trivia::empty(),
+      ),
+    )
+  }
 
   // Check for closing tag </tag>
   let is_closing = char_is(self.scanner.peek(), '/')
@@ -1087,7 +1145,7 @@ fn BlockParser::try_parse_html_block(self : BlockParser, start : Int) -> Block? 
 
   // Read tag name (including hyphen for custom elements)
   let tag_buf = StringBuilder::new()
-  while !(self.scanner.is_eof()) {
+  while !self.scanner.is_eof() {
     match self.scanner.peek() {
       Some(c) if (c >= 'a' && c <= 'z') ||
         (c >= 'A' && c <= 'Z') ||
@@ -1107,7 +1165,7 @@ fn BlockParser::try_parse_html_block(self : BlockParser, start : Int) -> Block? 
 
   // Check if this is a block-level tag or custom element
   let is_custom = is_custom_element_tag(tag_name)
-  if !(is_html_block_tag(tag_name)) && !(is_custom) {
+  if !is_html_block_tag(tag_name) && !is_custom {
     self.scanner.restore(saved)
     return None
   }
@@ -1117,14 +1175,14 @@ fn BlockParser::try_parse_html_block(self : BlockParser, start : Int) -> Block? 
   let content_buf = StringBuilder::new()
 
   // For custom elements, we need to find the closing tag
-  let closing_tag = if is_custom && !(is_closing) {
+  let closing_tag = if is_custom && !is_closing {
     Some("</\{tag_name}>")
   } else {
     None
   }
 
   // Read lines until closing tag (for custom elements) or blank line
-  while !(self.scanner.is_eof()) {
+  while !self.scanner.is_eof() {
     let line = self.scanner.read_line()
     content_buf.write_string(line)
     if char_is(self.scanner.peek(), '\n') {
@@ -1174,12 +1232,12 @@ fn BlockParser::try_parse_footnote_definition(
   let leading = self.read_leading_trivia()
 
   // [^label]:
-  if !(char_is(self.scanner.peek(), '[')) {
+  if !char_is(self.scanner.peek(), '[') {
     self.scanner.restore(saved)
     return None
   }
   self.scanner.advance(1)
-  if !(char_is(self.scanner.peek(), '^')) {
+  if !char_is(self.scanner.peek(), '^') {
     self.scanner.restore(saved)
     return None
   }
@@ -1187,7 +1245,7 @@ fn BlockParser::try_parse_footnote_definition(
 
   // Read label (alphanumeric, -, _)
   let label_buf = StringBuilder::new()
-  while !(self.scanner.is_eof()) {
+  while !self.scanner.is_eof() {
     match self.scanner.peek() {
       Some(']') => break
       Some(c) if (c >= 'a' && c <= 'z') ||
@@ -1210,7 +1268,7 @@ fn BlockParser::try_parse_footnote_definition(
     return None
   }
   self.scanner.advance(1) // ]
-  if !(char_is(self.scanner.peek(), ':')) {
+  if !char_is(self.scanner.peek(), ':') {
     self.scanner.restore(saved)
     return None
   }
@@ -1230,7 +1288,7 @@ fn BlockParser::try_parse_footnote_definition(
   }
 
   // Read continuation lines (indented with at least 2 spaces or tab)
-  while !(self.scanner.is_eof()) {
+  while !self.scanner.is_eof() {
     let line_start = self.scanner.pos
     let indent = self.scanner.skip_spaces()
     if self.scanner.is_blank_line() {
@@ -1259,7 +1317,11 @@ fn BlockParser::try_parse_footnote_definition(
   // Parse content as blocks
   let content = content_buf.to_string()
   let inner_scanner = Scanner::new(content)
-  let inner_parser = BlockParser::new(inner_scanner, self.strict)
+  let inner_parser = BlockParser::new(
+    inner_scanner,
+    self.strict,
+    self.wikilinks,
+  )
   let inner_result = inner_parser.parse_document()
   Some(
     Block::FootnoteDefinition(
@@ -1282,14 +1344,14 @@ fn BlockParser::try_parse_link_definition(
   let _ = self.scanner.skip_spaces()
 
   // [label]:
-  if !(char_is(self.scanner.peek(), '[')) {
+  if !char_is(self.scanner.peek(), '[') {
     return None
   }
   self.scanner.advance(1)
 
   // Read label
   let label_buf = StringBuilder::new()
-  while !(self.scanner.is_eof()) {
+  while !self.scanner.is_eof() {
     match self.scanner.peek() {
       Some(']') => break
       Some('\n') | None => {
@@ -1303,7 +1365,7 @@ fn BlockParser::try_parse_link_definition(
     }
   }
   self.scanner.advance(1) // ]
-  if !(char_is(self.scanner.peek(), ':')) {
+  if !char_is(self.scanner.peek(), ':') {
     self.scanner.restore(saved)
     return None
   }
@@ -1320,7 +1382,7 @@ fn BlockParser::try_parse_link_definition(
   let url = if char_is(self.scanner.peek(), '<') {
     self.scanner.advance(1)
     let url_buf = StringBuilder::new()
-    while !(self.scanner.is_eof()) && !(char_is(self.scanner.peek(), '>')) {
+    while !self.scanner.is_eof() && !char_is(self.scanner.peek(), '>') {
       match self.scanner.consume() {
         Some(c) => url_buf.write_char(c)
         None => break
@@ -1330,7 +1392,7 @@ fn BlockParser::try_parse_link_definition(
     url_buf.to_string()
   } else {
     let url_buf = StringBuilder::new()
-    while !(self.scanner.is_eof()) {
+    while !self.scanner.is_eof() {
       match self.scanner.peek() {
         Some(' ') | Some('\t') | Some('\n') | None => break
         Some(c) => {
@@ -1351,8 +1413,7 @@ fn BlockParser::try_parse_link_definition(
         None => '"'
       }
       let title_buf = StringBuilder::new()
-      while !(self.scanner.is_eof()) &&
-            !(char_is(self.scanner.peek(), quote)) {
+      while !self.scanner.is_eof() && !char_is(self.scanner.peek(), quote) {
         match self.scanner.consume() {
           Some(c) => title_buf.write_char(c)
           None => break
@@ -1384,7 +1445,7 @@ fn BlockParser::parse_paragraph(self : BlockParser, start : Int) -> Block? {
   let leading = self.read_leading_trivia()
   let content_buf = StringBuilder::new()
   let mut first = true
-  while !(self.scanner.is_eof()) {
+  while !self.scanner.is_eof() {
     if self.scanner.is_blank_line() {
       break
     }
@@ -1434,7 +1495,7 @@ fn BlockParser::parse_paragraph(self : BlockParser, start : Int) -> Block? {
       _ => ()
     }
     self.scanner.restore(saved)
-    if !(first) {
+    if !first {
       content_buf.write_char('\n')
     }
     let line = self.scanner.read_line()
@@ -1448,7 +1509,11 @@ fn BlockParser::parse_paragraph(self : BlockParser, start : Int) -> Block? {
   if content.trim(chars=" \t\n\r").is_empty() {
     return None
   }
-  let children = parse_inlines(content, strict=self.strict)
+  let children = parse_inlines(
+    content,
+    strict=self.strict,
+    wikilinks=self.wikilinks,
+  )
   Some(
     Block::Paragraph(
       children~,
@@ -1467,7 +1532,7 @@ fn BlockParser::try_parse_table(self : BlockParser, start : Int) -> Block? {
 
   // First line must be a potential header row (contains |)
   let header_line = self.scanner.read_line()
-  if !(header_line.contains("|")) {
+  if !header_line.contains("|") {
     self.scanner.restore(saved)
     return None
   }
@@ -1477,7 +1542,7 @@ fn BlockParser::try_parse_table(self : BlockParser, start : Int) -> Block? {
 
   // Second line must be separator row (contains | and -)
   let separator_line = self.scanner.read_line()
-  if !(separator_line.contains("|")) || !(separator_line.contains("-")) {
+  if !separator_line.contains("|") || !separator_line.contains("-") {
     self.scanner.restore(saved)
     return None
   }
@@ -1492,7 +1557,7 @@ fn BlockParser::try_parse_table(self : BlockParser, start : Int) -> Block? {
   // Count header columns - must match separator columns for valid table
   let header_cells = split_table_cells(header_line)
   let header_col_count = header_cells
-    .filter(fn(c) { !(c.trim(chars=" \t\n\r").is_empty()) })
+    .filter(fn(c) { !c.trim(chars=" \t\n\r").is_empty() })
     .length()
   if header_col_count != alignments.length() {
     // Column count mismatch - not a valid table
@@ -1504,19 +1569,31 @@ fn BlockParser::try_parse_table(self : BlockParser, start : Int) -> Block? {
   }
 
   // Parse header cells
-  let header = parse_table_row(header_line, alignments.length(), self.strict)
+  let header = parse_table_row(
+    header_line,
+    alignments.length(),
+    self.strict,
+    self.wikilinks,
+  )
 
   // Parse data rows
   let rows : Array[Array[TableCell]] = []
-  while !(self.scanner.is_eof()) && !(self.scanner.is_blank_line()) {
+  while !self.scanner.is_eof() && !self.scanner.is_blank_line() {
     let row_start = self.scanner.pos
     let row_line = self.scanner.read_line()
-    if !(row_line.contains("|")) {
+    if !row_line.contains("|") {
       // Not a table row, restore position and stop
       self.scanner.restore(row_start)
       break
     }
-    rows.push(parse_table_row(row_line, alignments.length(), self.strict))
+    rows.push(
+      parse_table_row(
+        row_line,
+        alignments.length(),
+        self.strict,
+        self.wikilinks,
+      ),
+    )
     if char_is(self.scanner.peek(), '\n') {
       self.scanner.advance(1)
     }
@@ -1557,7 +1634,7 @@ fn parse_table_alignments(line : String) -> Array[TableAlign] {
           return []
       }
     }
-    if !(has_dash) {
+    if !has_dash {
       return []
     }
     let align = if has_left_colon && has_right_colon {
@@ -1580,6 +1657,7 @@ fn parse_table_row(
   line : String,
   expected_cols : Int,
   strict : Bool,
+  wikilinks : Bool,
 ) -> Array[TableCell] {
   let cells : Array[TableCell] = []
   let raw_cells = split_table_cells(line)
@@ -1588,7 +1666,7 @@ fn parse_table_row(
       break
     }
     let content = cell.trim(chars=" \t\n\r").to_string()
-    let children = parse_inlines(content, strict~)
+    let children = parse_inlines(content, strict~, wikilinks~)
     cells.push({ children, span: Span::new(0, content.length()) }, // Simplified span
     )
   }
@@ -1608,11 +1686,11 @@ fn split_table_cells(line : String) -> Array[String] {
   let mut in_escape = false
   for i = 0; i < line.length(); i = i + 1 {
     match line.get_char(i) {
-      Some('\\') if !(in_escape) => {
+      Some('\\') if !in_escape => {
         in_escape = true
         buf.write_char('\\')
       }
-      Some('|') if !(in_escape) => {
+      Some('|') if !in_escape => {
         cells.push(buf.to_string())
         // Reset buffer by creating new one
         buf.reset()
@@ -1627,7 +1705,7 @@ fn split_table_cells(line : String) -> Array[String] {
 
   // Add last cell
   let last = buf.to_string()
-  if !(last.trim(chars=" \t\n\r").is_empty()) {
+  if !last.trim(chars=" \t\n\r").is_empty() {
     cells.push(last)
   }
 
@@ -1654,14 +1732,14 @@ fn BlockParser::try_parse_frontmatter(self : BlockParser) -> Frontmatter? {
   }
 
   // Check for opening ---
-  if !(self.scanner.matches("---")) {
+  if !self.scanner.matches("---") {
     return None
   }
   self.scanner.advance(3)
 
   // Skip to end of line
   let _ = self.scanner.skip_spaces()
-  if !(char_is(self.scanner.peek(), '\n')) && !(self.scanner.is_eof()) {
+  if !char_is(self.scanner.peek(), '\n') && !self.scanner.is_eof() {
     self.scanner.restore(start)
     return None
   }
@@ -1672,7 +1750,7 @@ fn BlockParser::try_parse_frontmatter(self : BlockParser) -> Frontmatter? {
   // Read YAML content until closing ---
   let yaml_buf = StringBuilder::new()
   let mut found_closing = false
-  while !(self.scanner.is_eof()) {
+  while !self.scanner.is_eof() {
     if self.scanner.matches("---") {
       self.scanner.advance(3)
       let _ = self.scanner.skip_spaces()
@@ -1696,7 +1774,7 @@ fn BlockParser::try_parse_frontmatter(self : BlockParser) -> Frontmatter? {
   }
 
   // Must have found closing --- to be valid frontmatter
-  if !(found_closing) {
+  if !found_closing {
     self.scanner.restore(start)
     return None
   }

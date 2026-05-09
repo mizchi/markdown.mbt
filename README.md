@@ -40,6 +40,21 @@ const normalized = toMarkdown("# Hello\n\n\n\nWorld");
 // => "# Hello\n\nWorld\n"
 ```
 
+### Optional WikiLinks
+
+WikiLinks are disabled by default to keep CommonMark-compatible behavior.
+Pass `{ wikilinks: true }` to parse `[[target]]` and `[[target|label]]`.
+
+```javascript
+import { parse, toHtml } from "@mizchi/markdown";
+
+const ast = parse("[[MoonBit#syntax|MoonBit syntax]]", { wikilinks: true });
+// ast.children[0].children[0].type === "wikiLink"
+
+const html = toHtml("[[MoonBit|MoonBit notes]]", { wikilinks: true });
+// => '<p><a href="MoonBit">MoonBit notes</a></p>\n'
+```
+
 ### Incremental Parsing
 
 For real-time editing scenarios:
@@ -101,6 +116,9 @@ let html = @markdown.render_html(doc)
 
 // Or use convenience function
 let html = @markdown.md_to_html("# Hello\n\nWorld")
+
+// Enable the WikiLink extension explicitly
+let wiki_html = @markdown.md_to_html("[[MoonBit|MoonBit notes]]", wikilinks=true)
 ```
 
 ### Incremental Parsing
@@ -131,6 +149,34 @@ pnpm install
 moon build --target js
 pnpm exec vite
 ```
+
+## Frontend Editor Package
+
+`@mizchi/markdown/editor` exports the Luna-based markdown editor without
+bundling syntax highlighters into the initial module. Code block highlighters
+are loaded on demand through dynamic imports under `@mizchi/markdown/highlight`.
+
+```tsx
+import { SyntaxHighlightEditor } from "@mizchi/markdown/editor";
+import "@mizchi/markdown/editor/style.css";
+
+<SyntaxHighlightEditor
+  value={() => markdown}
+  onChange={(next) => setMarkdown(next)}
+/>;
+```
+
+You can also preload or call a language highlighter explicitly:
+
+```ts
+import { loadHighlighter } from "@mizchi/markdown/highlight";
+
+const highlightMoonBit = await loadHighlighter("moonbit");
+const html = highlightMoonBit?.("fn main { println(\"hi\") }");
+```
+
+The currently split lazy highlighter entries are `typescript`, `moonbit`,
+`json`, `html`, `css`, `bash`, and `rust`.
 
 ## Performance
 

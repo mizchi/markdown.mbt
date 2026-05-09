@@ -94,7 +94,7 @@ fn render_block_html(block : Block, buf : StringBuilder) -> Unit {
     }
     Block::HtmlBlock(html~, ..) => {
       buf.write_string(html)
-      if !(html.has_suffix("\n")) {
+      if !html.has_suffix("\n") {
         buf.write_char('\n')
       }
     }
@@ -212,6 +212,16 @@ fn render_inlines_html(inlines : Array[Inline], buf : StringBuilder) -> Unit {
 }
 
 ///|
+/// Build the rendered destination for a wiki link.
+fn render_wikilink_destination(target : String, fragment : String) -> String {
+  if fragment.is_empty() {
+    target
+  } else {
+    target + "#" + fragment
+  }
+}
+
+///|
 /// Render a single inline element to HTML
 fn render_inline_html(inline : Inline, buf : StringBuilder) -> Unit {
   match inline {
@@ -220,6 +230,15 @@ fn render_inline_html(inline : Inline, buf : StringBuilder) -> Unit {
       buf.write_string("<code>")
       buf.write_string(escape_html(content))
       buf.write_string("</code>")
+    }
+    Inline::WikiLink(target~, label~, fragment~, ..) => {
+      let href = render_wikilink_destination(target, fragment)
+      let text = if label.is_empty() { href } else { label }
+      buf.write_string("<a href=\"")
+      buf.write_string(escape_html_attr(href))
+      buf.write_string("\">")
+      buf.write_string(escape_html(text))
+      buf.write_string("</a>")
     }
     Inline::Emphasis(children~, ..) => {
       buf.write_string("<em>")
@@ -240,7 +259,7 @@ fn render_inline_html(inline : Inline, buf : StringBuilder) -> Unit {
       buf.write_string("<a href=\"")
       buf.write_string(escape_html_attr(url))
       buf.write_char('"')
-      if !(title.is_empty()) {
+      if !title.is_empty() {
         buf.write_string(" title=\"")
         buf.write_string(escape_html_attr(title))
         buf.write_char('"')
@@ -274,7 +293,7 @@ fn render_inline_html(inline : Inline, buf : StringBuilder) -> Unit {
       buf.write_string("\" alt=\"")
       buf.write_string(escape_html_attr(alt))
       buf.write_char('"')
-      if !(title.is_empty()) {
+      if !title.is_empty() {
         buf.write_string(" title=\"")
         buf.write_string(escape_html_attr(title))
         buf.write_char('"')
@@ -339,14 +358,14 @@ fn escape_html_attr(s : String) -> String {
 
 ///|
 /// Parse markdown and render to HTML
-pub fn md_to_html(source : String) -> String {
-  let result = parse(source)
+pub fn md_to_html(source : String, wikilinks? : Bool = false) -> String {
+  let result = parse(source, wikilinks~)
   render_html(result.document)
 }
 
 ///|
 /// Parse markdown and render to HTML (strict mode)
-pub fn md_to_html_strict(source : String) -> String {
-  let result = parse(source, strict=true)
+pub fn md_to_html_strict(source : String, wikilinks? : Bool = false) -> String {
+  let result = parse(source, strict=true, wikilinks~)
   render_html(result.document)
 }

@@ -271,6 +271,14 @@ fn measure_inline_width(inline : @markdown.Inline) -> Int {
       measure_inlines_width(children)
     @markdown.Inline::Link(children~, ..) => measure_inlines_width(children)
     @markdown.Inline::RefLink(children~, ..) => measure_inlines_width(children)
+    @markdown.Inline::WikiLink(target~, label~, fragment~, ..) =>
+      if !label.is_empty() {
+        label.iter().count()
+      } else if fragment.is_empty() {
+        target.iter().count()
+      } else {
+        (target + "#" + fragment).iter().count()
+      }
     @markdown.Inline::Autolink(url~, ..) => url.iter().count()
     @markdown.Inline::Image(alt~, ..) => alt.iter().count() + 2 // emoji
     @markdown.Inline::RefImage(alt~, ..) => alt.iter().count() + 2
@@ -402,6 +410,23 @@ fn render_inline_tui(inline : @markdown.Inline, buf : StringBuilder) -> Unit {
       buf.write_string("[")
       buf.write_string(label)
       buf.write_string("]")
+      buf.write_string(reset)
+    }
+    @markdown.Inline::WikiLink(target~, label~, fragment~, ..) => {
+      let destination = if fragment.is_empty() {
+        target
+      } else {
+        target + "#" + fragment
+      }
+      let text = if label.is_empty() { destination } else { label }
+      buf.write_string(underline)
+      buf.write_string(blue)
+      buf.write_string(text)
+      buf.write_string(reset)
+      buf.write_string(dim)
+      buf.write_string(" [[")
+      buf.write_string(destination)
+      buf.write_string("]]")
       buf.write_string(reset)
     }
     @markdown.Inline::Autolink(url~, ..) => {

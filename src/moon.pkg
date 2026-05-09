@@ -9,6 +9,7 @@ options(
     "js": {
       "exports": [
         "md_parse",
+        "md_parse_with_wikilinks",
         "md_render_to_string",
         "md_render_to_html",
         "md_to_html",
@@ -20,6 +21,7 @@ options(
     "wasm": {
       "exports": [
         "md_parse",
+        "md_parse_with_wikilinks",
         "md_render_to_string",
         "md_render_to_html",
         "md_to_html",
@@ -31,6 +33,7 @@ options(
     "wasm-gc": {
       "exports": [
         "md_parse",
+        "md_parse_with_wikilinks",
         "md_render_to_string",
         "md_render_to_html",
         "md_to_html",

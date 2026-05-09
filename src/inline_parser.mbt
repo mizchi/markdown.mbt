@@ -53,20 +53,27 @@ fn trim_trailing_space_from_last_text(inlines : Array[Inline]) -> Unit {
 
 ///|
 /// When strict=false (default), uses fast single-pass parser
-pub fn parse_inlines(text : String, strict? : Bool = false) -> Array[Inline] {
+pub fn parse_inlines(
+  text : String,
+  strict? : Bool = false,
+  wikilinks? : Bool = false,
+) -> Array[Inline] {
   if strict {
     // In strict mode, always use delimiter stack for full CommonMark compliance
-    parse_inlines_with_delimiter_stack(text)
+    parse_inlines_with_delimiter_stack(text, wikilinks~)
   } else {
-    parse_inlines_fast(text)
+    parse_inlines_fast(text, wikilinks~)
   }
 }
 
 ///|
 /// Fast path: simple inline parsing without delimiter stack
-fn parse_inlines_fast(text : String) -> Array[Inline] {
+fn parse_inlines_fast(
+  text : String,
+  wikilinks? : Bool = false,
+) -> Array[Inline] {
   let scanner = Scanner::new(text)
-  let parser = InlineParser::new(scanner)
+  let parser = InlineParser::new(scanner, wikilinks~)
   parser.parse()
 }
 
@@ -74,18 +81,22 @@ fn parse_inlines_fast(text : String) -> Array[Inline] {
 /// Inline parser state
 priv struct InlineParser {
   scanner : Scanner
+  wikilinks : Bool
 }
 
 ///|
-fn InlineParser::new(scanner : Scanner) -> InlineParser {
-  { scanner, }
+fn InlineParser::new(
+  scanner : Scanner,
+  wikilinks? : Bool = false,
+) -> InlineParser {
+  { scanner, wikilinks }
 }
 
 ///|
 /// Parse all inline content
 fn InlineParser::parse(self : InlineParser) -> Array[Inline] {
   let inlines : Array[Inline] = []
-  while !(self.scanner.is_eof()) {
+  while !self.scanner.is_eof() {
     match self.parse_inline() {
       Some(inline) => {
         // For soft/hard breaks, trim trailing whitespace from previous text
@@ -151,10 +162,15 @@ fn InlineParser::parse_inline(self : InlineParser) -> Inline? {
     // Strikethrough
     Some('~') => self.try_parse_strikethrough(start)
 
-    // Footnote reference, Link, or Image
+    // WikiLink, Footnote reference, Link, or Image
     Some('[') =>
-      // Check for footnote reference [^label]
-      if char_is(self.scanner.peek_at(1), '^') {
+      if self.wikilinks && char_is(self.scanner.peek_at(1), '[') {
+        match self.try_parse_wikilink(start) {
+          Some(wikilink) => Some(wikilink)
+          None => self.try_parse_link(start)
+        }
+      } else if char_is(self.scanner.peek_at(1), '^') {
+        // Check for footnote reference [^label]
         match self.try_parse_footnote_reference(start) {
           Some(fn_ref) => Some(fn_ref)
           None => self.try_parse_link(start)
@@ -164,8 +180,12 @@ fn InlineParser::parse_inline(self : InlineParser) -> Inline? {
       }
     Some('!') => self.try_parse_image(start)
 
-    // Autolink
-    Some('<') => self.try_parse_autolink(start)
+    // Raw inline HTML or autolink
+    Some('<') =>
+      match self.try_parse_html_comment(start) {
+        Some(comment) => Some(comment)
+        None => self.try_parse_autolink(start)
+      }
 
     // Hard break (two spaces at end of line)
     Some(' ') => self.try_parse_hard_break(start)
@@ -233,7 +253,7 @@ fn InlineParser::try_parse_code_span(
 
   // Find closing backticks
   let content_buf = StringBuilder::new()
-  while !(self.scanner.is_eof()) {
+  while !self.scanner.is_eof() {
     let closing_count = self.scanner.count_char('`')
     if closing_count == backtick_count {
       // Found matching closing backticks
@@ -245,9 +265,7 @@ fn InlineParser::try_parse_code_span(
       let trimmed = if content.length() >= 2 {
         let first = content.get_char(0)
         let last = content.get_char(content.length() - 1)
-        if first == Some(' ') &&
-          last == Some(' ') &&
-          !(is_all_spaces(content)) {
+        if first == Some(' ') && last == Some(' ') && !is_all_spaces(content) {
           content.unsafe_substring(start=1, end=content.length() - 1)
         } else {
           content
@@ -349,7 +367,7 @@ fn InlineParser::parse_until_closing_marker(
   let children : Array[Inline] = []
   let text_buf = StringBuilder::new()
   let text_start = self.scanner.pos
-  while !(self.scanner.is_eof()) {
+  while !self.scanner.is_eof() {
     // Check for closing marker
     let closing_count = self.scanner.count_char(marker_char)
     if closing_count >= marker_count {
@@ -359,7 +377,7 @@ fn InlineParser::parse_until_closing_marker(
         Some(' ') | Some('\t') | Some('\n') => () // Not valid closer
         _ => {
           // Valid closer - flush text and consume markers
-          if !(text_buf.is_empty()) {
+          if !text_buf.is_empty() {
             children.push(
               Inline::Text(
                 content=text_buf.to_string(),
@@ -377,7 +395,7 @@ fn InlineParser::parse_until_closing_marker(
     match self.scanner.peek() {
       Some('`') => {
         // Flush text before inline
-        if !(text_buf.is_empty()) {
+        if !text_buf.is_empty() {
           children.push(
             Inline::Text(
               content=text_buf.to_string(),
@@ -395,7 +413,7 @@ fn InlineParser::parse_until_closing_marker(
         }
       }
       Some('[') => {
-        if !(text_buf.is_empty()) {
+        if !text_buf.is_empty() {
           children.push(
             Inline::Text(
               content=text_buf.to_string(),
@@ -444,7 +462,7 @@ fn InlineParser::try_parse_strikethrough(
   // Parse content until closing ~~
   let content_buf = StringBuilder::new()
   let content_start = self.scanner.pos
-  while !(self.scanner.is_eof()) {
+  while !self.scanner.is_eof() {
     if self.scanner.count_char('~') >= 2 {
       // Found closing
       let content = content_buf.to_string()
@@ -477,6 +495,93 @@ fn InlineParser::try_parse_strikethrough(
 }
 
 ///|
+/// Split wiki destination into page target and optional fragment.
+fn split_wikilink_destination(destination : String) -> (String, String) {
+  let parts = destination.split("#").collect()
+  if parts.length() <= 1 {
+    (destination, "")
+  } else {
+    (parts[0].to_string(), parts[1].to_string())
+  }
+}
+
+///|
+/// Try to parse a wiki link: [[target]] or [[target|label]].
+fn InlineParser::try_parse_wikilink(
+  self : InlineParser,
+  start : Int,
+) -> Inline? {
+  if !self.wikilinks || !self.scanner.matches("[[") {
+    return None
+  }
+  self.scanner.advance(2) // Skip [[
+  let target_buf = StringBuilder::new()
+  let label_buf = StringBuilder::new()
+  let mut in_label = false
+  while !self.scanner.is_eof() {
+    match self.scanner.peek() {
+      Some(']') if char_is(self.scanner.peek_at(1), ']') => {
+        self.scanner.advance(2)
+        let raw_target = target_buf.to_string().trim(chars=" \t").to_string()
+        if raw_target.is_empty() {
+          self.scanner.restore(start)
+          return None
+        }
+        let raw_label = if in_label {
+          label_buf.to_string().trim(chars=" \t").to_string()
+        } else {
+          ""
+        }
+        let (target, fragment) = split_wikilink_destination(raw_target)
+        return Some(
+          Inline::WikiLink(
+            target~,
+            label=raw_label,
+            fragment~,
+            span=Span::new(start, self.scanner.pos),
+          ),
+        )
+      }
+      Some('\n') => {
+        self.scanner.restore(start)
+        return None
+      }
+      Some('[') if char_is(self.scanner.peek_at(1), '[') => {
+        self.scanner.restore(start)
+        return None
+      }
+      Some('|') if !in_label => {
+        in_label = true
+        self.scanner.advance(1)
+      }
+      Some('\\') => {
+        self.scanner.advance(1)
+        match self.scanner.consume() {
+          Some(c) =>
+            if in_label {
+              label_buf.write_char(c)
+            } else {
+              target_buf.write_char(c)
+            }
+          None => break
+        }
+      }
+      Some(c) => {
+        if in_label {
+          label_buf.write_char(c)
+        } else {
+          target_buf.write_char(c)
+        }
+        self.scanner.advance(1)
+      }
+      None => break
+    }
+  }
+  self.scanner.restore(start)
+  None
+}
+
+///|
 /// Try to parse link
 fn InlineParser::try_parse_link(self : InlineParser, start : Int) -> Inline? {
   self.scanner.advance(1) // Skip [
@@ -484,7 +589,7 @@ fn InlineParser::try_parse_link(self : InlineParser, start : Int) -> Inline? {
   // Parse link text
   let text_buf = StringBuilder::new()
   let mut bracket_depth = 1
-  while !(self.scanner.is_eof()) && bracket_depth > 0 {
+  while !self.scanner.is_eof() && bracket_depth > 0 {
     match self.scanner.peek() {
       Some('[') => {
         bracket_depth += 1
@@ -529,7 +634,7 @@ fn InlineParser::try_parse_link(self : InlineParser, start : Int) -> Inline? {
     if char_is(self.scanner.peek(), '<') {
       self.scanner.advance(1)
       let mut angle_url_has_newline = false
-      while !(self.scanner.is_eof()) {
+      while !self.scanner.is_eof() {
         match self.scanner.peek() {
           Some('>') => {
             self.scanner.advance(1)
@@ -553,7 +658,7 @@ fn InlineParser::try_parse_link(self : InlineParser, start : Int) -> Inline? {
       }
     } else {
       let mut url_has_newline = false
-      while !(self.scanner.is_eof()) {
+      while !self.scanner.is_eof() {
         match self.scanner.peek() {
           Some('(') => {
             paren_depth += 1
@@ -590,7 +695,7 @@ fn InlineParser::try_parse_link(self : InlineParser, start : Int) -> Inline? {
     let url = url_buf.to_string()
 
     // Skip whitespace (including newlines) before title
-    while !(self.scanner.is_eof()) {
+    while !self.scanner.is_eof() {
       match self.scanner.peek() {
         Some(' ') | Some('\t') | Some('\n') => self.scanner.advance(1)
         _ => break
@@ -605,7 +710,7 @@ fn InlineParser::try_parse_link(self : InlineParser, start : Int) -> Inline? {
           None => '"'
         }
         let title_buf = StringBuilder::new()
-        while !(self.scanner.is_eof()) {
+        while !self.scanner.is_eof() {
           match self.scanner.peek() {
             Some(c) if c == quote => {
               self.scanner.advance(1)
@@ -631,7 +736,7 @@ fn InlineParser::try_parse_link(self : InlineParser, start : Int) -> Inline? {
         self.scanner.advance(1) // Skip opening (
         let title_buf = StringBuilder::new()
         let mut paren_depth = 1
-        while !(self.scanner.is_eof()) && paren_depth > 0 {
+        while !self.scanner.is_eof() && paren_depth > 0 {
           match self.scanner.peek() {
             Some(')') => {
               paren_depth -= 1
@@ -672,7 +777,7 @@ fn InlineParser::try_parse_link(self : InlineParser, start : Int) -> Inline? {
       self.scanner.advance(1)
 
       // Parse link text as inlines
-      let children = parse_inlines(link_text)
+      let children = parse_inlines(link_text, wikilinks=self.wikilinks)
 
       // CommonMark: Links cannot contain other links
       // If link text contains a link, the outer link is invalid
@@ -695,7 +800,7 @@ fn InlineParser::try_parse_link(self : InlineParser, start : Int) -> Inline? {
   if char_is(self.scanner.peek(), '[') {
     self.scanner.advance(1)
     let label_buf = StringBuilder::new()
-    while !(self.scanner.is_eof()) {
+    while !self.scanner.is_eof() {
       match self.scanner.peek() {
         Some(']') => {
           self.scanner.advance(1)
@@ -709,7 +814,7 @@ fn InlineParser::try_parse_link(self : InlineParser, start : Int) -> Inline? {
       }
     }
     let label = label_buf.to_string()
-    let children = parse_inlines(link_text)
+    let children = parse_inlines(link_text, wikilinks=self.wikilinks)
 
     // CommonMark: Links cannot contain other links
     if contains_link(children) {
@@ -737,7 +842,7 @@ fn InlineParser::try_parse_footnote_reference(
   start : Int,
 ) -> Inline? {
   self.scanner.advance(1) // Skip [
-  if !(char_is(self.scanner.peek(), '^')) {
+  if !char_is(self.scanner.peek(), '^') {
     self.scanner.restore(start)
     return None
   }
@@ -745,7 +850,7 @@ fn InlineParser::try_parse_footnote_reference(
 
   // Read label (alphanumeric, -, _)
   let label_buf = StringBuilder::new()
-  while !(self.scanner.is_eof()) {
+  while !self.scanner.is_eof() {
     match self.scanner.peek() {
       Some(']') => break
       Some(c) if (c >= 'a' && c <= 'z') ||
@@ -767,7 +872,7 @@ fn InlineParser::try_parse_footnote_reference(
     self.scanner.restore(start)
     return None
   }
-  if !(char_is(self.scanner.peek(), ']')) {
+  if !char_is(self.scanner.peek(), ']') {
     self.scanner.restore(start)
     return None
   }
@@ -781,7 +886,7 @@ fn InlineParser::try_parse_footnote_reference(
 /// Try to parse image
 fn InlineParser::try_parse_image(self : InlineParser, start : Int) -> Inline? {
   self.scanner.advance(1) // Skip !
-  if !(char_is(self.scanner.peek(), '[')) {
+  if !char_is(self.scanner.peek(), '[') {
     self.scanner.restore(start)
     return None
   }
@@ -789,7 +894,7 @@ fn InlineParser::try_parse_image(self : InlineParser, start : Int) -> Inline? {
 
   // Parse alt text
   let alt_buf = StringBuilder::new()
-  while !(self.scanner.is_eof()) {
+  while !self.scanner.is_eof() {
     match self.scanner.peek() {
       Some(']') => {
         self.scanner.advance(1)
@@ -820,7 +925,7 @@ fn InlineParser::try_parse_image(self : InlineParser, start : Int) -> Inline? {
     let _ = self.scanner.skip_spaces()
     if char_is(self.scanner.peek(), '<') {
       self.scanner.advance(1)
-      while !(self.scanner.is_eof()) {
+      while !self.scanner.is_eof() {
         match self.scanner.peek() {
           Some('>') => {
             self.scanner.advance(1)
@@ -834,7 +939,7 @@ fn InlineParser::try_parse_image(self : InlineParser, start : Int) -> Inline? {
         }
       }
     } else {
-      while !(self.scanner.is_eof()) {
+      while !self.scanner.is_eof() {
         match self.scanner.peek() {
           Some(')') | Some(' ') | Some('\t') => break
           Some(c) => {
@@ -856,7 +961,7 @@ fn InlineParser::try_parse_image(self : InlineParser, start : Int) -> Inline? {
           None => '"'
         }
         let title_buf = StringBuilder::new()
-        while !(self.scanner.is_eof()) {
+        while !self.scanner.is_eof() {
           match self.scanner.peek() {
             Some(c) if c == quote => {
               self.scanner.advance(1)
@@ -891,7 +996,7 @@ fn InlineParser::try_parse_image(self : InlineParser, start : Int) -> Inline? {
   if char_is(self.scanner.peek(), '[') {
     self.scanner.advance(1)
     let label_buf = StringBuilder::new()
-    while !(self.scanner.is_eof()) {
+    while !self.scanner.is_eof() {
       match self.scanner.peek() {
         Some(']') => {
           self.scanner.advance(1)
@@ -917,6 +1022,32 @@ fn InlineParser::try_parse_image(self : InlineParser, start : Int) -> Inline? {
 }
 
 ///|
+/// Try to parse an inline HTML comment
+fn InlineParser::try_parse_html_comment(
+  self : InlineParser,
+  start : Int,
+) -> Inline? {
+  if !self.scanner.matches("<!--") {
+    return None
+  }
+  self.scanner.advance(4)
+  while !self.scanner.is_eof() {
+    if self.scanner.matches("-->") {
+      self.scanner.advance(3)
+      return Some(
+        Inline::HtmlInline(
+          html=self.scanner.substring(start, self.scanner.pos),
+          span=Span::new(start, self.scanner.pos),
+        ),
+      )
+    }
+    self.scanner.advance(1)
+  }
+  self.scanner.restore(start)
+  None
+}
+
+///|
 /// Try to parse autolink
 fn InlineParser::try_parse_autolink(
   self : InlineParser,
@@ -925,14 +1056,14 @@ fn InlineParser::try_parse_autolink(
   self.scanner.advance(1) // Skip <
   let url_buf = StringBuilder::new()
   let mut is_email = false
-  while !(self.scanner.is_eof()) {
+  while !self.scanner.is_eof() {
     match self.scanner.peek() {
       Some('>') => {
         self.scanner.advance(1)
         let url = url_buf.to_string()
 
         // Check if it's an email
-        if url.contains("@") && !(url.has_prefix("http")) {
+        if url.contains("@") && !url.has_prefix("http") {
           is_email = true
         }
         return Some(
@@ -1018,7 +1149,10 @@ priv struct Delimiter {
 
 ///|
 /// Parse inlines using delimiter stack algorithm (CommonMark spec)
-fn parse_inlines_with_delimiter_stack(text : String) -> Array[Inline] {
+fn parse_inlines_with_delimiter_stack(
+  text : String,
+  wikilinks? : Bool = false,
+) -> Array[Inline] {
   let chars : Array[Char] = text.to_array()
   let len = chars.length()
 
@@ -1059,29 +1193,21 @@ fn parse_inlines_with_delimiter_stack(text : String) -> Array[Inline] {
 
       // Left-flanking: not followed by whitespace, and either
       // (a) not followed by punctuation, or (b) preceded by whitespace or punctuation
-      let left_flanking = !(after_is_whitespace) &&
-        (
-          !(after_is_punctuation) ||
-          before_is_whitespace ||
-          before_is_punctuation
-        )
+      let left_flanking = !after_is_whitespace &&
+        (!after_is_punctuation || before_is_whitespace || before_is_punctuation)
 
       // Right-flanking: not preceded by whitespace, and either
       // (a) not preceded by punctuation, or (b) followed by whitespace or punctuation
-      let right_flanking = !(before_is_whitespace) &&
-        (
-          !(before_is_punctuation) ||
-          after_is_whitespace ||
-          after_is_punctuation
-        )
+      let right_flanking = !before_is_whitespace &&
+        (!before_is_punctuation || after_is_whitespace || after_is_punctuation)
 
       // For underscore, additional rules apply
       let (can_open, can_close) = if marker == '_' {
         // _ can open if left-flanking and (not right-flanking or preceded by punctuation)
         // _ can close if right-flanking and (not left-flanking or followed by punctuation)
         (
-          left_flanking && (!(right_flanking) || before_is_punctuation),
-          right_flanking && (!(left_flanking) || after_is_punctuation),
+          left_flanking && (!right_flanking || before_is_punctuation),
+          right_flanking && (!left_flanking || after_is_punctuation),
         )
       } else {
         // * can open if left-flanking
@@ -1113,7 +1239,7 @@ fn parse_inlines_with_delimiter_stack(text : String) -> Array[Inline] {
       closer_idx < delimiters.length()
       closer_idx = closer_idx + 1 {
     let closer = delimiters[closer_idx]
-    if !(closer.can_close) || closer.remaining == 0 {
+    if !closer.can_close || closer.remaining == 0 {
       continue
     }
 
@@ -1122,7 +1248,7 @@ fn parse_inlines_with_delimiter_stack(text : String) -> Array[Inline] {
         opener_idx >= 0
         opener_idx = opener_idx - 1 {
       let opener = delimiters[opener_idx]
-      if !(opener.can_open) || opener.remaining == 0 || !(opener.active) {
+      if !opener.can_open || opener.remaining == 0 || !opener.active {
         continue
       }
       if opener.marker != closer.marker {
@@ -1182,12 +1308,12 @@ fn parse_inlines_with_delimiter_stack(text : String) -> Array[Inline] {
   let result : Array[Inline] = []
   if matches.is_empty() {
     // No emphasis matches, but still need to process other inlines correctly
-    let segment_inlines = parse_segment_simple(text, 0)
+    let segment_inlines = parse_segment_simple(text, 0, wikilinks~)
     for inline in segment_inlines {
       result.push(inline)
     }
   } else {
-    build_inlines_from_matches(text, chars, matches, result)
+    build_inlines_from_matches(text, chars, matches, result, wikilinks~)
   }
   result
 }
@@ -1199,6 +1325,7 @@ fn build_inlines_from_matches(
   chars : Array[Char],
   matches : Array[(Int, Int, Char, Bool)],
   result : Array[Inline],
+  wikilinks? : Bool = false,
 ) -> Unit {
   // Sort matches by opener position
   let sorted = matches.copy()
@@ -1215,6 +1342,7 @@ fn build_inlines_from_matches(
     0,
     sorted.length(),
     result,
+    wikilinks~,
   )
 }
 
@@ -1229,6 +1357,7 @@ fn build_inlines_recursive(
   match_start : Int,
   match_end : Int,
   result : Array[Inline],
+  wikilinks? : Bool = false,
 ) -> Unit {
   let mut pos = start
   for i = match_start; i < match_end; i = i + 1 {
@@ -1244,7 +1373,7 @@ fn build_inlines_recursive(
     if opener_pos > pos {
       let segment = text.unsafe_substring(start=pos, end=opener_pos)
       // Parse segment for other inline elements (code, links, etc.)
-      let segment_inlines = parse_segment_simple(segment, pos)
+      let segment_inlines = parse_segment_simple(segment, pos, wikilinks~)
       for inline in segment_inlines {
         result.push(inline)
       }
@@ -1269,14 +1398,25 @@ fn build_inlines_recursive(
     if nested_start < nested_end {
       // Has nested emphasis
       build_inlines_recursive(
-        text, chars, content_start, content_end, matches, nested_start, nested_end,
+        text,
+        chars,
+        content_start,
+        content_end,
+        matches,
+        nested_start,
+        nested_end,
         children,
+        wikilinks~,
       )
       // Note: nested matches will be skipped naturally by position check
     } else {
       // No nested emphasis, parse content simply
       let content = text.unsafe_substring(start=content_start, end=content_end)
-      let content_inlines = parse_segment_simple(content, content_start)
+      let content_inlines = parse_segment_simple(
+        content,
+        content_start,
+        wikilinks~,
+      )
       for inline in content_inlines {
         children.push(inline)
       }
@@ -1300,7 +1440,7 @@ fn build_inlines_recursive(
   // Add remaining text
   if pos < end {
     let segment = text.unsafe_substring(start=pos, end~)
-    let segment_inlines = parse_segment_simple(segment, pos)
+    let segment_inlines = parse_segment_simple(segment, pos, wikilinks~)
     for inline in segment_inlines {
       result.push(inline)
     }
@@ -1309,14 +1449,18 @@ fn build_inlines_recursive(
 
 ///|
 /// Parse a text segment for non-emphasis inlines (code spans, links, etc.)
-fn parse_segment_simple(text : String, offset : Int) -> Array[Inline] {
+fn parse_segment_simple(
+  text : String,
+  offset : Int,
+  wikilinks? : Bool = false,
+) -> Array[Inline] {
   // For now, just return as text. Full implementation would parse
   // code spans, links, etc. here.
   let scanner = Scanner::new(text)
   let result : Array[Inline] = []
   let text_buf = StringBuilder::new()
   let mut text_start = 0
-  while !(scanner.is_eof()) {
+  while !scanner.is_eof() {
     let pos = scanner.pos
     match scanner.peek() {
       Some('`') => {
@@ -1327,7 +1471,7 @@ fn parse_segment_simple(text : String, offset : Int) -> Array[Inline] {
         // Find closing backticks
         let content_buf = StringBuilder::new()
         let mut found_closing = false
-        while !(scanner.is_eof()) {
+        while !scanner.is_eof() {
           let closing_count = scanner.count_char('`')
           if closing_count == backtick_count {
             found_closing = true
@@ -1335,7 +1479,7 @@ fn parse_segment_simple(text : String, offset : Int) -> Array[Inline] {
             scanner.advance(closing_count)
 
             // Flush text buffer
-            if !(text_buf.is_empty()) {
+            if !text_buf.is_empty() {
               result.push(
                 Inline::Text(
                   content=text_buf.to_string(),
@@ -1350,7 +1494,7 @@ fn parse_segment_simple(text : String, offset : Int) -> Array[Inline] {
               let chars = content.to_array()
               if chars[0] == ' ' &&
                 chars[chars.length() - 1] == ' ' &&
-                !(is_all_spaces(content)) {
+                !is_all_spaces(content) {
                 content.unsafe_substring(start=1, end=content.length() - 1)
               } else {
                 content
@@ -1379,7 +1523,7 @@ fn parse_segment_simple(text : String, offset : Int) -> Array[Inline] {
             }
           }
         }
-        if !(found_closing) {
+        if !found_closing {
           // No closing backticks, include opening backticks in text
           for j = 0; j < backtick_count; j = j + 1 {
             text_buf.write_char('`')
@@ -1389,12 +1533,20 @@ fn parse_segment_simple(text : String, offset : Int) -> Array[Inline] {
         }
       }
       Some('[') => {
-        // Try to parse link or image
-        let link_parser = InlineParser::new(scanner)
-        match link_parser.try_parse_link(pos) {
-          Some(link) => {
+        // Try to parse wikilink before regular markdown links.
+        let inline_parser = InlineParser::new(scanner, wikilinks~)
+        let inline = if wikilinks && char_is(scanner.peek_at(1), '[') {
+          match inline_parser.try_parse_wikilink(pos) {
+            Some(wikilink) => Some(wikilink)
+            None => inline_parser.try_parse_link(pos)
+          }
+        } else {
+          inline_parser.try_parse_link(pos)
+        }
+        match inline {
+          Some(parsed) => {
             // Flush text buffer
-            if !(text_buf.is_empty()) {
+            if !text_buf.is_empty() {
               result.push(
                 Inline::Text(
                   content=text_buf.to_string(),
@@ -1403,7 +1555,7 @@ fn parse_segment_simple(text : String, offset : Int) -> Array[Inline] {
               )
               text_buf.reset()
             }
-            result.push(link)
+            result.push(parsed)
             text_start = scanner.pos
           }
           None => {
@@ -1415,11 +1567,11 @@ fn parse_segment_simple(text : String, offset : Int) -> Array[Inline] {
       Some('!') =>
         // Try to parse image
         if char_is(scanner.peek_at(1), '[') {
-          let img_parser = InlineParser::new(scanner)
+          let img_parser = InlineParser::new(scanner, wikilinks~)
           match img_parser.try_parse_image(pos) {
             Some(img) => {
               // Flush text buffer
-              if !(text_buf.is_empty()) {
+              if !text_buf.is_empty() {
                 result.push(
                   Inline::Text(
                     content=text_buf.to_string(),
@@ -1441,12 +1593,19 @@ fn parse_segment_simple(text : String, offset : Int) -> Array[Inline] {
           scanner.advance(1)
         }
       Some('<') => {
-        // Try to parse autolink
-        let auto_parser = InlineParser::new(scanner)
-        match auto_parser.try_parse_autolink(pos) {
-          Some(autolink) => {
+        // Try to parse raw inline HTML before autolink.
+        let html_parser = InlineParser::new(scanner, wikilinks~)
+        let inline = match html_parser.try_parse_html_comment(pos) {
+          Some(comment) => Some(comment)
+          None => {
+            let auto_parser = InlineParser::new(scanner, wikilinks~)
+            auto_parser.try_parse_autolink(pos)
+          }
+        }
+        match inline {
+          Some(parsed) => {
             // Flush text buffer
-            if !(text_buf.is_empty()) {
+            if !text_buf.is_empty() {
               result.push(
                 Inline::Text(
                   content=text_buf.to_string(),
@@ -1455,7 +1614,7 @@ fn parse_segment_simple(text : String, offset : Int) -> Array[Inline] {
               )
               text_buf.reset()
             }
-            result.push(autolink)
+            result.push(parsed)
             text_start = scanner.pos
           }
           None => {
@@ -1470,7 +1629,7 @@ fn parse_segment_simple(text : String, offset : Int) -> Array[Inline] {
         let trimmed = content.trim_end(chars=" ").to_string()
         let trailing_spaces = content.length() - trimmed.length()
         let is_hard_break = trailing_spaces >= 2
-        if !(trimmed.is_empty()) {
+        if !trimmed.is_empty() {
           result.push(
             Inline::Text(
               content=trimmed,
@@ -1515,7 +1674,7 @@ fn parse_segment_simple(text : String, offset : Int) -> Array[Inline] {
   }
 
   // Flush remaining text
-  if !(text_buf.is_empty()) {
+  if !text_buf.is_empty() {
     result.push(
       Inline::Text(
         content=text_buf.to_string(),

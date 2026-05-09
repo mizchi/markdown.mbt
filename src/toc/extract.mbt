@@ -55,7 +55,10 @@ pub fn extract_text_from_inlines(inlines : Array[@md.Inline]) -> String {
 
 ///|
 /// Extract text recursively
-fn append_inline_texts(inlines : Array[@md.Inline], buf : StringBuilder) -> Unit {
+fn append_inline_texts(
+  inlines : Array[@md.Inline],
+  buf : StringBuilder,
+) -> Unit {
   for inline in inlines {
     append_inline_text(inline, buf)
   }
@@ -73,6 +76,14 @@ fn append_inline_text(inline : @md.Inline, buf : StringBuilder) -> Unit {
     | @md.Inline::Strikethrough(children~, ..)
     | @md.Inline::Link(children~, ..)
     | @md.Inline::RefLink(children~, ..) => append_inline_texts(children, buf)
+    @md.Inline::WikiLink(target~, label~, fragment~, ..) =>
+      if !label.is_empty() {
+        buf.write_string(label)
+      } else if fragment.is_empty() {
+        buf.write_string(target)
+      } else {
+        buf.write_string(target + "#" + fragment)
+      }
     @md.Inline::Autolink(url~, ..) => buf.write_string(url)
     @md.Inline::Image(alt~, ..) | @md.Inline::RefImage(alt~, ..) =>
       buf.write_string(alt)

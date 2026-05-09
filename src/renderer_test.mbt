@@ -114,6 +114,18 @@ test "escape html in text" {
 }
 
 ///|
+test "render html comment block" {
+  let html = md_to_html("<!-- comment -->\n\n# Title\n")
+  inspect(html, content="<!-- comment -->\n<h1>Title</h1>\n")
+}
+
+///|
+test "render inline html comment" {
+  let html = md_to_html("a <!-- note --> b\n")
+  inspect(html, content="<p>a <!-- note --> b</p>\n")
+}
+
+///|
 test "render footnote" {
   let html = md_to_html("Text[^1]\n\n[^1]: Note\n")
   inspect(html.contains("<sup><a href=\"#fn-1\""), content="true")

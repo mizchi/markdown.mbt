@@ -530,3 +530,32 @@ test "parse custom element single line with BEM classes" {
     _ => fail("Expected HtmlBlock")
   }
 }
+
+///|
+test "parse html comment block" {
+  let result = parse("<!-- comment -->\n\n# Title\n")
+  inspect(result.document.children.length(), content="3")
+  match result.document.children[0] {
+    Block::HtmlBlock(html~, ..) => inspect(html, content="<!-- comment -->\n")
+    _ => fail("Expected HtmlBlock for HTML comment")
+  }
+}
+
+///|
+test "parse multiline html comment block" {
+  let source =
+    #|<!--
+    #|comment
+    #|-->
+    #|
+  let result = parse(source)
+  inspect(result.document.children.length(), content="1")
+  match result.document.children[0] {
+    Block::HtmlBlock(html~, ..) => {
+      inspect(html.contains("<!--"), content="true")
+      inspect(html.contains("comment"), content="true")
+      inspect(html.contains("-->"), content="true")
+    }
+    _ => fail("Expected HtmlBlock for multiline HTML comment")
+  }
+}
