@@ -1,0 +1,45 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/markdown/highlight_common"
+
+import {
+  "mizchi/syntree",
+}
+
+// Values
+pub fn github_dark() -> HighlightTheme
+
+pub fn tokens_to_html(String, Array[@syntree.HighlightToken], HighlightTheme) -> String
+
+// Errors
+
+// Types and methods
+pub(all) struct HighlightTheme {
+  name : String
+  background : String
+  foreground : String
+  keyword : String
+  operator : String
+  punctuation : String
+  string : String
+  number : String
+  bool : String
+  null : String
+  property : String
+  variable : String
+  function_ : String
+  type_ : String
+  class_ : String
+  comment : String
+  doc_comment : String
+  regexp : String
+  meta : String
+  bracket : String
+  tag : String
+  invalid : String
+}
+pub fn HighlightTheme::get_color(Self, @syntree.HighlightTag) -> String
+
+// Type aliases
+
+// Traits
+

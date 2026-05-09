@@ -1,0 +1,8 @@
+import {
+  "mizchi/markdown/highlight_common" @highlight_common,
+  "mizchi/syntree/moonbit",
+}
+
+options(
+  link: { "js": { "exports": [ "highlight_moonbit" ] } },
+)

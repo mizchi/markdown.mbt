@@ -1,0 +1,7 @@
+import {
+  "mizchi/syntree",
+}
+
+options(
+  link: { "js": { "exports": [ "github_dark", "tokens_to_html" ] } },
+)

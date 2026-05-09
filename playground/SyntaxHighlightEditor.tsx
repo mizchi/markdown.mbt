@@ -1,8 +1,11 @@
-import { createEffect, onMount, createSignal, createMemo, For } from "@luna_ui/luna";
-// @ts-ignore - no type declarations for syntree_api.js
-import { highlight } from "../js/syntree_api.js";
+import { createEffect, onMount, onCleanup, createSignal, createMemo, For } from "@luna_ui/luna";
+import {
+  getLoadedHighlighter,
+  loadHighlighter,
+  normalizeHighlightLanguage,
+} from "../frontend/highlight/index.js";
 
-interface SyntaxHighlightEditorProps {
+export interface SyntaxHighlightEditorProps {
   value: () => string;  // Always accessor for fine-grained reactivity
   onChange: (value: string) => void;
   onCursorChange?: (position: number) => void;
@@ -10,25 +13,6 @@ interface SyntaxHighlightEditorProps {
   ref?: (handle: SyntaxHighlightEditorHandle) => void;
   showLineNumbers?: boolean; // Default: false for better performance
 }
-
-// Language alias mapping
-const langMap: Record<string, string> = {
-  js: "typescript",
-  javascript: "typescript",
-  ts: "typescript",
-  tsx: "typescript",
-  jsx: "typescript",
-  mbt: "moonbit",
-  md: "markdown",
-  markdown: "markdown",
-  sh: "bash",
-  bash: "bash",
-  shell: "bash",
-  zsh: "bash",
-  rs: "rust",
-};
-
-const supportedLangs = ["typescript", "moonbit", "json", "html", "css", "bash", "rust"];
 
 // Cache for code block highlighting - avoids re-highlighting unchanged blocks
 const codeBlockCache = new Map<string, string[]>();
@@ -38,6 +22,24 @@ const lineCache = new Map<string, string>();
 const inlineCache = new Map<string, string>();
 const MAX_CACHE_SIZE = 100;
 const MAX_INLINE_CACHE_SIZE = 200;
+const pendingHighlighters = new Set<string>();
+const highlighterLoadedListeners = new Set<() => void>();
+
+function requestHighlighter(lang: string): void {
+  if (pendingHighlighters.has(lang)) return;
+  pendingHighlighters.add(lang);
+  void loadHighlighter(lang).then((highlighter) => {
+    pendingHighlighters.delete(lang);
+    if (!highlighter) return;
+    codeBlockCache.clear();
+    for (const listener of highlighterLoadedListeners) {
+      listener();
+    }
+  }).catch((e) => {
+    pendingHighlighters.delete(lang);
+    console.error("Code highlighter load error:", e);
+  });
+}
 
 function getCachedHighlight(code: string, lang: string): string[] | undefined {
   return codeBlockCache.get(`${lang}:${code}`);
@@ -159,8 +161,22 @@ function highlightFenceLine(line: string, fence: string, lang: string): string {
 function highlightCodeBlockLines(lines: string[], lang: string): string[] {
   if (lines.length === 0) return [];
 
-  const mappedLang = langMap[lang] || lang;
   const code = lines.join("\n");
+  const rawLang = lang.trim().toLowerCase();
+  if (rawLang === "md" || rawLang === "markdown") {
+    const highlighted = highlightMarkdown(code);
+    const result = highlighted.split("\n");
+    setCachedHighlight(code, "markdown", result);
+    return result;
+  }
+
+  const mappedLang = normalizeHighlightLanguage(lang);
+
+  if (mappedLang === null) {
+    const result = lines.map((line) => escapeHtml(line));
+    setCachedHighlight(code, lang, result);
+    return result;
+  }
 
   // Check cache first
   const cached = getCachedHighlight(code, mappedLang);
@@ -168,15 +184,21 @@ function highlightCodeBlockLines(lines: string[], lang: string): string[] {
 
   let result: string[];
 
-  // For markdown blocks, recursively highlight
-  if (mappedLang === "markdown") {
+  if (false) {
     const highlighted = highlightMarkdown(code);
     result = highlighted.split("\n");
   }
-  // Use our syntax highlighters for supported languages
-  else if (supportedLangs.includes(mappedLang)) {
+  // Use lazily loaded syntax highlighters for supported languages.
+  else {
+    const highlighter = getLoadedHighlighter(mappedLang);
+    if (!highlighter) {
+      requestHighlighter(mappedLang);
+      result = lines.map((line) => escapeHtml(line));
+      setCachedHighlight(code, mappedLang, result);
+      return result;
+    }
     try {
-      const html = highlight(code, mappedLang);
+      const html = highlighter(code);
       // Extract content from highlight output
       const match = html.match(/<code>([\s\S]*)<\/code>/);
       if (match) {
@@ -198,9 +220,6 @@ function highlightCodeBlockLines(lines: string[], lang: string): string[] {
       console.error("Code highlight error:", e);
       result = lines.map((line) => escapeHtml(line));
     }
-  } else {
-    // Fallback: just escape each line
-    result = lines.map((line) => escapeHtml(line));
   }
 
   // Cache the result
@@ -455,6 +474,14 @@ export function SyntaxHighlightEditor(props: SyntaxHighlightEditorProps) {
 
   // Signal for line count - enables efficient updates (only when count changes)
   const [lineCount, setLineCount] = createSignal(1);
+
+  const refreshAfterHighlighterLoad = () => queueMicrotask(scheduleHighlight);
+  onMount(() => {
+    highlighterLoadedListeners.add(refreshAfterHighlighterLoad);
+  });
+  onCleanup(() => {
+    highlighterLoadedListeners.delete(refreshAfterHighlighterLoad);
+  });
 
   // Expose handle via ref prop
   onMount(() => {

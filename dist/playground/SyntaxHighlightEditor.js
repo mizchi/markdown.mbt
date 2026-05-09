@@ -1,0 +1,725 @@
+import { jsx as _jsx, jsxs as _jsxs } from "@luna_ui/luna/jsx-runtime";
+import { createEffect, onMount, onCleanup, createSignal, createMemo, For } from "@luna_ui/luna";
+import { getLoadedHighlighter, loadHighlighter, normalizeHighlightLanguage, } from "../frontend/highlight/index.js";
+// Cache for code block highlighting - avoids re-highlighting unchanged blocks
+const codeBlockCache = new Map();
+// Cache for markdown line highlighting
+const lineCache = new Map();
+// Cache for inline highlighting
+const inlineCache = new Map();
+const MAX_CACHE_SIZE = 100;
+const MAX_INLINE_CACHE_SIZE = 200;
+const pendingHighlighters = new Set();
+const highlighterLoadedListeners = new Set();
+function requestHighlighter(lang) {
+    if (pendingHighlighters.has(lang))
+        return;
+    pendingHighlighters.add(lang);
+    void loadHighlighter(lang).then((highlighter) => {
+        pendingHighlighters.delete(lang);
+        if (!highlighter)
+            return;
+        codeBlockCache.clear();
+        for (const listener of highlighterLoadedListeners) {
+            listener();
+        }
+    }).catch((e) => {
+        pendingHighlighters.delete(lang);
+        console.error("Code highlighter load error:", e);
+    });
+}
+function getCachedHighlight(code, lang) {
+    return codeBlockCache.get(`${lang}:${code}`);
+}
+function setCachedHighlight(code, lang, result) {
+    const key = `${lang}:${code}`;
+    // Simple LRU-ish: clear oldest entries when cache is full
+    if (codeBlockCache.size >= MAX_CACHE_SIZE) {
+        const firstKey = codeBlockCache.keys().next().value;
+        if (firstKey)
+            codeBlockCache.delete(firstKey);
+    }
+    codeBlockCache.set(key, result);
+}
+// Optimized escapeHtml - fast path for strings without special chars
+function escapeHtml(text) {
+    // Fast path: check if any escaping is needed
+    let needsEscape = false;
+    for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        if (c === "&" || c === "<" || c === ">" || c === '"') {
+            needsEscape = true;
+            break;
+        }
+    }
+    if (!needsEscape)
+        return text;
+    // Slow path: build escaped string
+    const parts = [];
+    let start = 0;
+    for (let i = 0; i < text.length; i++) {
+        const c = text[i];
+        let escape = null;
+        switch (c) {
+            case "&":
+                escape = "&amp;";
+                break;
+            case "<":
+                escape = "&lt;";
+                break;
+            case ">":
+                escape = "&gt;";
+                break;
+            case '"':
+                escape = "&quot;";
+                break;
+        }
+        if (escape) {
+            if (i > start)
+                parts.push(text.slice(start, i));
+            parts.push(escape);
+            start = i + 1;
+        }
+    }
+    if (start < text.length)
+        parts.push(text.slice(start));
+    return parts.join("");
+}
+// Returns array of highlighted lines (for incremental updates)
+function highlightMarkdownLines(source) {
+    const lines = source.split("\n");
+    const result = [];
+    let inCodeBlock = false;
+    let codeBlockLang = "";
+    let codeBlockFenceLen = 0;
+    let codeBlockContent = [];
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        // Check for code fence
+        const fenceMatch = line.match(/^(`{3,})([\w]*)\s*$/);
+        if (fenceMatch && !inCodeBlock) {
+            // Start of code block
+            inCodeBlock = true;
+            codeBlockFenceLen = fenceMatch[1].length;
+            codeBlockLang = (fenceMatch[2] || "").toLowerCase();
+            codeBlockContent = [];
+            result.push(highlightFenceLine(line, fenceMatch[1], fenceMatch[2] || ""));
+        }
+        else if (inCodeBlock) {
+            // Check for end of code block
+            const endFenceMatch = line.match(/^(`{3,})\s*$/);
+            if (endFenceMatch && endFenceMatch[1].length >= codeBlockFenceLen) {
+                // End of code block - highlight and add all content lines
+                const highlightedLines = highlightCodeBlockLines(codeBlockContent, codeBlockLang);
+                for (let j = 0; j < codeBlockContent.length; j++) {
+                    result.push(highlightedLines[j] ?? escapeHtml(codeBlockContent[j]));
+                }
+                result.push(`<span class="md-fence">${escapeHtml(line)}</span>`);
+                inCodeBlock = false;
+                codeBlockLang = "";
+                codeBlockContent = [];
+            }
+            else {
+                // Inside code block - accumulate
+                codeBlockContent.push(line);
+            }
+        }
+        else {
+            // Regular markdown line
+            result.push(highlightMarkdownLine(line));
+        }
+    }
+    // Handle unclosed code block
+    if (inCodeBlock) {
+        for (const line of codeBlockContent) {
+            result.push(escapeHtml(line));
+        }
+    }
+    return result;
+}
+// Legacy function for compatibility - returns joined string
+function highlightMarkdown(source) {
+    return highlightMarkdownLines(source).join("\n");
+}
+function highlightFenceLine(line, fence, lang) {
+    let html = `<span class="md-fence">${escapeHtml(fence)}</span>`;
+    if (lang) {
+        html += `<span class="md-fence-lang">${escapeHtml(lang)}</span>`;
+    }
+    return html;
+}
+function highlightCodeBlockLines(lines, lang) {
+    if (lines.length === 0)
+        return [];
+    const code = lines.join("\n");
+    const rawLang = lang.trim().toLowerCase();
+    if (rawLang === "md" || rawLang === "markdown") {
+        const highlighted = highlightMarkdown(code);
+        const result = highlighted.split("\n");
+        setCachedHighlight(code, "markdown", result);
+        return result;
+    }
+    const mappedLang = normalizeHighlightLanguage(lang);
+    if (mappedLang === null) {
+        const result = lines.map((line) => escapeHtml(line));
+        setCachedHighlight(code, lang, result);
+        return result;
+    }
+    // Check cache first
+    const cached = getCachedHighlight(code, mappedLang);
+    if (cached)
+        return cached;
+    let result;
+    if (false) {
+        const highlighted = highlightMarkdown(code);
+        result = highlighted.split("\n");
+    }
+    // Use lazily loaded syntax highlighters for supported languages.
+    else {
+        const highlighter = getLoadedHighlighter(mappedLang);
+        if (!highlighter) {
+            requestHighlighter(mappedLang);
+            result = lines.map((line) => escapeHtml(line));
+            setCachedHighlight(code, mappedLang, result);
+            return result;
+        }
+        try {
+            const html = highlighter(code);
+            // Extract content from highlight output
+            const match = html.match(/<code>([\s\S]*)<\/code>/);
+            if (match) {
+                const content = match[1];
+                const resultLines = [];
+                const rawLines = content.split("\n");
+                for (const rawLine of rawLines) {
+                    const cleaned = rawLine.replace(/^<span class="line">/, "").replace(/<\/span>$/, "");
+                    resultLines.push(cleaned);
+                }
+                if (resultLines.length > 0 && resultLines[resultLines.length - 1] === "") {
+                    resultLines.pop();
+                }
+                result = resultLines;
+            }
+            else {
+                result = lines.map((line) => escapeHtml(line));
+            }
+        }
+        catch (e) {
+            console.error("Code highlight error:", e);
+            result = lines.map((line) => escapeHtml(line));
+        }
+    }
+    // Cache the result
+    setCachedHighlight(code, mappedLang, result);
+    return result;
+}
+function highlightMarkdownLine(line) {
+    // Empty line
+    if (!line)
+        return "";
+    // Check cache first
+    const cached = lineCache.get(line);
+    if (cached !== undefined)
+        return cached;
+    const result = highlightMarkdownLineImpl(line);
+    // Cache the result (with LRU-ish eviction)
+    if (lineCache.size >= MAX_CACHE_SIZE) {
+        const firstKey = lineCache.keys().next().value;
+        if (firstKey !== undefined)
+            lineCache.delete(firstKey);
+    }
+    lineCache.set(line, result);
+    return result;
+}
+function highlightMarkdownLineImpl(line) {
+    // Heading
+    const headingMatch = line.match(/^(#{1,6})\s+(.*)$/);
+    if (headingMatch) {
+        const marker = headingMatch[1];
+        const text = headingMatch[2];
+        return `<span class="md-heading-marker">${marker}</span> <span class="md-heading">${highlightInline(text)}</span>`;
+    }
+    // Horizontal rule
+    if (/^(\*{3,}|-{3,}|_{3,})\s*$/.test(line)) {
+        return `<span class="md-hr">${escapeHtml(line)}</span>`;
+    }
+    // Blockquote
+    const quoteMatch = line.match(/^(>\s*)(.*)$/);
+    if (quoteMatch) {
+        return `<span class="md-blockquote">${escapeHtml(quoteMatch[1])}</span>${highlightInline(quoteMatch[2])}`;
+    }
+    // List items (unordered)
+    const ulMatch = line.match(/^(\s*)([-*+])\s+(.*)$/);
+    if (ulMatch) {
+        const indent = ulMatch[1];
+        const marker = ulMatch[2];
+        const text = ulMatch[3];
+        return `${escapeHtml(indent)}<span class="md-list-marker">${marker}</span> ${highlightInline(text)}`;
+    }
+    // List items (ordered)
+    const olMatch = line.match(/^(\s*)(\d+\.)\s+(.*)$/);
+    if (olMatch) {
+        const indent = olMatch[1];
+        const marker = olMatch[2];
+        const text = olMatch[3];
+        return `${escapeHtml(indent)}<span class="md-list-marker">${marker}</span> ${highlightInline(text)}`;
+    }
+    // Regular paragraph - highlight inline elements
+    return highlightInline(line);
+}
+function highlightInline(text) {
+    if (!text)
+        return "";
+    // Check cache first
+    const cached = inlineCache.get(text);
+    if (cached !== undefined)
+        return cached;
+    const result = highlightInlineImpl(text);
+    // Cache the result
+    if (inlineCache.size >= MAX_INLINE_CACHE_SIZE) {
+        const firstKey = inlineCache.keys().next().value;
+        if (firstKey !== undefined)
+            inlineCache.delete(firstKey);
+    }
+    inlineCache.set(text, result);
+    return result;
+}
+function highlightInlineImpl(text) {
+    let result = "";
+    let i = 0;
+    const len = text.length;
+    while (i < len) {
+        // Escaped character
+        if (text[i] === "\\" && i + 1 < len) {
+            result += `<span class="md-escape">${escapeHtml(text[i] + text[i + 1])}</span>`;
+            i += 2;
+            continue;
+        }
+        // Inline code
+        if (text[i] === "`") {
+            const endIdx = text.indexOf("`", i + 1);
+            if (endIdx !== -1) {
+                const code = text.slice(i + 1, endIdx);
+                result += `<span class="md-code-marker">\`</span><span class="md-code">${escapeHtml(code)}</span><span class="md-code-marker">\`</span>`;
+                i = endIdx + 1;
+                continue;
+            }
+        }
+        // Bold + Italic (***text*** or ___text___)
+        const boldItalicMatch = text.slice(i).match(/^(\*{3}|_{3})([^\*_]+)\1/);
+        if (boldItalicMatch) {
+            const marker = boldItalicMatch[1];
+            const content = boldItalicMatch[2];
+            result += `<span class="md-bold-italic">${escapeHtml(marker)}${escapeHtml(content)}${escapeHtml(marker)}</span>`;
+            i += boldItalicMatch[0].length;
+            continue;
+        }
+        // Bold (**text** or __text__)
+        const boldMatch = text.slice(i).match(/^(\*{2}|_{2})([^\*_]+)\1/);
+        if (boldMatch) {
+            const marker = boldMatch[1];
+            const content = boldMatch[2];
+            result += `<span class="md-bold">${escapeHtml(marker)}${escapeHtml(content)}${escapeHtml(marker)}</span>`;
+            i += boldMatch[0].length;
+            continue;
+        }
+        // Italic (*text* or _text_)
+        const italicMatch = text.slice(i).match(/^(\*|_)([^\*_]+)\1/);
+        if (italicMatch) {
+            const marker = italicMatch[1];
+            const content = italicMatch[2];
+            result += `<span class="md-italic">${escapeHtml(marker)}${escapeHtml(content)}${escapeHtml(marker)}</span>`;
+            i += italicMatch[0].length;
+            continue;
+        }
+        // Strikethrough (~~text~~)
+        const strikeMatch = text.slice(i).match(/^~~([^~]+)~~/);
+        if (strikeMatch) {
+            const content = strikeMatch[1];
+            result += `<span class="md-strikethrough">~~${escapeHtml(content)}~~</span>`;
+            i += strikeMatch[0].length;
+            continue;
+        }
+        // Image (![alt](url))
+        const imgMatch = text.slice(i).match(/^!\[([^\]]*)\]\(([^)]+)\)/);
+        if (imgMatch) {
+            const alt = imgMatch[1];
+            const url = imgMatch[2];
+            result += `<span class="md-image">![${escapeHtml(alt)}]</span><span class="md-link-bracket">(</span><span class="md-link-url">${escapeHtml(url)}</span><span class="md-link-bracket">)</span>`;
+            i += imgMatch[0].length;
+            continue;
+        }
+        // Link ([text](url))
+        const linkMatch = text.slice(i).match(/^\[([^\]]+)\]\(([^)]+)\)/);
+        if (linkMatch) {
+            const linkText = linkMatch[1];
+            const url = linkMatch[2];
+            result += `<span class="md-link-bracket">[</span><span class="md-link-text">${escapeHtml(linkText)}</span><span class="md-link-bracket">](</span><span class="md-link-url">${escapeHtml(url)}</span><span class="md-link-bracket">)</span>`;
+            i += linkMatch[0].length;
+            continue;
+        }
+        // HTML tags
+        const htmlMatch = text.slice(i).match(/^<[^>]+>/);
+        if (htmlMatch) {
+            result += `<span class="md-html">${escapeHtml(htmlMatch[0])}</span>`;
+            i += htmlMatch[0].length;
+            continue;
+        }
+        // Regular character
+        result += escapeHtml(text[i]);
+        i++;
+    }
+    return result;
+}
+// Fast DOM update - use textContent for plain text, innerHTML only when needed
+function setLineContent(el, html) {
+    if (!html || html === "&nbsp;") {
+        el.textContent = "\u00A0"; // Non-breaking space
+        return;
+    }
+    // Check if HTML contains any tags (fast check)
+    const hasTag = html.indexOf("<") !== -1;
+    if (!hasTag) {
+        // Plain text with HTML entities - decode and use textContent
+        // Fast path: check for common entities
+        if (html.indexOf("&") !== -1) {
+            // Has entities - decode them
+            el.textContent = html
+                .replace(/&amp;/g, "&")
+                .replace(/&lt;/g, "<")
+                .replace(/&gt;/g, ">")
+                .replace(/&quot;/g, '"');
+        }
+        else {
+            // Pure text - use directly
+            el.textContent = html;
+        }
+    }
+    else {
+        // Has HTML formatting - must use innerHTML
+        el.innerHTML = html;
+    }
+}
+// Convert character offset to line number (0-indexed)
+function getLineFromOffset(text, offset) {
+    let line = 0;
+    for (let i = 0; i < offset && i < text.length; i++) {
+        if (text[i] === "\n")
+            line++;
+    }
+    return line;
+}
+export function SyntaxHighlightEditor(props) {
+    let editorRef = null;
+    let highlightRef = null;
+    let lineNumbersRef = null;
+    let wrapperRef = null;
+    let initialized = false;
+    // Incremental update state - track previous highlighted lines for diff
+    let prevHighlightedLines = [];
+    let lineElements = [];
+    let lastCursorLine = -1; // Track which line cursor is on for targeted updates
+    let lastValueLength = 0; // Track value length for fast newline detection
+    // Track if change came from user input (to skip redundant textarea.value update)
+    let isUserInput = false;
+    // Track pre-input selection state to detect selection replacements
+    let preInputHadSelection = false;
+    // Signal for line count - enables efficient updates (only when count changes)
+    const [lineCount, setLineCount] = createSignal(1);
+    const refreshAfterHighlighterLoad = () => queueMicrotask(scheduleHighlight);
+    onMount(() => {
+        highlighterLoadedListeners.add(refreshAfterHighlighterLoad);
+    });
+    onCleanup(() => {
+        highlighterLoadedListeners.delete(refreshAfterHighlighterLoad);
+    });
+    // Expose handle via ref prop
+    onMount(() => {
+        if (props.ref) {
+            props.ref({
+                focus: () => editorRef?.focus(),
+                getCursorPosition: () => editorRef?.selectionStart ?? 0,
+                setCursorPosition: (pos) => {
+                    if (editorRef) {
+                        editorRef.setSelectionRange(pos, pos);
+                        editorRef.focus();
+                    }
+                },
+                getScrollTop: () => editorRef?.scrollTop ?? 0,
+                setScrollTop: (top) => {
+                    if (editorRef) {
+                        editorRef.scrollTop = top;
+                    }
+                },
+                setValue: (value, span) => {
+                    if (editorRef && highlightRef) {
+                        editorRef.value = value;
+                        if (span && lineElements.length > 0) {
+                            // Targeted update: find lines affected by span and update only those
+                            const startLine = getLineFromOffset(value, span.start);
+                            const endLine = getLineFromOffset(value, span.end);
+                            const newHighlightedLines = highlightMarkdownLines(value);
+                            // Update only affected lines
+                            for (let i = startLine; i <= endLine && i < newHighlightedLines.length; i++) {
+                                if (i < lineElements.length) {
+                                    // Update existing line
+                                    if (prevHighlightedLines[i] !== newHighlightedLines[i]) {
+                                        setLineContent(lineElements[i], newHighlightedLines[i]);
+                                    }
+                                }
+                            }
+                            prevHighlightedLines = newHighlightedLines;
+                            lastValueLength = value.length;
+                        }
+                        else {
+                            // Full re-highlight (fallback when no span provided)
+                            const newHighlightedLines = highlightMarkdownLines(value);
+                            highlightRef.innerHTML = "";
+                            lineElements.length = 0;
+                            for (let i = 0; i < newHighlightedLines.length; i++) {
+                                const div = document.createElement("div");
+                                div.className = "highlight-line";
+                                setLineContent(div, newHighlightedLines[i]);
+                                highlightRef.appendChild(div);
+                                lineElements.push(div);
+                            }
+                            prevHighlightedLines = newHighlightedLines;
+                            lastValueLength = value.length;
+                        }
+                    }
+                },
+            });
+        }
+    });
+    // Get line number and line content from cursor position (0-indexed)
+    // Returns [lineNumber, lineStart, lineEnd] without splitting entire string
+    const getLineInfo = (text, pos) => {
+        let line = 0;
+        let lineStart = 0;
+        for (let i = 0; i < pos && i < text.length; i++) {
+            if (text[i] === "\n") {
+                line++;
+                lineStart = i + 1;
+            }
+        }
+        // Find line end
+        let lineEnd = text.indexOf("\n", pos);
+        if (lineEnd === -1)
+            lineEnd = text.length;
+        return [line, lineStart, lineEnd];
+    };
+    // Count lines without creating array (faster than split for large docs)
+    const countLines = (text) => {
+        let count = 1;
+        for (let i = 0; i < text.length; i++) {
+            if (text[i] === "\n")
+                count++;
+        }
+        return count;
+    };
+    // Highlight a single line
+    const highlightSingleLine = (line) => {
+        // Check cache first
+        const cached = lineCache.get(line);
+        if (cached !== undefined)
+            return cached;
+        return highlightMarkdownLine(line);
+    };
+    // Incremental highlight update - only update changed lines
+    // Accepts optional value/cursorPos for direct calls from input handlers
+    const updateHighlight = (inputValue, inputCursorPos) => {
+        if (!highlightRef || !editorRef)
+            return;
+        const value = inputValue ?? props.value();
+        const valueLen = value.length;
+        const cursorPos = inputCursorPos ?? editorRef.selectionStart;
+        const [cursorLine, lineStart, lineEnd] = getLineInfo(value, cursorPos);
+        // First render - must do full highlight
+        if (lineElements.length === 0) {
+            const newHighlightedLines = highlightMarkdownLines(value);
+            highlightRef.innerHTML = "";
+            for (let i = 0; i < newHighlightedLines.length; i++) {
+                const div = document.createElement("div");
+                div.className = "highlight-line";
+                setLineContent(div, newHighlightedLines[i]);
+                highlightRef.appendChild(div);
+                lineElements.push(div);
+            }
+            prevHighlightedLines = newHighlightedLines;
+            lastCursorLine = cursorLine;
+            lastValueLength = valueLen;
+            return;
+        }
+        const lengthDiff = valueLen - lastValueLength;
+        lastValueLength = valueLen;
+        // Always count lines for correct change detection.
+        // The previous ±1 heuristic missed selection replacements that happen to
+        // produce a length diff of exactly ±1 (e.g. select "BC\nD" and type "XY").
+        const newLineCount = countLines(value);
+        const lineCountChanged = newLineCount !== prevHighlightedLines.length;
+        // Multi-char edits (paste, cut, selection replacement) may shift content
+        // across multiple lines even when line count stays the same.
+        const isMultiCharChange = Math.abs(lengthDiff) > 1 || preInputHadSelection;
+        preInputHadSelection = false; // reset after use
+        // Check if cursor is inside a code block by scanning raw text for fence markers
+        let inCodeBlock = false;
+        let pos = 0;
+        let lineIdx = 0;
+        while (pos < value.length && lineIdx < cursorLine) {
+            const lineEndPos = value.indexOf("\n", pos);
+            const lineEndIdx = lineEndPos === -1 ? value.length : lineEndPos;
+            const rawLine = value.slice(pos, lineEndIdx);
+            // Check for fence start/end (``` at start of line)
+            if (/^`{3,}/.test(rawLine)) {
+                inCodeBlock = !inCodeBlock;
+            }
+            pos = lineEndIdx + 1;
+            lineIdx++;
+        }
+        // If we're on a fence line itself, we need full re-highlight too
+        const currentRawLine = value.slice(lineStart, lineEnd);
+        const isOnFenceLine = /^`{3,}/.test(currentRawLine);
+        // Full re-highlight when: line count changed, multi-char edit, selection replacement,
+        // code block context, fence line, or cursor jumped multiple lines
+        if (lineCountChanged || isMultiCharChange || Math.abs(cursorLine - lastCursorLine) > 1 || inCodeBlock || isOnFenceLine) {
+            const newHighlightedLines = highlightMarkdownLines(value);
+            const maxLen = Math.max(lineElements.length, newHighlightedLines.length);
+            for (let i = 0; i < maxLen; i++) {
+                if (i >= newHighlightedLines.length) {
+                    lineElements[i]?.remove();
+                }
+                else if (i >= lineElements.length) {
+                    const div = document.createElement("div");
+                    div.className = "highlight-line";
+                    setLineContent(div, newHighlightedLines[i]);
+                    highlightRef.appendChild(div);
+                    lineElements.push(div);
+                }
+                else if (prevHighlightedLines[i] !== newHighlightedLines[i]) {
+                    setLineContent(lineElements[i], newHighlightedLines[i]);
+                }
+            }
+            if (newHighlightedLines.length < lineElements.length) {
+                lineElements.length = newHighlightedLines.length;
+            }
+            prevHighlightedLines = newHighlightedLines;
+            lastCursorLine = cursorLine;
+            return;
+        }
+        // Fast path: only the cursor line changed (single character typed)
+        // Extract just the current line without splitting entire string
+        const rawLine = value.slice(lineStart, lineEnd);
+        if (lineElements[cursorLine]) {
+            const newHighlight = highlightSingleLine(rawLine);
+            if (prevHighlightedLines[cursorLine] !== newHighlight) {
+                setLineContent(lineElements[cursorLine], newHighlight);
+                prevHighlightedLines[cursorLine] = newHighlight;
+            }
+        }
+        lastCursorLine = cursorLine;
+    };
+    const syncScroll = () => {
+        if (!editorRef || !highlightRef)
+            return;
+        highlightRef.style.transform = `translate(${-editorRef.scrollLeft}px, ${-editorRef.scrollTop}px)`;
+        if (props.showLineNumbers && lineNumbersRef) {
+            lineNumbersRef.style.transform = `translateY(${-editorRef.scrollTop}px)`;
+        }
+    };
+    // Direct highlight update - Luna's signal batch handles scheduling via queueMicrotask
+    const scheduleHighlight = () => {
+        updateHighlight();
+    };
+    // Update textarea value and schedule highlight when value changes
+    createEffect(() => {
+        // Access props.value() to subscribe to changes
+        const value = props.value();
+        // Only update textarea if change came from external source (not user input)
+        // Skip both the comparison and assignment for user input (both are expensive for large docs)
+        if (isUserInput) {
+            isUserInput = false; // Reset flag
+        }
+        else if (editorRef) {
+            // External change - must update textarea
+            editorRef.value = value;
+        }
+        // Update line count only if line numbers are shown
+        if (props.showLineNumbers) {
+            // Count newlines directly (faster than split for large docs)
+            let newLineCount = 1;
+            for (let i = 0; i < value.length; i++) {
+                if (value[i] === "\n")
+                    newLineCount++;
+            }
+            if (newLineCount !== lineCount()) {
+                setLineCount(newLineCount);
+            }
+        }
+        // Schedule highlight update for next frame
+        scheduleHighlight();
+    });
+    // Setup function called when editor ref is set
+    const setupEditor = (el) => {
+        editorRef = el;
+        const value = props.value();
+        // Set initial value
+        el.value = value;
+        // Reset scroll position
+        el.scrollTop = 0;
+        el.scrollLeft = 0;
+        // Defer initial line count to avoid updating signal during render
+        if (props.showLineNumbers) {
+            queueMicrotask(() => {
+                setLineCount(value.split("\n").length);
+            });
+        }
+        // Initial highlight (synchronous for initial render)
+        updateHighlight();
+        // Reset transforms
+        if (highlightRef) {
+            highlightRef.style.transform = "translate(0px, 0px)";
+        }
+        if (props.showLineNumbers && lineNumbersRef) {
+            lineNumbersRef.style.transform = "translateY(0px)";
+        }
+        // Restore cursor position
+        if (props.initialCursorPosition != null && props.initialCursorPosition > 0) {
+            const pos = Math.min(props.initialCursorPosition, value.length);
+            el.setSelectionRange(pos, pos);
+            initialized = true;
+        }
+    };
+    const handleBeforeInput = () => {
+        if (editorRef) {
+            preInputHadSelection = editorRef.selectionStart !== editorRef.selectionEnd;
+        }
+    };
+    const handleInput = (e) => {
+        const target = e.target;
+        isUserInput = true; // Mark as user input to skip redundant textarea.value update
+        props.onChange(target.value);
+        props.onCursorChange?.(target.selectionStart);
+    };
+    const handleKeyDown = (e) => {
+        if (e.key === "Tab") {
+            e.preventDefault();
+            const target = e.target;
+            const start = target.selectionStart;
+            const end = target.selectionEnd;
+            target.setRangeText("  ", start, end, "end");
+            isUserInput = true; // Mark as user input
+            props.onChange(target.value);
+        }
+    };
+    const handleCursorUpdate = (e) => {
+        const target = e.target;
+        props.onCursorChange?.(target.selectionStart);
+    };
+    // Memoized array for For component - fine-grained updates (fixed in Luna 0.3.3)
+    const lineNumbersArray = createMemo(() => {
+        const count = lineCount();
+        return Array.from({ length: count }, (_, i) => i + 1);
+    });
+    return (_jsxs("div", { class: "syntax-editor-container", children: [props.showLineNumbers && (_jsx("div", { class: "line-numbers", ref: (el) => { lineNumbersRef = el; }, children: _jsx(For, { each: lineNumbersArray, children: (num) => _jsx("div", { class: "line-number", children: num }) }) })), _jsx("div", { class: "editor-wrapper", ref: (el) => { wrapperRef = el; }, children: _jsxs("div", { class: "editor-content", children: [_jsx("div", { class: "editor-highlight", ref: (el) => { highlightRef = el; } }), _jsx("textarea", { ref: (el) => setupEditor(el), class: "editor-textarea", onBeforeInput: handleBeforeInput, onInput: handleInput, onScroll: syncScroll, onKeyDown: handleKeyDown, onKeyUp: handleCursorUpdate, onClick: handleCursorUpdate, spellcheck: false, autocomplete: "off", autocorrect: "off", autocapitalize: "off" })] }) })] }));
+}
+//# sourceMappingURL=SyntaxHighlightEditor.js.map

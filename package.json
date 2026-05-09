@@ -1,15 +1,64 @@
 {
   "name": "@mizchi/markdown",
   "version": "0.4.1",
+  "type": "module",
   "description": "incremental markdown parser",
   "scripts": {
-    "prepublishOnly": "moon build",
+    "build:moon": "moon build --target js --release",
+    "build:editor": "pnpm run build:moon && tsc -p tsconfig.editor.json && node scripts/prepare-editor-package.mjs",
+    "prepublishOnly": "pnpm run build:editor",
     "test": "vitest run"
+  },
+  "imports": {
+    "#moonbit/highlight-typescript": "./_build/js/release/build/highlight_typescript/highlight_typescript.js",
+    "#moonbit/highlight-moonbit": "./_build/js/release/build/highlight_moonbit/highlight_moonbit.js",
+    "#moonbit/highlight-json": "./_build/js/release/build/highlight_json/highlight_json.js",
+    "#moonbit/highlight-html": "./_build/js/release/build/highlight_html/highlight_html.js",
+    "#moonbit/highlight-css": "./_build/js/release/build/highlight_css/highlight_css.js",
+    "#moonbit/highlight-bash": "./_build/js/release/build/highlight_bash/highlight_bash.js",
+    "#moonbit/highlight-rust": "./_build/js/release/build/highlight_rust/highlight_rust.js"
   },
   "exports": {
     ".": {
       "import": "./js/api.js",
       "types": "./js/api.d.ts"
+    },
+    "./editor": {
+      "import": "./dist/frontend/editor/index.js",
+      "types": "./dist/frontend/editor/index.d.ts"
+    },
+    "./editor/style.css": "./dist/frontend/editor/style.css",
+    "./highlight": {
+      "import": "./dist/frontend/highlight/index.js",
+      "types": "./dist/frontend/highlight/index.d.ts"
+    },
+    "./highlight/typescript": {
+      "import": "./dist/frontend/highlight/languages/typescript.js",
+      "types": "./dist/frontend/highlight/languages/typescript.d.ts"
+    },
+    "./highlight/moonbit": {
+      "import": "./dist/frontend/highlight/languages/moonbit.js",
+      "types": "./dist/frontend/highlight/languages/moonbit.d.ts"
+    },
+    "./highlight/json": {
+      "import": "./dist/frontend/highlight/languages/json.js",
+      "types": "./dist/frontend/highlight/languages/json.d.ts"
+    },
+    "./highlight/html": {
+      "import": "./dist/frontend/highlight/languages/html.js",
+      "types": "./dist/frontend/highlight/languages/html.d.ts"
+    },
+    "./highlight/css": {
+      "import": "./dist/frontend/highlight/languages/css.js",
+      "types": "./dist/frontend/highlight/languages/css.d.ts"
+    },
+    "./highlight/bash": {
+      "import": "./dist/frontend/highlight/languages/bash.js",
+      "types": "./dist/frontend/highlight/languages/bash.d.ts"
+    },
+    "./highlight/rust": {
+      "import": "./dist/frontend/highlight/languages/rust.js",
+      "types": "./dist/frontend/highlight/languages/rust.d.ts"
     }
   },
   "keywords": [
@@ -40,6 +89,7 @@
   },
   "files": [
     "js",
+    "dist",
     "_build/js/release/build"
   ]
 }
