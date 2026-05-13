@@ -26,6 +26,8 @@ pub fn md_render_html(Int) -> String
 
 pub fn md_render_html_with_autolink(Int) -> String
 
+pub fn md_render_html_without_autolink(Int) -> String
+
 pub fn md_serialize(Int) -> String
 
 pub fn md_to_ast_json(String) -> String
@@ -39,6 +41,10 @@ pub fn md_to_html_with_autolink(String) -> String
 pub fn md_to_html_with_wikilinks(String) -> String
 
 pub fn md_to_html_with_wikilinks_and_autolink(String) -> String
+
+pub fn md_to_html_with_wikilinks_without_autolink(String) -> String
+
+pub fn md_to_html_without_autolink(String) -> String
 
 pub fn md_to_markdown(String) -> String
 

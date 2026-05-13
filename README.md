@@ -32,8 +32,12 @@ const ast = parse("# Hello\n\n**Bold** text");
 console.log(ast.children[0].type); // "heading"
 
 // Convert to HTML
-const html = toHtml("# Hello\n\n**Bold** text");
-// => "<h1>Hello</h1>\n<p><strong>Bold</strong> text</p>\n"
+const html = toHtml("See https://example.com/docs\n");
+// => '<p>See <a href="https://example.com/docs">https://example.com/docs</a></p>\n'
+
+// Disable bare URL links when you need plain text output
+const plain = toHtml("See https://example.com/docs\n", { autolink: false });
+// => "<p>See https://example.com/docs</p>\n"
 
 // Normalize markdown
 const normalized = toMarkdown("# Hello\n\n\n\nWorld");
@@ -116,6 +120,8 @@ let html = @markdown.render_html(doc)
 
 // Or use convenience function
 let html = @markdown.md_to_html("# Hello\n\nWorld")
+let linked = @markdown.md_to_html("See https://example.com/docs\n")
+let plain = @markdown.md_to_html("See https://example.com/docs\n", autolink=false)
 
 // Enable the WikiLink extension explicitly
 let wiki_html = @markdown.md_to_html("[[MoonBit|MoonBit notes]]", wikilinks=true)

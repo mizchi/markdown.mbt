@@ -54,22 +54,31 @@ test "render link with title" {
 }
 
 ///|
-test "render bare URL text as link only when autolink is enabled" {
-  let default_html = md_to_html("Read https://example.com/docs.\n")
-  inspect(default_html, content="<p>Read https://example.com/docs.</p>\n")
-  let html = md_to_html("Read https://example.com/docs.\n", autolink=true)
+test "render bare URL text as link by default" {
+  let html = md_to_html("Read https://example.com/docs.\n")
   inspect(
     html,
     content="<p>Read <a href=\"https://example.com/docs\">https://example.com/docs</a>.</p>\n",
   )
+  let disabled = md_to_html("Read https://example.com/docs.\n", autolink=false)
+  inspect(disabled, content="<p>Read https://example.com/docs.</p>\n")
 }
 
 ///|
 test "render bare URL text with escaped attributes" {
-  let html = md_to_html("Open https://example.com/?a=1&b=2\n", autolink=true)
+  let html = md_to_html("Open https://example.com/?a=1&b=2\n")
   inspect(
     html,
     content="<p>Open <a href=\"https://example.com/?a=1&amp;b=2\">https://example.com/?a=1&amp;b=2</a></p>\n",
+  )
+}
+
+///|
+test "render markdown link label URL without nested autolink" {
+  let html = md_to_html("[https://example.com](https://target.example)\n")
+  inspect(
+    html,
+    content="<p><a href=\"https://target.example\">https://example.com</a></p>\n",
   )
 }
 

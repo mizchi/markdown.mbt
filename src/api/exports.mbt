@@ -52,6 +52,12 @@ pub fn md_to_html_with_autolink(source : String) -> String {
 }
 
 ///|
+/// Parse markdown with bare URL autolinks disabled and return HTML directly
+pub fn md_to_html_without_autolink(source : String) -> String {
+  @markdown.md_to_html(source, autolink=false)
+}
+
+///|
 /// Parse markdown with wikilinks enabled and return HTML directly
 pub fn md_to_html_with_wikilinks(source : String) -> String {
   @markdown.md_to_html(source, wikilinks=true)
@@ -61,6 +67,12 @@ pub fn md_to_html_with_wikilinks(source : String) -> String {
 /// Parse markdown with wikilinks and bare URL autolinks enabled and return HTML directly
 pub fn md_to_html_with_wikilinks_and_autolink(source : String) -> String {
   @markdown.md_to_html(source, wikilinks=true, autolink=true)
+}
+
+///|
+/// Parse markdown with wikilinks enabled and bare URL autolinks disabled.
+pub fn md_to_html_with_wikilinks_without_autolink(source : String) -> String {
+  @markdown.md_to_html(source, wikilinks=true, autolink=false)
 }
 
 ///|
@@ -109,6 +121,15 @@ pub fn md_render_html(handle : Int) -> String {
 pub fn md_render_html_with_autolink(handle : Int) -> String {
   match ast_documents.get(handle) {
     Some(doc) => @markdown.render_html(doc, autolink=true)
+    None => ""
+  }
+}
+
+///|
+/// Render handle's document to HTML with bare URL autolinks disabled
+pub fn md_render_html_without_autolink(handle : Int) -> String {
+  match ast_documents.get(handle) {
+    Some(doc) => @markdown.render_html(doc, autolink=false)
     None => ""
   }
 }

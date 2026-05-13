@@ -4,7 +4,7 @@
 
 ///|
 /// Render a document to HTML
-pub fn render_html(doc : Document, autolink? : Bool = false) -> String {
+pub fn render_html(doc : Document, autolink? : Bool = true) -> String {
   let buf = StringBuilder::new()
   for block in doc.children {
     render_block_html(block, buf, autolink~)
@@ -17,7 +17,7 @@ pub fn render_html(doc : Document, autolink? : Bool = false) -> String {
 fn render_block_html(
   block : Block,
   buf : StringBuilder,
-  autolink? : Bool = false,
+  autolink? : Bool = true,
 ) -> Unit {
   match block {
     Block::Paragraph(children~, ..) => {
@@ -151,7 +151,7 @@ fn render_list_item_html(
   buf : StringBuilder,
   tight : Bool,
   is_task_list : Bool,
-  autolink? : Bool = false,
+  autolink? : Bool = true,
 ) -> Unit {
   // Task list items get a special class
   if is_task_list && !(item.checked is None) {
@@ -193,7 +193,7 @@ fn render_table_cell_html(
   buf : StringBuilder,
   tag : String,
   align : TableAlign,
-  autolink? : Bool = false,
+  autolink? : Bool = true,
 ) -> Unit {
   buf.write_char('<')
   buf.write_string(tag)
@@ -215,7 +215,7 @@ fn render_table_cell_html(
 fn render_inlines_html(
   inlines : Array[Inline],
   buf : StringBuilder,
-  autolink? : Bool = false,
+  autolink? : Bool = true,
 ) -> Unit {
   for inline in inlines {
     render_inline_html(inline, buf, autolink~)
@@ -237,7 +237,7 @@ fn render_wikilink_destination(target : String, fragment : String) -> String {
 fn render_text_html(
   content : String,
   buf : StringBuilder,
-  autolink? : Bool = false,
+  autolink? : Bool = true,
 ) -> Unit {
   if !autolink {
     buf.write_string(escape_html(content))
@@ -380,7 +380,7 @@ fn is_url_trailing_punctuation(c : Char) -> Bool {
 fn render_inline_html(
   inline : Inline,
   buf : StringBuilder,
-  autolink? : Bool = false,
+  autolink? : Bool = true,
 ) -> Unit {
   match inline {
     Inline::Text(content~, ..) => render_text_html(content, buf, autolink~)
@@ -423,14 +423,14 @@ fn render_inline_html(
         buf.write_char('"')
       }
       buf.write_char('>')
-      render_inlines_html(children, buf)
+      render_inlines_html(children, buf, autolink=false)
       buf.write_string("</a>")
     }
     Inline::RefLink(children~, label~, ..) => {
       // Reference links should be resolved before rendering
       // For now, render as plain text with the label
       buf.write_char('[')
-      render_inlines_html(children, buf)
+      render_inlines_html(children, buf, autolink=false)
       buf.write_string("][")
       buf.write_string(escape_html(label))
       buf.write_char(']')
@@ -519,7 +519,7 @@ fn escape_html_attr(s : String) -> String {
 pub fn md_to_html(
   source : String,
   wikilinks? : Bool = false,
-  autolink? : Bool = false,
+  autolink? : Bool = true,
 ) -> String {
   let result = parse(source, wikilinks~)
   render_html(result.document, autolink~)
@@ -540,7 +540,7 @@ pub fn md_to_html_autolink(
 pub fn md_to_html_strict(
   source : String,
   wikilinks? : Bool = false,
-  autolink? : Bool = false,
+  autolink? : Bool = true,
 ) -> String {
   let result = parse(source, strict=true, wikilinks~)
   render_html(result.document, autolink~)

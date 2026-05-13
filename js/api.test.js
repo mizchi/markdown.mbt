@@ -58,12 +58,12 @@ describe("toHtml", () => {
     );
   });
 
-  it("renders bare URL text as links only when autolink is enabled", () => {
+  it("renders bare URL text as links by default", () => {
     expect(toHtml("Read https://example.com/docs.\n")).toBe(
-      "<p>Read https://example.com/docs.</p>\n"
-    );
-    expect(toHtml("Read https://example.com/docs.\n", { autolink: true })).toBe(
       '<p>Read <a href="https://example.com/docs">https://example.com/docs</a>.</p>\n'
+    );
+    expect(toHtml("Read https://example.com/docs.\n", { autolink: false })).toBe(
+      "<p>Read https://example.com/docs.</p>\n"
     );
   });
 
@@ -76,6 +76,12 @@ describe("toHtml", () => {
     ).toBe(
       '<p><a href="MoonBit">MoonBit notes</a> <a href="https://example.com/docs">https://example.com/docs</a></p>\n'
     );
+    expect(
+      toHtml("[[MoonBit|MoonBit notes]] https://example.com/docs\n", {
+        wikilinks: true,
+        autolink: false,
+      })
+    ).toBe('<p><a href="MoonBit">MoonBit notes</a> https://example.com/docs</p>\n');
   });
 });
 
@@ -160,13 +166,19 @@ describe("createDocument", () => {
     doc.dispose();
   });
 
-  it("keeps autolink option on document handles", () => {
-    const doc = createDocument("Read https://example.com/docs.", {
-      autolink: true,
-    });
+  it("keeps autolink default on document handles", () => {
+    const doc = createDocument("Read https://example.com/docs.");
     expect(doc.toHtml()).toBe(
       '<p>Read <a href="https://example.com/docs">https://example.com/docs</a>.</p>\n'
     );
+    doc.dispose();
+  });
+
+  it("can disable bare URL links on document handles", () => {
+    const doc = createDocument("Read https://example.com/docs.", {
+      autolink: false,
+    });
+    expect(doc.toHtml()).toBe("<p>Read https://example.com/docs.</p>\n");
     doc.dispose();
   });
 

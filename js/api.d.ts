@@ -68,7 +68,7 @@ export interface MarkdownOptions {
 
   /**
    * Render bare http:// and https:// URL text as links.
-   * Disabled by default so plain text rendering remains stable.
+   * Enabled by default; set false to keep bare URLs as plain text.
    */
   autolink?: boolean;
 }

@@ -6,15 +6,15 @@
 
 import {
   md_to_html,
-  md_to_html_with_autolink,
-  md_to_html_with_wikilinks,
+  md_to_html_without_autolink,
   md_to_html_with_wikilinks_and_autolink,
+  md_to_html_with_wikilinks_without_autolink,
   md_to_markdown,
   md_to_markdown_with_wikilinks,
   md_to_ast_json,
   md_to_ast_json_with_wikilinks,
-  md_render_html,
   md_render_html_with_autolink,
+  md_render_html_without_autolink,
   md_serialize,
   md_parse_with_source,
   md_parse_with_source_with_wikilinks,
@@ -31,7 +31,7 @@ function useWikilinks(options) {
 }
 
 function useAutolink(options) {
-  return options?.autolink === true;
+  return options?.autolink !== false;
 }
 
 /**
@@ -60,10 +60,10 @@ export function toHtml(source, options = {}) {
     return md_to_html_with_wikilinks_and_autolink(source);
   }
   if (wikilinks) {
-    return md_to_html_with_wikilinks(source);
+    return md_to_html_with_wikilinks_without_autolink(source);
   }
-  if (autolink) {
-    return md_to_html_with_autolink(source);
+  if (!autolink) {
+    return md_to_html_without_autolink(source);
   }
   return md_to_html(source);
 }
@@ -109,7 +109,7 @@ export function createDocument(source, options = {}) {
     toHtml() {
       return autolink
         ? md_render_html_with_autolink(handle)
-        : md_render_html(handle);
+        : md_render_html_without_autolink(handle);
     },
 
     toMarkdown() {
@@ -139,7 +139,7 @@ export function createDocument(source, options = {}) {
         toHtml: () =>
           autolink
             ? md_render_html_with_autolink(newHandle)
-            : md_render_html(newHandle),
+            : md_render_html_without_autolink(newHandle),
         toMarkdown: () => md_serialize(newHandle),
         update: (s, e) => createDocument(s, options).update(s, e), // Simplified
         dispose: () => md_free(newHandle),
