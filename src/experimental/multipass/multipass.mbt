@@ -39,7 +39,7 @@
 ///| See docs/compare_cmark.md for detailed analysis.
 
 ///|
-/// Inline token for multi-pass processing
+/// @markdown.Inline token for multi-pass processing
 priv enum InlineToken {
   /// Backtick run: start position, count, escaped by backslash
   Backticks(Int, Int, Bool)
@@ -78,57 +78,41 @@ fn InlineToken::start(self : InlineToken) -> Int {
 }
 
 ///|
-/// Check if character is Unicode whitespace
-fn is_unicode_whitespace(c : Char) -> Bool {
-  c == ' ' || c == '\t' || c == '\n' || c == '\r' || c == '\u000C'
-}
-
-///|
-/// Check if character is Unicode punctuation (ASCII subset)
-fn is_unicode_punctuation(c : Char) -> Bool {
-  let code = c.to_int()
-  (code >= 0x21 && code <= 0x2F) || // !"#$%&'()*+,-./
-  (code >= 0x3A && code <= 0x40) || // :;<=>?@
-  (code >= 0x5B && code <= 0x60) || // [\]^_`
-  (code >= 0x7B && code <= 0x7E) // {|}~
-}
-
-///|
 /// Check if a delimiter run is left-flanking
 fn is_left_flanking(prev_char : Char, next_char : Char) -> Bool {
   // Must not be followed by whitespace
-  if is_unicode_whitespace(next_char) {
+  if @markdown.is_unicode_whitespace(next_char) {
     return false
   }
   // Either not followed by punctuation, or preceded by whitespace/punctuation
-  !is_unicode_punctuation(next_char) ||
-  is_unicode_whitespace(prev_char) ||
-  is_unicode_punctuation(prev_char)
+  !@markdown.is_unicode_punctuation(next_char) ||
+  @markdown.is_unicode_whitespace(prev_char) ||
+  @markdown.is_unicode_punctuation(prev_char)
 }
 
 ///|
 /// Check if a delimiter run is right-flanking
 fn is_right_flanking(prev_char : Char, next_char : Char) -> Bool {
   // Must not be preceded by whitespace
-  if is_unicode_whitespace(prev_char) {
+  if @markdown.is_unicode_whitespace(prev_char) {
     return false
   }
   // Either not preceded by punctuation, or followed by whitespace/punctuation
-  !is_unicode_punctuation(prev_char) ||
-  is_unicode_whitespace(next_char) ||
-  is_unicode_punctuation(next_char)
+  !@markdown.is_unicode_punctuation(prev_char) ||
+  @markdown.is_unicode_whitespace(next_char) ||
+  @markdown.is_unicode_punctuation(next_char)
 }
 
 ///|
 /// Tokenize input string into InlineToken array
-fn tokenize_inline(scanner : Scanner) -> Array[InlineToken] {
+fn tokenize_inline(scanner : @markdown.Scanner) -> Array[InlineToken] {
   let (tokens, _) = tokenize_with_index(scanner)
   tokens
 }
 
 ///|
 /// Tokenize and build CloserIndex in a single pass
-fn tokenize_with_index(scanner : Scanner) -> (Array[InlineToken], CloserIndex) {
+fn tokenize_with_index(scanner : @markdown.Scanner) -> (Array[InlineToken], CloserIndex) {
   let tokens : Array[InlineToken] = []
   let idx = CloserIndex::new()
   let mut prev_char : Char = ' ' // Start of line treated as whitespace
@@ -168,8 +152,8 @@ fn tokenize_with_index(scanner : Scanner) -> (Array[InlineToken], CloserIndex) {
           } else {
             // _ has additional word boundary constraints
             (
-              left_flank && (!right_flank || is_unicode_punctuation(prev_char)),
-              right_flank && (!left_flank || is_unicode_punctuation(next_char)),
+              left_flank && (!right_flank || @markdown.is_unicode_punctuation(prev_char)),
+              right_flank && (!left_flank || @markdown.is_unicode_punctuation(next_char)),
             )
           }
           if may_open || may_close {
@@ -247,8 +231,8 @@ fn tokenize_with_index(scanner : Scanner) -> (Array[InlineToken], CloserIndex) {
           let count = scanner.count_char('~')
           if count == 2 {
             let next_char = scanner.peek_at(2).unwrap_or(' ')
-            let may_open = !is_unicode_whitespace(next_char)
-            let may_close = !is_unicode_whitespace(prev_char)
+            let may_open = !@markdown.is_unicode_whitespace(next_char)
+            let may_close = !@markdown.is_unicode_whitespace(prev_char)
             tokens.push(InlineToken::Strikethrough(start, may_open, may_close))
             if may_close {
               idx.strikethrough.push(start)
@@ -441,7 +425,7 @@ priv struct MultiPassParser {
 ///|
 /// Create multi-pass parser from text
 fn MultiPassParser::new(text : String) -> MultiPassParser {
-  let scanner = Scanner::new(text)
+  let scanner = @markdown.Scanner::new(text)
   let (tokens, _) = tokenize_with_index(scanner)
   { text, text_len: text.length(), tokens }
 }
@@ -501,7 +485,7 @@ fn MultiPassParser::parse_code_span(
   self : MultiPassParser,
   opener_idx : Int,
   text_end : Int,
-) -> (Inline, Int)? {
+) -> (@markdown.Inline, Int)? {
   guard opener_idx < self.tokens.length() else { return None }
   let opener = self.tokens[opener_idx]
   guard opener is Backticks(opener_start, backtick_count, escaped) else {
@@ -535,10 +519,10 @@ fn MultiPassParser::parse_code_span(
           content
         }
         let end_pos = closer_start + closer_count
-        let inline = Inline::Code(
+        let inline = @markdown.Inline::Code(
           content=trimmed,
           backtick_count~,
-          span=Span::new(opener_start, end_pos),
+          span=@markdown.Span::new(opener_start, end_pos),
         )
         return Some((inline, end_pos))
       }
@@ -561,13 +545,13 @@ fn is_all_spaces_mp(s : String) -> Bool {
 
 ///|
 /// Check if inlines contain a link (for nested link detection)
-fn contains_link_mp(inlines : Array[Inline]) -> Bool {
+fn contains_link_mp(inlines : Array[@markdown.Inline]) -> Bool {
   for inline in inlines {
     match inline {
-      Inline::Link(..) | Inline::RefLink(..) => return true
-      Inline::Emphasis(children~, ..)
-      | Inline::Strong(children~, ..)
-      | Inline::Strikethrough(children~, ..) =>
+      @markdown.Inline::Link(..) | @markdown.Inline::RefLink(..) => return true
+      @markdown.Inline::Emphasis(children~, ..)
+      | @markdown.Inline::Strong(children~, ..)
+      | @markdown.Inline::Strikethrough(children~, ..) =>
         if contains_link_mp(children) {
           return true
         }
@@ -583,7 +567,7 @@ fn MultiPassParser::parse_link(
   self : MultiPassParser,
   opener_idx : Int,
   text_end : Int,
-) -> (Inline, Int)? {
+) -> (@markdown.Inline, Int)? {
   guard opener_idx < self.tokens.length() else { return None }
   let opener = self.tokens[opener_idx]
   guard opener is LinkStart(opener_start) else { return None }
@@ -619,7 +603,7 @@ fn MultiPassParser::parse_link(
   guard after_brack < self.text_len else { return None }
   let next_char = self.char_at(after_brack).unwrap()
   if next_char == '(' {
-    // Inline link: [text](url "title")
+    // @markdown.Inline link: [text](url "title")
     match
       self.parse_inline_link_dest(
         after_brack + 1,
@@ -651,7 +635,7 @@ fn MultiPassParser::parse_inline_link_dest(
   link_start : Int,
   link_text : String,
   text_end_token_idx : Int,
-) -> (Inline, Int)? {
+) -> (@markdown.Inline, Int)? {
   let mut pos = start
 
   // Skip leading whitespace
@@ -778,11 +762,11 @@ fn MultiPassParser::parse_inline_link_dest(
   if contains_link_mp(children) {
     return None
   }
-  let inline = Inline::Link(
+  let inline = @markdown.Inline::Link(
     children~,
     url~,
     title~,
-    span=Span::new(link_start, pos),
+    span=@markdown.Span::new(link_start, pos),
   )
   Some((inline, pos))
 }
@@ -795,7 +779,7 @@ fn MultiPassParser::parse_ref_link(
   text_end : Int,
   link_start : Int,
   link_text : String,
-) -> (Inline, Int)? {
+) -> (@markdown.Inline, Int)? {
   let mut pos = start
   let label_buf = StringBuilder::new()
 
@@ -817,10 +801,10 @@ fn MultiPassParser::parse_ref_link(
   if contains_link_mp(children) {
     return None
   }
-  let inline = Inline::RefLink(
+  let inline = @markdown.Inline::RefLink(
     children~,
     label~,
-    span=Span::new(link_start, pos),
+    span=@markdown.Span::new(link_start, pos),
   )
   Some((inline, pos))
 }
@@ -831,7 +815,7 @@ fn MultiPassParser::parse_image(
   self : MultiPassParser,
   opener_idx : Int,
   text_end : Int,
-) -> (Inline, Int)? {
+) -> (@markdown.Inline, Int)? {
   guard opener_idx < self.tokens.length() else { return None }
   let opener = self.tokens[opener_idx]
   guard opener is ImageStart(opener_start) else { return None }
@@ -864,7 +848,7 @@ fn MultiPassParser::parse_image(
   guard after_brack < self.text_len else { return None }
   let next_char = self.char_at(after_brack).unwrap()
   if next_char == '(' {
-    // Inline image: ![alt](url "title")
+    // @markdown.Inline image: ![alt](url "title")
     match self.parse_image_dest(after_brack + 1, text_end, opener_start, alt) {
       Some(result) => return Some(result)
       None => return None
@@ -887,7 +871,7 @@ fn MultiPassParser::parse_image_dest(
   text_end : Int,
   image_start : Int,
   alt : String,
-) -> (Inline, Int)? {
+) -> (@markdown.Inline, Int)? {
   let mut pos = start
 
   // Skip leading whitespace
@@ -981,11 +965,11 @@ fn MultiPassParser::parse_image_dest(
     return None
   }
   pos += 1
-  let inline = Inline::Image(
+  let inline = @markdown.Inline::Image(
     alt~,
     url~,
     title~,
-    span=Span::new(image_start, pos),
+    span=@markdown.Span::new(image_start, pos),
   )
   Some((inline, pos))
 }
@@ -998,7 +982,7 @@ fn MultiPassParser::parse_ref_image(
   text_end : Int,
   image_start : Int,
   alt : String,
-) -> (Inline, Int)? {
+) -> (@markdown.Inline, Int)? {
   let mut pos = start
   let label_buf = StringBuilder::new()
 
@@ -1014,7 +998,7 @@ fn MultiPassParser::parse_ref_image(
     }
   }
   let label = label_buf.to_string()
-  let inline = Inline::RefImage(alt~, label~, span=Span::new(image_start, pos))
+  let inline = @markdown.Inline::RefImage(alt~, label~, span=@markdown.Span::new(image_start, pos))
   Some((inline, pos))
 }
 
@@ -1024,7 +1008,7 @@ fn MultiPassParser::parse_autolink(
   self : MultiPassParser,
   start : Int,
   text_end : Int,
-) -> (Inline, Int)? {
+) -> (@markdown.Inline, Int)? {
   let mut pos = start + 1 // Skip <
   let url_buf = StringBuilder::new()
 
@@ -1040,7 +1024,7 @@ fn MultiPassParser::parse_autolink(
 
       // Check if it's an email
       let is_email = url.contains("@") && !url.has_prefix("http")
-      let inline = Inline::Autolink(url~, is_email~, span=Span::new(start, pos))
+      let inline = @markdown.Inline::Autolink(url~, is_email~, span=@markdown.Span::new(start, pos))
       return Some((inline, pos))
     } else if c == ' ' || c == '\t' || c == '\n' {
       // Invalid autolink
@@ -1059,7 +1043,7 @@ fn MultiPassParser::parse_strikethrough(
   self : MultiPassParser,
   opener_idx : Int,
   text_end : Int,
-) -> (Inline, Int)? {
+) -> (@markdown.Inline, Int)? {
   guard opener_idx < self.tokens.length() else { return None }
   let opener = self.tokens[opener_idx]
   guard opener is Strikethrough(opener_start, may_open, _) else { return None }
@@ -1077,11 +1061,11 @@ fn MultiPassParser::parse_strikethrough(
           return None
         }
         let children = [
-          Inline::Text(content~, span=Span::new(opener_start + 2, closer_start)),
+          @markdown.Inline::Text(content~, span=@markdown.Span::new(opener_start + 2, closer_start)),
         ]
-        let inline = Inline::Strikethrough(
+        let inline = @markdown.Inline::Strikethrough(
           children~,
-          span=Span::new(opener_start, closer_start + 2),
+          span=@markdown.Span::new(opener_start, closer_start + 2),
         )
         return Some((inline, closer_start + 2))
       }
@@ -1097,7 +1081,7 @@ fn process_escapes_str(
   text : String,
   start : Int,
   end : Int,
-  result : Array[Inline],
+  result : Array[@markdown.Inline],
 ) -> Unit {
   let buf = StringBuilder::new()
   let mut i = start
@@ -1111,14 +1095,14 @@ fn process_escapes_str(
         // Backslash + newline = hard break
         if buf.to_string().length() > 0 {
           result.push(
-            Inline::Text(content=buf.to_string(), span=Span::new(text_start, i)),
+            @markdown.Inline::Text(content=buf.to_string(), span=@markdown.Span::new(text_start, i)),
           )
           buf.reset()
         }
         result.push(
-          Inline::HardBreak(
-            style=HardBreakStyle::Backslash,
-            span=Span::new(i, i + 2),
+          @markdown.Inline::HardBreak(
+            style=@markdown.HardBreakStyle::Backslash,
+            span=@markdown.Span::new(i, i + 2),
           ),
         )
         i += 2
@@ -1139,7 +1123,7 @@ fn process_escapes_str(
   }
   let content = buf.to_string()
   if content.length() > 0 {
-    result.push(Inline::Text(content~, span=Span::new(text_start, end)))
+    result.push(@markdown.Inline::Text(content~, span=@markdown.Span::new(text_start, end)))
   }
 }
 
@@ -1159,7 +1143,7 @@ fn MultiPassParser::parse_emphasis(
   self : MultiPassParser,
   opener_idx : Int,
   text_end : Int,
-) -> (Array[Inline], Int)? {
+) -> (Array[@markdown.Inline], Int)? {
   // Get opener token
   guard opener_idx < self.tokens.length() else { return None }
   let opener = self.tokens[opener_idx]
@@ -1218,16 +1202,16 @@ fn MultiPassParser::parse_emphasis(
 
   // Create emphasis or strong inline
   let marker = if marker_char == '*' {
-    EmphasisMarker::Asterisk
+    @markdown.EmphasisMarker::Asterisk
   } else {
-    EmphasisMarker::Underscore
+    @markdown.EmphasisMarker::Underscore
   }
   let inline_end = closer_start + best_used
-  let span = Span::new(opener_start, inline_end)
+  let span = @markdown.Span::new(opener_start, inline_end)
   let inline = if best_used == 2 {
-    Inline::Strong(marker~, children~, span~)
+    @markdown.Inline::Strong(marker~, children~, span~)
   } else {
-    Inline::Emphasis(marker~, children~, span~)
+    @markdown.Inline::Emphasis(marker~, children~, span~)
   }
 
   // Return where to continue parsing
@@ -1244,8 +1228,8 @@ fn MultiPassParser::parse_range(
   text_end : Int,
   token_start : Int,
   token_end : Int,
-) -> Array[Inline] {
-  let result : Array[Inline] = []
+) -> Array[@markdown.Inline] {
+  let result : Array[@markdown.Inline] = []
   let mut pos = text_start
   let mut tok_idx = token_start
   while pos < text_end {
@@ -1298,9 +1282,9 @@ fn MultiPassParser::parse_range(
                   // No matching closer, add backticks as text
                   let text = self.substring(tok_start, tok_start + count)
                   result.push(
-                    Inline::Text(
+                    @markdown.Inline::Text(
                       content=text,
-                      span=Span::new(tok_start, tok_start + count),
+                      span=@markdown.Span::new(tok_start, tok_start + count),
                     ),
                   )
                   pos = tok_start + count
@@ -1311,9 +1295,9 @@ fn MultiPassParser::parse_range(
               // Escaped backtick, add as text
               let text = self.substring(tok_start, tok_start + count)
               result.push(
-                Inline::Text(
+                @markdown.Inline::Text(
                   content=text,
-                  span=Span::new(tok_start, tok_start + count),
+                  span=@markdown.Span::new(tok_start, tok_start + count),
                 ),
               )
               pos = tok_start + count
@@ -1339,9 +1323,9 @@ fn MultiPassParser::parse_range(
                   // Not valid emphasis, add markers as text
                   let marker_text = self.substring(tok_start, tok_start + count)
                   result.push(
-                    Inline::Text(
+                    @markdown.Inline::Text(
                       content=marker_text,
-                      span=Span::new(tok_start, tok_start + count),
+                      span=@markdown.Span::new(tok_start, tok_start + count),
                     ),
                   )
                   pos = tok_start + count
@@ -1352,9 +1336,9 @@ fn MultiPassParser::parse_range(
               // Closing marker without opener, add as text
               let marker_text = self.substring(tok_start, tok_start + count)
               result.push(
-                Inline::Text(
+                @markdown.Inline::Text(
                   content=marker_text,
-                  span=Span::new(tok_start, tok_start + count),
+                  span=@markdown.Span::new(tok_start, tok_start + count),
                 ),
               )
               pos = tok_start + count
@@ -1375,9 +1359,9 @@ fn MultiPassParser::parse_range(
               None => {
                 // Not a valid link, add [ as text
                 result.push(
-                  Inline::Text(
+                  @markdown.Inline::Text(
                     content="[",
-                    span=Span::new(tok_start, tok_start + 1),
+                    span=@markdown.Span::new(tok_start, tok_start + 1),
                   ),
                 )
                 pos = tok_start + 1
@@ -1399,9 +1383,9 @@ fn MultiPassParser::parse_range(
               None => {
                 // Not a valid image, add ![ as text
                 result.push(
-                  Inline::Text(
+                  @markdown.Inline::Text(
                     content="![",
-                    span=Span::new(tok_start, tok_start + 2),
+                    span=@markdown.Span::new(tok_start, tok_start + 2),
                   ),
                 )
                 pos = tok_start + 2
@@ -1423,9 +1407,9 @@ fn MultiPassParser::parse_range(
               None => {
                 // Not a valid autolink, add < as text
                 result.push(
-                  Inline::Text(
+                  @markdown.Inline::Text(
                     content="<",
-                    span=Span::new(tok_start, tok_start + 1),
+                    span=@markdown.Span::new(tok_start, tok_start + 1),
                   ),
                 )
                 pos = tok_start + 1
@@ -1448,9 +1432,9 @@ fn MultiPassParser::parse_range(
                 None => {
                   // Not valid strikethrough, add ~~ as text
                   result.push(
-                    Inline::Text(
+                    @markdown.Inline::Text(
                       content="~~",
-                      span=Span::new(tok_start, tok_start + 2),
+                      span=@markdown.Span::new(tok_start, tok_start + 2),
                     ),
                   )
                   pos = tok_start + 2
@@ -1460,9 +1444,9 @@ fn MultiPassParser::parse_range(
             } else {
               // Closing without opener
               result.push(
-                Inline::Text(
+                @markdown.Inline::Text(
                   content="~~",
-                  span=Span::new(tok_start, tok_start + 2),
+                  span=@markdown.Span::new(tok_start, tok_start + 2),
                 ),
               )
               pos = tok_start + 2
@@ -1472,7 +1456,7 @@ fn MultiPassParser::parse_range(
             if is_backslash_hard {
               // Remove trailing backslash from previous text if any
               match result.last() {
-                Some(Inline::Text(content~, span~)) if content.length() > 0 =>
+                Some(@markdown.Inline::Text(content~, span~)) if content.length() > 0 =>
                   // Check if last char is backslash
                   if content.get_char(content.length() - 1) == Some('\\') {
                     let _ = result.pop()
@@ -1482,9 +1466,9 @@ fn MultiPassParser::parse_range(
                         end=content.length() - 1,
                       )
                       result.push(
-                        Inline::Text(
+                        @markdown.Inline::Text(
                           content=new_content,
-                          span=Span::new(span.from, span.to - 1),
+                          span=@markdown.Span::new(span.from, span.to - 1),
                         ),
                       )
                     }
@@ -1492,21 +1476,21 @@ fn MultiPassParser::parse_range(
                 _ => ()
               }
               result.push(
-                Inline::HardBreak(
-                  style=HardBreakStyle::Backslash,
-                  span=Span::new(tok_start - 1, tok_start + 1),
+                @markdown.Inline::HardBreak(
+                  style=@markdown.HardBreakStyle::Backslash,
+                  span=@markdown.Span::new(tok_start - 1, tok_start + 1),
                 ),
               )
             } else if is_space_hard {
               result.push(
-                Inline::HardBreak(
-                  style=HardBreakStyle::TwoSpaces,
-                  span=Span::new(tok_start, tok_start + 1),
+                @markdown.Inline::HardBreak(
+                  style=@markdown.HardBreakStyle::TwoSpaces,
+                  span=@markdown.Span::new(tok_start, tok_start + 1),
                 ),
               )
             } else {
               result.push(
-                Inline::SoftBreak(span=Span::new(tok_start, tok_start + 1)),
+                @markdown.Inline::SoftBreak(span=@markdown.Span::new(tok_start, tok_start + 1)),
               )
             }
             pos = tok_start + 1
@@ -1526,7 +1510,7 @@ fn MultiPassParser::parse_range(
 
 ///|
 /// Parse all inlines using multi-pass approach
-pub fn parse_inlines_multipass(text : String) -> Array[Inline] {
+pub fn parse_inlines_multipass(text : String) -> Array[@markdown.Inline] {
   let parser = MultiPassParser::new(text)
   parser.parse_range(0, text.length(), 0, parser.tokens.length())
 }
@@ -1535,7 +1519,7 @@ pub fn parse_inlines_multipass(text : String) -> Array[Inline] {
 
 ///|
 test "tokenize: simple emphasis" {
-  let scanner = Scanner::new("*hello*")
+  let scanner = @markdown.Scanner::new("*hello*")
   let tokens = tokenize_inline(scanner)
   assert_eq(tokens.length(), 2)
 
@@ -1566,7 +1550,7 @@ test "tokenize: simple emphasis" {
 
 ///|
 test "tokenize: strong emphasis" {
-  let scanner = Scanner::new("**bold**")
+  let scanner = @markdown.Scanner::new("**bold**")
   let tokens = tokenize_inline(scanner)
   assert_eq(tokens.length(), 2)
   match tokens[0] {
@@ -1580,7 +1564,7 @@ test "tokenize: strong emphasis" {
 
 ///|
 test "tokenize: link" {
-  let scanner = Scanner::new("[text](url)")
+  let scanner = @markdown.Scanner::new("[text](url)")
   let tokens = tokenize_inline(scanner)
 
   // Should have: LinkStart, RightBrack, RightParen
@@ -1602,7 +1586,7 @@ test "tokenize: link" {
 
 ///|
 test "tokenize: escaped asterisk" {
-  let scanner = Scanner::new("\\*not emphasis\\*")
+  let scanner = @markdown.Scanner::new("\\*not emphasis\\*")
   let tokens = tokenize_inline(scanner)
 
   // Escaped asterisks should not create EmphasisMarks tokens
@@ -1617,7 +1601,7 @@ test "tokenize: escaped asterisk" {
 
 ///|
 test "tokenize: underscore in word" {
-  let scanner = Scanner::new("foo_bar_baz")
+  let scanner = @markdown.Scanner::new("foo_bar_baz")
   let tokens = tokenize_inline(scanner)
 
   // _ surrounded by word characters should not open/close
@@ -1633,7 +1617,7 @@ test "tokenize: underscore in word" {
 
 ///|
 test "closer_index: emphasis lookup" {
-  let scanner = Scanner::new("*hello* and *world*")
+  let scanner = @markdown.Scanner::new("*hello* and *world*")
   let tokens = tokenize_inline(scanner)
   let idx = build_closer_index(tokens)
 
@@ -1652,7 +1636,7 @@ test "closer_index: emphasis lookup" {
 
 ///|
 test "closer_index: link brackets" {
-  let scanner = Scanner::new("[link](url)")
+  let scanner = @markdown.Scanner::new("[link](url)")
   let tokens = tokenize_inline(scanner)
   let idx = build_closer_index(tokens)
 
@@ -1665,7 +1649,7 @@ test "closer_index: link brackets" {
 
 ///|
 test "closer_index: no closer" {
-  let scanner = Scanner::new("*unclosed")
+  let scanner = @markdown.Scanner::new("*unclosed")
   let tokens = tokenize_inline(scanner)
   let idx = build_closer_index(tokens)
 
@@ -1680,11 +1664,11 @@ test "multipass: simple emphasis" {
   let result = parse_inlines_multipass("*hello*")
   assert_eq(result.length(), 1)
   match result[0] {
-    Inline::Emphasis(children~, marker~, ..) => {
-      assert_eq(marker, EmphasisMarker::Asterisk)
+    @markdown.Inline::Emphasis(children~, marker~, ..) => {
+      assert_eq(marker, @markdown.EmphasisMarker::Asterisk)
       assert_eq(children.length(), 1)
       match children[0] {
-        Inline::Text(content~, ..) => assert_eq(content, "hello")
+        @markdown.Inline::Text(content~, ..) => assert_eq(content, "hello")
         _ => fail("Expected Text")
       }
     }
@@ -1697,8 +1681,8 @@ test "multipass: strong emphasis" {
   let result = parse_inlines_multipass("**bold**")
   assert_eq(result.length(), 1)
   match result[0] {
-    Inline::Strong(children~, marker~, ..) => {
-      assert_eq(marker, EmphasisMarker::Asterisk)
+    @markdown.Inline::Strong(children~, marker~, ..) => {
+      assert_eq(marker, @markdown.EmphasisMarker::Asterisk)
       assert_eq(children.length(), 1)
     }
     _ => fail("Expected Strong")
@@ -1718,7 +1702,7 @@ test "multipass: plain text" {
   let result = parse_inlines_multipass("hello world")
   assert_eq(result.length(), 1)
   match result[0] {
-    Inline::Text(content~, ..) => assert_eq(content, "hello world")
+    @markdown.Inline::Text(content~, ..) => assert_eq(content, "hello world")
     _ => fail("Expected Text")
   }
 }
@@ -1735,7 +1719,7 @@ test "multipass: code span" {
   let result = parse_inlines_multipass("`code`")
   assert_eq(result.length(), 1)
   match result[0] {
-    Inline::Code(content~, backtick_count~, ..) => {
+    @markdown.Inline::Code(content~, backtick_count~, ..) => {
       assert_eq(content, "code")
       assert_eq(backtick_count, 1)
     }
@@ -1748,7 +1732,7 @@ test "multipass: double backtick code span" {
   let result = parse_inlines_multipass("``code with ` backtick``")
   assert_eq(result.length(), 1)
   match result[0] {
-    Inline::Code(content~, backtick_count~, ..) => {
+    @markdown.Inline::Code(content~, backtick_count~, ..) => {
       assert_eq(content, "code with ` backtick")
       assert_eq(backtick_count, 2)
     }
@@ -1761,7 +1745,7 @@ test "multipass: code span with space trimming" {
   let result = parse_inlines_multipass("` code `")
   assert_eq(result.length(), 1)
   match result[0] {
-    Inline::Code(content~, ..) => assert_eq(content, "code") // Spaces trimmed
+    @markdown.Inline::Code(content~, ..) => assert_eq(content, "code") // Spaces trimmed
     _ => fail("Expected Code")
   }
 }
@@ -1771,7 +1755,7 @@ test "multipass: inline link" {
   let result = parse_inlines_multipass("[text](url)")
   assert_eq(result.length(), 1)
   match result[0] {
-    Inline::Link(children~, url~, ..) => {
+    @markdown.Inline::Link(children~, url~, ..) => {
       assert_eq(url, "url")
       assert_eq(children.length(), 1)
     }
@@ -1784,7 +1768,7 @@ test "multipass: link with title" {
   let result = parse_inlines_multipass("[text](url \"title\")")
   assert_eq(result.length(), 1)
   match result[0] {
-    Inline::Link(url~, title~, ..) => {
+    @markdown.Inline::Link(url~, title~, ..) => {
       assert_eq(url, "url")
       assert_eq(title, "title")
     }
@@ -1797,7 +1781,7 @@ test "multipass: reference link" {
   let result = parse_inlines_multipass("[text][ref]")
   assert_eq(result.length(), 1)
   match result[0] {
-    Inline::RefLink(label~, ..) => assert_eq(label, "ref")
+    @markdown.Inline::RefLink(label~, ..) => assert_eq(label, "ref")
     _ => fail("Expected RefLink")
   }
 }
@@ -1807,7 +1791,7 @@ test "multipass: inline image" {
   let result = parse_inlines_multipass("![alt](url)")
   assert_eq(result.length(), 1)
   match result[0] {
-    Inline::Image(alt~, url~, ..) => {
+    @markdown.Inline::Image(alt~, url~, ..) => {
       assert_eq(alt, "alt")
       assert_eq(url, "url")
     }
@@ -1820,7 +1804,7 @@ test "multipass: reference image" {
   let result = parse_inlines_multipass("![alt][ref]")
   assert_eq(result.length(), 1)
   match result[0] {
-    Inline::RefImage(alt~, label~, ..) => {
+    @markdown.Inline::RefImage(alt~, label~, ..) => {
       assert_eq(alt, "alt")
       assert_eq(label, "ref")
     }
@@ -1833,7 +1817,7 @@ test "multipass: autolink url" {
   let result = parse_inlines_multipass("<http://example.com>")
   assert_eq(result.length(), 1)
   match result[0] {
-    Inline::Autolink(url~, is_email~, ..) => {
+    @markdown.Inline::Autolink(url~, is_email~, ..) => {
       assert_eq(url, "http://example.com")
       assert_eq(is_email, false)
     }
@@ -1846,7 +1830,7 @@ test "multipass: autolink email" {
   let result = parse_inlines_multipass("<test@example.com>")
   assert_eq(result.length(), 1)
   match result[0] {
-    Inline::Autolink(url~, is_email~, ..) => {
+    @markdown.Inline::Autolink(url~, is_email~, ..) => {
       assert_eq(url, "test@example.com")
       assert_eq(is_email, true)
     }
@@ -1859,10 +1843,10 @@ test "multipass: strikethrough" {
   let result = parse_inlines_multipass("~~deleted~~")
   assert_eq(result.length(), 1)
   match result[0] {
-    Inline::Strikethrough(children~, ..) => {
+    @markdown.Inline::Strikethrough(children~, ..) => {
       assert_eq(children.length(), 1)
       match children[0] {
-        Inline::Text(content~, ..) => assert_eq(content, "deleted")
+        @markdown.Inline::Text(content~, ..) => assert_eq(content, "deleted")
         _ => fail("Expected Text")
       }
     }
@@ -1878,7 +1862,7 @@ test "multipass: escaped asterisk" {
   // The escaped asterisks should be literal text
   let first = result[0]
   match first {
-    Inline::Text(content~, ..) => assert_true(content.contains("*"))
+    @markdown.Inline::Text(content~, ..) => assert_true(content.contains("*"))
     _ => ()
   }
 }
@@ -1888,7 +1872,7 @@ test "multipass: escaped backslash" {
   let result = parse_inlines_multipass("\\\\")
   assert_eq(result.length(), 1)
   match result[0] {
-    Inline::Text(content~, ..) => assert_eq(content, "\\")
+    @markdown.Inline::Text(content~, ..) => assert_eq(content, "\\")
     _ => fail("Expected Text")
   }
 }
@@ -1900,8 +1884,8 @@ test "multipass: backslash newline hard break" {
   let mut has_hard_break = false
   for item in result {
     match item {
-      Inline::HardBreak(style~, ..) => {
-        assert_eq(style, HardBreakStyle::Backslash)
+      @markdown.Inline::HardBreak(style~, ..) => {
+        assert_eq(style, @markdown.HardBreakStyle::Backslash)
         has_hard_break = true
       }
       _ => ()

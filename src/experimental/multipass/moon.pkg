@@ -1,0 +1,4 @@
+import {
+  "mizchi/markdown",
+  "moonbitlang/core/bench",
+}

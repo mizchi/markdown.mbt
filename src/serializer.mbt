@@ -1,6 +1,18 @@
 ///| CST Serializer - Convert CST back to markdown text (lossless roundtrip)
 
 ///|
+/// Parse markdown source and serialize back to a normalized string.
+/// Convenience wrapper around `parse` + `serialize` used by compatibility tests.
+pub fn md_parse_and_render(
+  source : String,
+  strict? : Bool = false,
+  wikilinks? : Bool = false,
+) -> String {
+  let result = parse(source, strict~, wikilinks~)
+  serialize(result.document)
+}
+
+///|
 /// Serialize document to markdown string
 pub fn serialize(doc : Document) -> String {
   let buf = StringBuilder::new()
