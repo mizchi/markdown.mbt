@@ -6,14 +6,25 @@ CST-based incremental Markdown parser implemented in MoonBit.
 
 ```
 src/
-├── types.mbt              # CST type definitions (Span, Block, Inline)
-├── scanner.mbt            # O(1) character access (Array[Char])
-├── block_parser.mbt       # Block parser
-├── inline_parser.mbt      # Inline parser
-├── incremental.mbt        # Incremental parsing (EditInfo)
-├── serializer.mbt         # Lossless serializer
-├── crdt_experiment.mbt    # CRDT experimental code
-└── bench.mbt              # Benchmarks
+├── types.mbt                       # CST type definitions (Span, Block, Inline)
+├── scanner.mbt                     # O(1) character access (Array[Char])
+├── unicode.mbt                     # Shared Unicode classification helpers
+├── block_parser.mbt                # Block parser dispatcher / paragraph / definitions
+├── block_parser_list.mbt           # Bullet & ordered list parsing
+├── block_parser_table.mbt          # GFM table parsing
+├── block_parser_html.mbt           # HTML block parsing
+├── block_parser_frontmatter.mbt    # YAML frontmatter parsing
+├── inline_parser.mbt               # Inline parser (single-pass)
+├── inline_parser_link.mbt          # Links, images, wikilinks, footnote refs
+├── inline_parser_strict.mbt        # CommonMark delimiter-stack emphasis
+├── incremental.mbt                 # Incremental parsing (EditInfo)
+├── serializer.mbt                  # Lossless serializer + md_parse_and_render
+├── renderer.mbt                    # HTML renderer + md_to_html
+├── api/                            # FFI exports for JS/WASM consumers
+├── experimental/
+│   ├── crdt/                       # CRDT experimental code (isolated)
+│   └── multipass/                  # Experimental multi-pass inline parser
+└── bench.mbt                       # Benchmarks (core parser only)
 ```
 
 ## Design Philosophy
