@@ -106,7 +106,9 @@ test "extract_description_from_blocks: first paragraph" {
     make_paragraph("This is the description."),
   ]
   let desc = extract_description_from_blocks(blocks)
-  inspect(desc, content="Some(\"This is the description.\")")
+  inspect(desc, content=(
+    #|Some(This is the description.)
+  ))
 }
 
 ///|
@@ -124,7 +126,9 @@ test "extract_description_from_blocks: truncation" {
 test "extract_description_from_blocks: prefers word boundary" {
   let blocks = [make_paragraph("alpha beta gamma delta")]
   let desc = extract_description_from_blocks(blocks, max_length=18)
-  inspect(desc, content="Some(\"alpha beta gamma...\")")
+  inspect(desc, content=(
+    #|Some(alpha beta gamma...)
+  ))
 }
 
 ///|

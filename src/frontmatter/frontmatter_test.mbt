@@ -6,8 +6,12 @@ fn make_fm(entries : Array[(String, String)]) -> @md.Frontmatter {
 ///|
 test "get_string: existing key" {
   let fm = make_fm([("title", "Hello"), ("description", "World")])
-  inspect(get_string(fm, "title"), content="Some(\"Hello\")")
-  inspect(get_string(fm, "description"), content="Some(\"World\")")
+  inspect(get_string(fm, "title"), content=(
+    #|Some(Hello)
+  ))
+  inspect(get_string(fm, "description"), content=(
+    #|Some(World)
+  ))
 }
 
 ///|

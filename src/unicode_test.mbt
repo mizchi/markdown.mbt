@@ -47,28 +47,44 @@ test "Scanner: emoji basic" {
 ///|
 test "Scanner: peek Japanese characters" {
   let s = Scanner::new("あいう")
-  inspect(s.peek(), content="Some('あ')")
+  inspect(s.peek(), content=(
+    #|Some(あ)
+  ))
   s.advance(1)
-  inspect(s.peek(), content="Some('い')")
+  inspect(s.peek(), content=(
+    #|Some(い)
+  ))
   s.advance(1)
-  inspect(s.peek(), content="Some('う')")
+  inspect(s.peek(), content=(
+    #|Some(う)
+  ))
 }
 
 ///|
 test "Scanner: peek Chinese characters" {
   let s = Scanner::new("中文字")
-  inspect(s.peek(), content="Some('中')")
+  inspect(s.peek(), content=(
+    #|Some(中)
+  ))
   s.advance(1)
-  inspect(s.peek(), content="Some('文')")
+  inspect(s.peek(), content=(
+    #|Some(文)
+  ))
   s.advance(1)
-  inspect(s.peek(), content="Some('字')")
+  inspect(s.peek(), content=(
+    #|Some(字)
+  ))
 }
 
 ///|
 test "Scanner: consume Japanese characters" {
   let s = Scanner::new("日本")
-  inspect(s.consume(), content="Some('日')")
-  inspect(s.consume(), content="Some('本')")
+  inspect(s.consume(), content=(
+    #|Some(日)
+  ))
+  inspect(s.consume(), content=(
+    #|Some(本)
+  ))
   inspect(s.consume(), content="None")
 }
 
@@ -447,9 +463,15 @@ test "String.code_unit_at with Japanese" {
 ///|
 test "String.get_char with Japanese" {
   let s = "日本語"
-  inspect(s.get_char(0), content="Some('日')")
-  inspect(s.get_char(1), content="Some('本')")
-  inspect(s.get_char(2), content="Some('語')")
+  inspect(s.get_char(0), content=(
+    #|Some(日)
+  ))
+  inspect(s.get_char(1), content=(
+    #|Some(本)
+  ))
+  inspect(s.get_char(2), content=(
+    #|Some(語)
+  ))
   inspect(s.get_char(3), content="None")
 }
 
@@ -739,13 +761,17 @@ test "INVESTIGATE: Scanner.chars array content with emoji" {
   inspect(s.len, content="3")
 
   // Check peek at each position
-  inspect(s.peek(), content="Some('A')")
+  inspect(s.peek(), content=(
+    #|Some(A)
+  ))
   s.advance(1)
   // Position 1 is the FULL emoji (code point)
   let emoji_char = s.peek()
   inspect(emoji_char is None, content="false")
   s.advance(1)
-  inspect(s.peek(), content="Some('B')")
+  inspect(s.peek(), content=(
+    #|Some(B)
+  ))
 }
 
 ///|
