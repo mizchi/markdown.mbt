@@ -9,7 +9,10 @@ src/
 ├── types.mbt                       # CST type definitions (Span, Block, Inline)
 ├── scanner.mbt                     # O(1) character access (Array[Char])
 ├── unicode.mbt                     # Shared Unicode classification helpers
-├── block_parser.mbt                # Block parser dispatcher / paragraph / definitions
+├── block_parser.mbt                # Block parser dispatcher / paragraph / blockquote / thematic break
+├── block_parser_heading.mbt        # ATX & setext heading parsing
+├── block_parser_code.mbt           # Fenced & indented code-block parsing
+├── block_parser_link_def.mbt       # Link reference & GFM footnote definitions
 ├── block_parser_list.mbt           # Bullet & ordered list parsing
 ├── block_parser_table.mbt          # GFM table parsing
 ├── block_parser_html.mbt           # HTML block parsing
@@ -20,6 +23,7 @@ src/
 ├── incremental.mbt                 # Incremental parsing (EditInfo)
 ├── serializer.mbt                  # Lossless serializer + md_parse_and_render
 ├── renderer.mbt                    # HTML renderer + md_to_html
+├── renderer_autolink.mbt           # Bare-URL autolink boundary helpers
 ├── plugin.mbt                      # CodeBlockInfo + RenderOptions + parse_code_block_info
 ├── api/                            # FFI exports for JS/WASM consumers
 ├── experimental/
