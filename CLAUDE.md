@@ -20,11 +20,16 @@ src/
 ├── incremental.mbt                 # Incremental parsing (EditInfo)
 ├── serializer.mbt                  # Lossless serializer + md_parse_and_render
 ├── renderer.mbt                    # HTML renderer + md_to_html
+├── plugin.mbt                      # CodeBlockInfo + RenderOptions + parse_code_block_info
 ├── api/                            # FFI exports for JS/WASM consumers
 ├── experimental/
 │   ├── crdt/                       # CRDT experimental code (isolated)
 │   └── multipass/                  # Experimental multi-pass inline parser
-└── bench.mbt                       # Benchmarks (core parser only)
+├── bench.mbt                       # Document parse/serialize/roundtrip benches
+├── bench_inline.mbt                # Inline parser benches
+├── bench_table.mbt                 # GFM table benches
+├── bench_scanner.mbt               # Scanner / block-only benches
+└── bench_incremental.mbt           # Incremental parser benches
 ```
 
 ## Design Philosophy

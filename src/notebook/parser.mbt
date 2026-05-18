@@ -18,8 +18,8 @@
 /// Parse code block info string with notebook attributes
 pub fn parse_code_block_attrs(
   info : String,
-) -> (@info_string.CodeBlockInfo, CodeBlockAttrs) {
-  let base_info = @info_string.parse(info)
+) -> (@markdown.CodeBlockInfo, CodeBlockAttrs) {
+  let base_info = @markdown.parse_code_block_info(info)
   let attrs = CodeBlockAttrs::new()
 
   // Parse meta string for notebook attributes

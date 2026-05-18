@@ -1,42 +1,74 @@
-///| FFI exports for AST access
+///| FFI exports for AST access.
+
+// =============================================================================
+// Internal handle storage
+// =============================================================================
 
 ///|
-/// Global document storage for AST access
-let ast_documents : Map[Int, @markdown.Document] = {}
+/// Per-handle state. `source` is populated only when the caller intends to do
+/// incremental parsing later; one-shot AST handles leave it as `""`.
+priv struct AstEntry {
+  document : @markdown.Document
+  source : String
+  has_source : Bool
+  wikilinks : Bool
+}
 
 ///|
-/// Next available handle ID
+let ast_store : Map[Int, AstEntry] = {}
+
+///|
 let ast_next_handle : Ref[Int] = Ref::new(1)
+
+///|
+/// Allocate a new handle for the given entry and store it.
+fn alloc_handle(entry : AstEntry) -> Int {
+  let handle = ast_next_handle.val
+  ast_next_handle.val = handle + 1
+  ast_store[handle] = entry
+  handle
+}
+
+///|
+/// Render a handle to a string by applying `f` to its document.
+/// Returns the empty string for invalid handles.
+fn with_doc(handle : Int, f : (@markdown.Document) -> String) -> String {
+  match ast_store.get(handle) {
+    Some(entry) => f(entry.document)
+    None => ""
+  }
+}
+
+// =============================================================================
+// AST handle APIs
+// =============================================================================
 
 ///|
 /// Parse markdown and return handle for AST access
 pub fn md_parse_to_ast(source : String) -> Int {
   let result = @markdown.parse(source)
-  let handle = ast_next_handle.val
-  ast_next_handle.val = handle + 1
-  ast_documents[handle] = result.document
-  handle
+  alloc_handle({
+    document: result.document,
+    source: "",
+    has_source: false,
+    wikilinks: false,
+  })
 }
 
-///| Get AST as JSON string from handle
-
 ///|
-/// Returns empty string if handle is invalid
+/// Get AST as JSON string from handle. Returns empty string if handle is invalid.
 pub fn md_get_ast(handle : Int) -> String {
-  match ast_documents.get(handle) {
-    Some(doc) => document_to_json(doc)
-    None => ""
-  }
+  with_doc(handle, document_to_json)
 }
 
 ///|
 /// Free AST handle
 pub fn md_free_ast(handle : Int) -> Unit {
-  ast_documents.remove(handle)
+  ast_store.remove(handle)
 }
 
 // =============================================================================
-// Stateless One-shot APIs (no handle management needed)
+// Stateless one-shot APIs (no handle management needed)
 // =============================================================================
 
 ///|
@@ -104,84 +136,65 @@ pub fn md_to_ast_json_with_wikilinks(source : String) -> String {
 }
 
 // =============================================================================
-// Handle-based APIs with HTML/Serialize support
+// Handle-based render APIs
 // =============================================================================
 
 ///|
 /// Render handle's document to HTML
 pub fn md_render_html(handle : Int) -> String {
-  match ast_documents.get(handle) {
-    Some(doc) => @markdown.render_html(doc)
-    None => ""
-  }
+  with_doc(handle, fn(doc) { @markdown.render_html(doc) })
 }
 
 ///|
 /// Render handle's document to HTML with bare URL autolinks enabled
 pub fn md_render_html_with_autolink(handle : Int) -> String {
-  match ast_documents.get(handle) {
-    Some(doc) => @markdown.render_html(doc, autolink=true)
-    None => ""
-  }
+  with_doc(handle, fn(doc) { @markdown.render_html(doc, autolink=true) })
 }
 
 ///|
 /// Render handle's document to HTML with bare URL autolinks disabled
 pub fn md_render_html_without_autolink(handle : Int) -> String {
-  match ast_documents.get(handle) {
-    Some(doc) => @markdown.render_html(doc, autolink=false)
-    None => ""
-  }
+  with_doc(handle, fn(doc) { @markdown.render_html(doc, autolink=false) })
 }
 
 ///|
 /// Serialize handle's document back to markdown
 pub fn md_serialize(handle : Int) -> String {
-  match ast_documents.get(handle) {
-    Some(doc) => @markdown.serialize(doc)
-    None => ""
-  }
+  with_doc(handle, @markdown.serialize)
 }
 
 // =============================================================================
-// Incremental Parsing API
+// Incremental parsing API
 // =============================================================================
-
-///|
-/// Stored source for incremental parsing
-let ast_sources : Map[Int, String] = {}
-
-///|
-/// Per-handle extension flags.
-let ast_wikilinks : Map[Int, Bool] = {}
 
 ///|
 /// Parse markdown and store source for incremental updates
 pub fn md_parse_with_source(source : String) -> Int {
   let result = @markdown.parse(source)
-  let handle = ast_next_handle.val
-  ast_next_handle.val = handle + 1
-  ast_documents[handle] = result.document
-  ast_sources[handle] = source
-  ast_wikilinks[handle] = false
-  handle
+  alloc_handle({
+    document: result.document,
+    source,
+    has_source: true,
+    wikilinks: false,
+  })
 }
 
 ///|
 /// Parse markdown with wikilinks enabled and store source for incremental updates
 pub fn md_parse_with_source_with_wikilinks(source : String) -> Int {
   let result = @markdown.parse(source, wikilinks=true)
-  let handle = ast_next_handle.val
-  ast_next_handle.val = handle + 1
-  ast_documents[handle] = result.document
-  ast_sources[handle] = source
-  ast_wikilinks[handle] = true
-  handle
+  alloc_handle({
+    document: result.document,
+    source,
+    has_source: true,
+    wikilinks: true,
+  })
 }
 
 ///|
-/// Parse incrementally from an existing handle
-/// Returns new handle with updated document
+/// Parse incrementally from an existing handle.
+/// Returns new handle with updated document, or 0 if the handle is invalid
+/// or was not registered for incremental updates.
 pub fn md_parse_incremental(
   handle : Int,
   new_source : String,
@@ -189,30 +202,26 @@ pub fn md_parse_incremental(
   old_end : Int,
   new_end : Int,
 ) -> Int {
-  match (ast_documents.get(handle), ast_sources.get(handle)) {
-    (Some(doc), Some(old_source)) => {
-      let wikilinks = match ast_wikilinks.get(handle) {
-        Some(value) => value
-        None => false
-      }
+  match ast_store.get(handle) {
+    Some(entry) if entry.has_source => {
       let edit = @markdown.EditInfo::replace(
         change_start,
         old_end - change_start,
         new_end - change_start,
       )
       let inc_result = @markdown.parse_incremental(
-        doc,
-        old_source,
+        entry.document,
+        entry.source,
         new_source,
         edit,
-        wikilinks~,
+        wikilinks=entry.wikilinks,
       )
-      let new_handle = ast_next_handle.val
-      ast_next_handle.val = new_handle + 1
-      ast_documents[new_handle] = inc_result.document
-      ast_sources[new_handle] = new_source
-      ast_wikilinks[new_handle] = wikilinks
-      new_handle
+      alloc_handle({
+        document: inc_result.document,
+        source: new_source,
+        has_source: true,
+        wikilinks: entry.wikilinks,
+      })
     }
     _ => 0
   }
@@ -221,7 +230,5 @@ pub fn md_parse_incremental(
 ///|
 /// Free handle and its source
 pub fn md_free(handle : Int) -> Unit {
-  ast_documents.remove(handle)
-  ast_sources.remove(handle)
-  ast_wikilinks.remove(handle)
+  ast_store.remove(handle)
 }

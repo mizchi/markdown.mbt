@@ -1,6 +1,6 @@
 ///|
 test "parse: lang only" {
-  let info = parse("javascript")
+  let info = parse_code_block_info("javascript")
   inspect(info.lang, content="javascript")
   inspect(info.filename, content="")
   inspect(info.meta, content="")
@@ -8,7 +8,7 @@ test "parse: lang only" {
 
 ///|
 test "parse: lang with filename" {
-  let info = parse("js:app.js")
+  let info = parse_code_block_info("js:app.js")
   inspect(info.lang, content="js")
   inspect(info.filename, content="app.js")
   inspect(info.meta, content="")
@@ -16,7 +16,7 @@ test "parse: lang with filename" {
 
 ///|
 test "parse: lang with path filename" {
-  let info = parse("typescript:src/index.ts")
+  let info = parse_code_block_info("typescript:src/index.ts")
   inspect(info.lang, content="typescript")
   inspect(info.filename, content="src/index.ts")
   inspect(info.meta, content="")
@@ -24,7 +24,7 @@ test "parse: lang with path filename" {
 
 ///|
 test "parse: lang with meta" {
-  let info = parse("js {highlight=[1,3]}")
+  let info = parse_code_block_info("js {highlight=[1,3]}")
   inspect(info.lang, content="js")
   inspect(info.filename, content="")
   inspect(info.meta, content="{highlight=[1,3]}")
@@ -32,7 +32,7 @@ test "parse: lang with meta" {
 
 ///|
 test "parse: lang, filename, and meta" {
-  let info = parse("ts:index.ts {highlight=[1,3]}")
+  let info = parse_code_block_info("ts:index.ts {highlight=[1,3]}")
   inspect(info.lang, content="ts")
   inspect(info.filename, content="index.ts")
   inspect(info.meta, content="{highlight=[1,3]}")
@@ -40,7 +40,7 @@ test "parse: lang, filename, and meta" {
 
 ///|
 test "parse: preserves emoji filename" {
-  let info = parse("ts:src/😀.ts")
+  let info = parse_code_block_info("ts:src/😀.ts")
   inspect(info.lang, content="ts")
   inspect(info.filename, content="src/😀.ts")
   inspect(info.meta, content="")
@@ -48,7 +48,7 @@ test "parse: preserves emoji filename" {
 
 ///|
 test "parse: preserves emoji meta" {
-  let info = parse("ts:index.ts {title=😀}")
+  let info = parse_code_block_info("ts:index.ts {title=😀}")
   inspect(info.lang, content="ts")
   inspect(info.filename, content="index.ts")
   inspect(info.meta, content="{title=😀}")
@@ -56,7 +56,7 @@ test "parse: preserves emoji meta" {
 
 ///|
 test "parse: empty string" {
-  let info = parse("")
+  let info = parse_code_block_info("")
   inspect(info.lang, content="")
   inspect(info.filename, content="")
   inspect(info.meta, content="")
@@ -64,7 +64,7 @@ test "parse: empty string" {
 
 ///|
 test "parse: whitespace only" {
-  let info = parse("  ")
+  let info = parse_code_block_info("  ")
   inspect(info.lang, content="")
   inspect(info.filename, content="")
   inspect(info.meta, content="")
@@ -72,7 +72,7 @@ test "parse: whitespace only" {
 
 ///|
 test "parse: json package.json" {
-  let info = parse("json:package.json")
+  let info = parse_code_block_info("json:package.json")
   inspect(info.lang, content="json")
   inspect(info.filename, content="package.json")
   inspect(info.meta, content="")
