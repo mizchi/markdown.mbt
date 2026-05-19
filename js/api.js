@@ -11,6 +11,8 @@ import {
   md_to_html_with_wikilinks_without_autolink,
   md_to_html_literal,
   md_to_html_literal_with_wikilinks,
+  md_to_html_literal_with_positions,
+  md_to_html_literal_with_positions_and_wikilinks,
   md_to_markdown,
   md_to_markdown_with_wikilinks,
   md_to_ast_json,
@@ -99,9 +101,12 @@ export function toMarkdown(source, options = {}) {
  * @returns {string} HTML
  */
 export function toHtmlLiteral(source, options = {}) {
-  return useWikilinks(options)
-    ? md_to_html_literal_with_wikilinks(source)
-    : md_to_html_literal(source);
+  const wikilinks = useWikilinks(options);
+  const positions = options?.positions === true;
+  if (positions && wikilinks) return md_to_html_literal_with_positions_and_wikilinks(source);
+  if (positions) return md_to_html_literal_with_positions(source);
+  if (wikilinks) return md_to_html_literal_with_wikilinks(source);
+  return md_to_html_literal(source);
 }
 
 // =============================================================================

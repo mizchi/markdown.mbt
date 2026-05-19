@@ -149,6 +149,23 @@ pub fn md_to_html_literal_with_wikilinks(source : String) -> String {
   @markdown.md_to_html_literal(source, wikilinks=true)
 }
 
+///|
+/// Same as `md_to_html_literal`, but every top-level block also carries
+/// `data-src-start` / `data-src-end` attributes. Click handlers can walk
+/// the DOM to the nearest annotated ancestor and use those offsets to
+/// place a cursor in the original source.
+pub fn md_to_html_literal_with_positions(source : String) -> String {
+  @markdown.md_to_html_literal(source, positions=true)
+}
+
+///|
+/// `md_to_html_literal_with_positions` with wikilinks parsing enabled.
+pub fn md_to_html_literal_with_positions_and_wikilinks(
+  source : String,
+) -> String {
+  @markdown.md_to_html_literal(source, wikilinks=true, positions=true)
+}
+
 // =============================================================================
 // Handle-based render APIs
 // =============================================================================

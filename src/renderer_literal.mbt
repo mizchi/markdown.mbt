@@ -16,10 +16,30 @@
 ///| `<a>`, `<ul>` / `<ol>` / `<li>`, `<blockquote>`, `<pre><code>`, …) carry
 ///| the role for assistive technology; the marker spans are
 ///| `aria-hidden="true"` so screen readers skip them.
+///|
+///| When `positions=true` the renderer also emits `data-src-start` /
+///| `data-src-end` attributes (character offsets into the original source)
+///| on **block-level** elements (`<h1>` – `<h6>`, `<p>`, `<ul>`, `<ol>`,
+///| `<li>`, `<blockquote>`, `<pre>`, `<table>`, `<th>` / `<td>`, the
+///| thematic-break / fenced-code wrappers, footnote definitions). Inline
+///| spans coming from the inline parser are recorded relative to the
+///| block's content, not to the document, so they are not directly usable
+///| as document offsets and are intentionally omitted.
+///|
+///| For a "click in the preview → place cursor in the source" editor, walk
+///| up the DOM to the nearest ancestor with `data-src-start`. The literal
+///| renderer's visible-text invariant guarantees that the offset of a
+///| character inside that ancestor's text content equals
+///| `data-src-start + that-character's-index-within-the-ancestor`, so
+///| `caretRangeFromPoint` plus a quick text-node walk yields the exact
+///| source offset.
 
 ///|
 /// Render a document to HTML using the literal (source-preserving) mode.
-pub fn render_html_literal(doc : Document) -> String {
+pub fn render_html_literal(
+  doc : Document,
+  positions? : Bool = false,
+) -> String {
   let buf = StringBuilder::new()
   let mut first = true
   for block in doc.children {
@@ -31,16 +51,20 @@ pub fn render_html_literal(doc : Document) -> String {
       buf.write_char('\n')
     }
     first = false
-    render_block_literal(block, buf)
+    render_block_literal(block, buf, positions)
   }
   buf.to_string()
 }
 
 ///|
 /// Parse markdown and render with the literal renderer in one step.
-pub fn md_to_html_literal(source : String, wikilinks? : Bool = false) -> String {
+pub fn md_to_html_literal(
+  source : String,
+  wikilinks? : Bool = false,
+  positions? : Bool = false,
+) -> String {
   let result = parse(source, wikilinks~)
-  render_html_literal(result.document)
+  render_html_literal(result.document, positions~)
 }
 
 // =============================================================================
@@ -57,6 +81,21 @@ fn write_marker(buf : StringBuilder, text : String) -> Unit {
   buf.write_string("<span class=\"md-marker\" aria-hidden=\"true\">")
   buf.write_string(escape_html(text))
   buf.write_string("</span>")
+}
+
+///|
+/// Compose ` data-src-start="X" data-src-end="Y"` (with a leading space)
+/// when `positions=true`. Otherwise an empty string.
+fn pos_attrs(span : Span, positions : Bool) -> String {
+  if positions {
+    " data-src-start=\"" +
+    span.from.to_string() +
+    "\" data-src-end=\"" +
+    span.to.to_string() +
+    "\""
+  } else {
+    ""
+  }
 }
 
 ///|
@@ -102,24 +141,29 @@ fn prefix_blockquote_lines(html : String) -> String {
 // =============================================================================
 
 ///|
-fn render_block_literal(block : Block, buf : StringBuilder) -> Unit {
+fn render_block_literal(
+  block : Block,
+  buf : StringBuilder,
+  positions : Bool,
+) -> Unit {
   match block {
-    Block::ThematicBreak(..) => {
-      // Always normalize to ***. `<div role="separator">` keeps the semantic
-      // (a thematic break) while still rendering the characters in the flow.
-      buf.write_string("<div role=\"separator\">")
+    Block::ThematicBreak(span~, ..) => {
+      buf.write_string("<div role=\"separator\"")
+      buf.write_string(pos_attrs(span, positions))
+      buf.write_char('>')
       write_marker(buf, "***")
       buf.write_string("</div>\n")
     }
-    Block::Heading(level~, style~, children~, ..) =>
+    Block::Heading(level~, style~, children~, span~, ..) =>
       match style {
         HeadingStyle::Atx => {
           buf.write_string("<h")
           buf.write_string(level.to_string())
+          buf.write_string(pos_attrs(span, positions))
           buf.write_char('>')
           if !children.is_empty() {
             write_marker(buf, repeat_char('#', level) + " ")
-            render_inlines_literal(children, buf)
+            render_inlines_literal(children, buf, positions)
           } else {
             write_marker(buf, repeat_char('#', level))
           }
@@ -128,12 +172,11 @@ fn render_block_literal(block : Block, buf : StringBuilder) -> Unit {
           buf.write_string(">\n")
         }
         HeadingStyle::Setext => {
-          // Setext is two lines: title then === or ---. Both lines must end
-          // up inside `<h1>` / `<h2>` so the heading carries the full text.
           buf.write_string("<h")
           buf.write_string(level.to_string())
+          buf.write_string(pos_attrs(span, positions))
           buf.write_char('>')
-          render_inlines_literal(children, buf)
+          render_inlines_literal(children, buf, positions)
           buf.write_char('\n')
           let underline_char = if level == 1 { '=' } else { '-' }
           write_marker(buf, repeat_char(underline_char, 3))
@@ -142,15 +185,19 @@ fn render_block_literal(block : Block, buf : StringBuilder) -> Unit {
           buf.write_string(">\n")
         }
       }
-    Block::Paragraph(children~, ..) => {
-      buf.write_string("<p>")
-      render_inlines_literal(children, buf)
+    Block::Paragraph(children~, span~, ..) => {
+      buf.write_string("<p")
+      buf.write_string(pos_attrs(span, positions))
+      buf.write_char('>')
+      render_inlines_literal(children, buf, positions)
       buf.write_string("</p>\n")
     }
-    Block::FencedCode(info~, code~, ..) => {
+    Block::FencedCode(info~, code~, span~, ..) => {
       let fence_len = calc_fence_length(code)
       let fence = repeat_char('`', fence_len)
-      buf.write_string("<div class=\"md-fenced-code\">")
+      buf.write_string("<div class=\"md-fenced-code\"")
+      buf.write_string(pos_attrs(span, positions))
+      buf.write_char('>')
       write_marker(buf, fence + info)
       buf.write_char('\n')
       if info.is_empty() {
@@ -170,11 +217,12 @@ fn render_block_literal(block : Block, buf : StringBuilder) -> Unit {
       write_marker(buf, fence)
       buf.write_string("</div>\n")
     }
-    Block::IndentedCode(code~, ..) => {
-      // Serializer normalizes indented code to fenced code, so mirror that.
+    Block::IndentedCode(code~, span~, ..) => {
       let fence_len = calc_fence_length(code)
       let fence = repeat_char('`', fence_len)
-      buf.write_string("<div class=\"md-fenced-code\">")
+      buf.write_string("<div class=\"md-fenced-code\"")
+      buf.write_string(pos_attrs(span, positions))
+      buf.write_char('>')
       write_marker(buf, fence)
       buf.write_char('\n')
       buf.write_string("<pre><code>")
@@ -186,67 +234,66 @@ fn render_block_literal(block : Block, buf : StringBuilder) -> Unit {
       write_marker(buf, fence)
       buf.write_string("</div>\n")
     }
-    Block::Blockquote(children~, ..) => {
-      // No trailing `\n` after `</blockquote>` because each prefixed line
-      // already ends with `\n` (matching the serializer).
-      buf.write_string("<blockquote>")
+    Block::Blockquote(children~, span~, ..) => {
+      buf.write_string("<blockquote")
+      buf.write_string(pos_attrs(span, positions))
+      buf.write_char('>')
+      // Children are parsed inside the blockquote and their spans are
+      // relative to the blockquote's content, not the document, so don't
+      // emit `data-src` on them. The outer <blockquote> annotation is
+      // enough — clicks inside it walk up to here.
       for child in children {
         let child_buf = StringBuilder::new()
-        render_block_literal(child, child_buf)
+        render_block_literal(child, child_buf, false)
         buf.write_string(prefix_blockquote_lines(child_buf.to_string()))
       }
       buf.write_string("</blockquote>")
     }
-    Block::BulletList(items~, ..) => {
-      // No trailing `\n` after `</ul>` — each `<li>` provides its own.
+    Block::BulletList(items~, span~, ..) => {
       let has_task = items.iter().any(fn(item) { !(item.checked is None) })
-      if has_task {
-        buf.write_string("<ul class=\"contains-task-list\">")
+      buf.write_string(if has_task {
+        "<ul class=\"contains-task-list\""
       } else {
-        buf.write_string("<ul>")
-      }
-      render_bullet_items_literal(items, buf, 0)
+        "<ul"
+      })
+      buf.write_string(pos_attrs(span, positions))
+      buf.write_char('>')
+      render_bullet_items_literal(items, buf, 0, positions)
       buf.write_string("</ul>")
     }
-    Block::OrderedList(start~, items~, ..) => {
+    Block::OrderedList(start~, items~, span~, ..) => {
       let has_task = items.iter().any(fn(item) { !(item.checked is None) })
-      if start == 1 {
-        if has_task {
-          buf.write_string("<ol class=\"contains-task-list\">")
-        } else {
-          buf.write_string("<ol>")
-        }
-      } else {
-        if has_task {
-          buf.write_string("<ol class=\"contains-task-list\" start=\"")
-        } else {
-          buf.write_string("<ol start=\"")
-        }
+      let open_tag = if has_task { "<ol class=\"contains-task-list\"" } else { "<ol" }
+      buf.write_string(open_tag)
+      if start != 1 {
+        buf.write_string(" start=\"")
         buf.write_string(start.to_string())
-        buf.write_string("\">")
+        buf.write_char('"')
       }
-      render_ordered_items_literal(items, buf, 0, start)
+      buf.write_string(pos_attrs(span, positions))
+      buf.write_char('>')
+      render_ordered_items_literal(items, buf, 0, start, positions)
       buf.write_string("</ol>")
     }
-    Block::HtmlBlock(html~, ..) => {
-      // Raw HTML passes through. The visible-text invariant still holds
-      // because raw HTML is opaque to both renderer and serializer.
-      buf.write_string(html)
+    Block::HtmlBlock(html~, span~, ..) => {
+      buf.write_string("<span class=\"md-html-block\"")
+      buf.write_string(pos_attrs(span, positions))
+      buf.write_char('>')
+      buf.write_string(escape_html(html))
+      buf.write_string("</span>")
       if !html.has_suffix("\n") {
         buf.write_char('\n')
       }
     }
-    Block::Table(header~, alignments~, rows~, ..) => {
-      // Mirror the serializer's normalized pipe-table form, with each
-      // pipe and dashes wrapped as markers. Visible text is:
-      //   | h1 | h2 |\n| --- | --- |\n| a | b |\n
-      render_table_literal(header, alignments, rows, buf)
-    }
-    Block::BlankLines(..) => () // Already filtered at the doc level.
-    Block::FootnoteDefinition(label~, children~, ..) => {
+    Block::Table(header~, alignments~, rows~, span~, ..) =>
+      render_table_literal(header, alignments, rows, span, buf, positions)
+    Block::BlankLines(..) => ()
+    Block::FootnoteDefinition(label~, children~, span~, ..) => {
       buf.write_string("<div class=\"footnote\" id=\"fn-")
       buf.write_string(escape_html(label))
-      buf.write_string("\">")
+      buf.write_char('"')
+      buf.write_string(pos_attrs(span, positions))
+      buf.write_char('>')
       write_marker(buf, "[^" + label + "]: ")
       let mut first = true
       for child in children {
@@ -255,7 +302,7 @@ fn render_block_literal(block : Block, buf : StringBuilder) -> Unit {
           write_marker(buf, "    ")
         }
         let child_buf = StringBuilder::new()
-        render_block_literal(child, child_buf)
+        render_block_literal(child, child_buf, positions)
         buf.write_string(strip_trailing_newline(child_buf.to_string()))
         first = false
       }
@@ -269,11 +316,14 @@ fn render_table_literal(
   header : Array[TableCell],
   alignments : Array[TableAlign],
   rows : Array[Array[TableCell]],
+  span : Span,
   buf : StringBuilder,
+  positions : Bool,
 ) -> Unit {
-  buf.write_string("<table>")
+  buf.write_string("<table")
+  buf.write_string(pos_attrs(span, positions))
+  buf.write_char('>')
   buf.write_string("<thead><tr>")
-  // Header row visible: "| cell | cell |\n"
   write_marker(buf, "|")
   for i, cell in header {
     let align = if i < alignments.length() {
@@ -281,11 +331,10 @@ fn render_table_literal(
     } else {
       TableAlign::None
     }
-    render_table_cell_literal(cell, "th", align, buf)
+    render_table_cell_literal(cell, "th", align, buf, positions)
   }
   buf.write_char('\n')
   buf.write_string("</tr></thead>")
-  // Separator row (markers, no semantic cells).
   buf.write_string("<tr aria-hidden=\"true\" class=\"md-table-separator\">")
   write_marker(buf, "|")
   for align in alignments {
@@ -310,7 +359,7 @@ fn render_table_literal(
         } else {
           TableAlign::None
         }
-        render_table_cell_literal(cell, "td", align, buf)
+        render_table_cell_literal(cell, "td", align, buf, positions)
       }
       buf.write_char('\n')
       buf.write_string("</tr>")
@@ -326,7 +375,12 @@ fn render_table_cell_literal(
   tag : String,
   align : TableAlign,
   buf : StringBuilder,
+  positions : Bool,
 ) -> Unit {
+  // Cell spans are relative to the cell content, not the document.
+  // The enclosing <table data-src-*> covers the whole grid; the click
+  // handler walks up from a cell click to there.
+  let _ = positions
   let align_attr = match align {
     TableAlign::Left => " style=\"text-align: left\""
     TableAlign::Center => " style=\"text-align: center\""
@@ -338,7 +392,7 @@ fn render_table_cell_literal(
   buf.write_string(align_attr)
   buf.write_char('>')
   write_marker(buf, " ")
-  render_inlines_literal(cell.children, buf)
+  render_inlines_literal(cell.children, buf, false)
   buf.write_string("</")
   buf.write_string(tag)
   buf.write_char('>')
@@ -346,14 +400,20 @@ fn render_table_cell_literal(
 }
 
 ///|
-/// Render bullet-list items. `indent` is the column at which the marker sits.
+/// Render bullet-list items.
 fn render_bullet_items_literal(
   items : Array[ListItem],
   buf : StringBuilder,
   indent : Int,
+  positions : Bool,
 ) -> Unit {
   for item in items {
-    buf.write_string("<li>")
+    // Top-level item spans are absolute, but blocks parsed inside the
+    // item (nested lists, paragraphs) carry relative spans, so only
+    // annotate the <li> and stop recursion's annotation there.
+    buf.write_string("<li")
+    buf.write_string(pos_attrs(item.span, positions))
+    buf.write_char('>')
     let prefix = repeat_char(' ', indent) + "* "
     write_marker(buf, prefix)
     match item.checked {
@@ -361,7 +421,7 @@ fn render_bullet_items_literal(
       Some(false) => write_marker(buf, "[ ] ")
       None => ()
     }
-    render_list_item_content_literal(item, buf, indent + 2)
+    render_list_item_content_literal(item, buf, indent + 2, false)
     buf.write_string("</li>")
   }
 }
@@ -373,10 +433,13 @@ fn render_ordered_items_literal(
   buf : StringBuilder,
   indent : Int,
   start : Int,
+  positions : Bool,
 ) -> Unit {
   let mut num = start
   for item in items {
-    buf.write_string("<li>")
+    buf.write_string("<li")
+    buf.write_string(pos_attrs(item.span, positions))
+    buf.write_char('>')
     let prefix = repeat_char(' ', indent) + num.to_string() + ". "
     write_marker(buf, prefix)
     match item.checked {
@@ -384,7 +447,7 @@ fn render_ordered_items_literal(
       Some(false) => write_marker(buf, "[ ] ")
       None => ()
     }
-    render_list_item_content_literal(item, buf, indent + 3)
+    render_list_item_content_literal(item, buf, indent + 3, false)
     buf.write_string("</li>")
     num += 1
   }
@@ -395,12 +458,13 @@ fn render_list_item_content_literal(
   item : ListItem,
   buf : StringBuilder,
   nested_indent : Int,
+  positions : Bool,
 ) -> Unit {
   let mut first_block = true
   for child in item.children {
     match child {
       Block::Paragraph(children=para_children, ..) => {
-        render_inlines_literal(para_children, buf)
+        render_inlines_literal(para_children, buf, positions)
         buf.write_char('\n')
         first_block = false
       }
@@ -409,7 +473,7 @@ fn render_list_item_content_literal(
           buf.write_char('\n')
         }
         buf.write_string("<ul>")
-        render_bullet_items_literal(nested_items, buf, nested_indent)
+        render_bullet_items_literal(nested_items, buf, nested_indent, positions)
         buf.write_string("</ul>")
       }
       Block::OrderedList(items=nested_items, start=nested_start, ..) => {
@@ -422,14 +486,12 @@ fn render_list_item_content_literal(
           buf,
           nested_indent,
           nested_start,
+          positions,
         )
         buf.write_string("</ol>")
       }
       _ => {
-        // Fallback: render the inner block normally. This may not preserve
-        // visible-text invariance perfectly for complex constructs but
-        // covers the common cases.
-        render_block_literal(child, buf)
+        render_block_literal(child, buf, positions)
         first_block = false
       }
     }
@@ -447,48 +509,56 @@ fn render_list_item_content_literal(
 fn render_inlines_literal(
   inlines : Array[Inline],
   buf : StringBuilder,
+  positions : Bool,
 ) -> Unit {
   for inline in inlines {
-    render_inline_literal(inline, buf)
+    render_inline_literal(inline, buf, positions)
   }
 }
 
 ///|
-fn render_inline_literal(inline : Inline, buf : StringBuilder) -> Unit {
+fn render_inline_literal(
+  inline : Inline,
+  buf : StringBuilder,
+  positions : Bool,
+) -> Unit {
+  // Inline spans come from the inline parser and are relative to the
+  // surrounding block's content, not the document. They are intentionally
+  // omitted from `data-src-*` annotations — the block-level ancestor's
+  // span is enough to recover precise source offsets via the visible-text
+  // invariant.
+  let _ = positions
   match inline {
     Inline::Text(content~, ..) => buf.write_string(escape_html(content))
     Inline::SoftBreak(..) => buf.write_char('\n')
     Inline::HardBreak(..) => {
-      // Serializer emits `\\\n`. Wrap the backslash as a marker.
       write_marker(buf, "\\")
       buf.write_char('\n')
     }
     Inline::Emphasis(children~, ..) => {
       buf.write_string("<em>")
       write_marker(buf, "*")
-      render_inlines_literal(children, buf)
+      render_inlines_literal(children, buf, positions)
       write_marker(buf, "*")
       buf.write_string("</em>")
     }
     Inline::Strong(children~, ..) => {
       buf.write_string("<strong>")
       write_marker(buf, "**")
-      render_inlines_literal(children, buf)
+      render_inlines_literal(children, buf, positions)
       write_marker(buf, "**")
       buf.write_string("</strong>")
     }
     Inline::Strikethrough(children~, ..) => {
       buf.write_string("<del>")
       write_marker(buf, "~~")
-      render_inlines_literal(children, buf)
+      render_inlines_literal(children, buf, positions)
       write_marker(buf, "~~")
       buf.write_string("</del>")
     }
     Inline::Code(content~, ..) => {
       let backticks = calc_code_span_backticks(content)
       let tick_str = repeat_char('`', backticks)
-      // Mirror the serializer's space-padding rule for code spans whose
-      // content begins or ends with a backtick.
       let needs_padding = content.length() > 0 &&
         ({
           let first = content.get_char(0)
@@ -539,8 +609,7 @@ fn render_inline_literal(inline : Inline, buf : StringBuilder) -> Unit {
       }
       buf.write_char('>')
       write_marker(buf, "[")
-      render_inlines_literal(children, buf)
-      // Markers cover `](url"title")` so the URL is visible alongside the link.
+      render_inlines_literal(children, buf, positions)
       let trailing = if title.is_empty() {
         "](" + url + ")"
       } else {
@@ -554,7 +623,7 @@ fn render_inline_literal(inline : Inline, buf : StringBuilder) -> Unit {
       buf.write_string(escape_html_attr(label))
       buf.write_string("\">")
       write_marker(buf, "[")
-      render_inlines_literal(children, buf)
+      render_inlines_literal(children, buf, positions)
       write_marker(buf, "][" + label + "]")
       buf.write_string("</a>")
     }
@@ -569,8 +638,6 @@ fn render_inline_literal(inline : Inline, buf : StringBuilder) -> Unit {
       buf.write_string("</a>")
     }
     Inline::Image(alt~, url~, title~, ..) => {
-      // Use a `<span role="img">` wrapper so the visible text remains
-      // `![alt](url "title")` while assistive tech gets the alt text.
       buf.write_string("<span class=\"md-image\" role=\"img\" aria-label=\"")
       buf.write_string(escape_html_attr(alt))
       buf.write_string("\">")
@@ -593,7 +660,11 @@ fn render_inline_literal(inline : Inline, buf : StringBuilder) -> Unit {
       write_marker(buf, "][" + label + "]")
       buf.write_string("</span>")
     }
-    Inline::HtmlInline(html~, ..) => buf.write_string(html)
+    Inline::HtmlInline(html~, ..) => {
+      buf.write_string("<span class=\"md-html-inline\">")
+      buf.write_string(escape_html(html))
+      buf.write_string("</span>")
+    }
     Inline::FootnoteReference(label~, ..) => {
       buf.write_string("<sup class=\"footnote-ref\"><a href=\"#fn-")
       buf.write_string(escape_html_attr(label))

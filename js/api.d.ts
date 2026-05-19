@@ -160,7 +160,26 @@ export function toMarkdown(source: string, options?: MarkdownOptions): string;
  * toHtmlLiteral("## Intro\n");
  * // => '<h2><span class="md-marker" aria-hidden="true">## </span>Intro</h2>\n'
  */
-export function toHtmlLiteral(source: string, options?: MarkdownOptions): string;
+export interface LiteralOptions extends MarkdownOptions {
+  /**
+   * When true, every top-level block element in the rendered HTML carries
+   * `data-src-start` / `data-src-end` attributes (character offsets in
+   * the original source). The literal renderer's visible-text invariant
+   * means the offset of a character inside such an element equals
+   * `data-src-start + char-index-within-element`, so a "click → cursor"
+   * editor can compute exact source positions by walking up to the
+   * nearest annotated ancestor.
+   *
+   * Inline elements (em, strong, code, a, ...) are NOT annotated because
+   * their spans come from the inline parser and are relative to the
+   * surrounding block's content, not the document.
+   *
+   * Defaults to false.
+   */
+  positions?: boolean;
+}
+
+export function toHtmlLiteral(source: string, options?: LiteralOptions): string;
 
 /**
  * Create a new document handle from markdown source.

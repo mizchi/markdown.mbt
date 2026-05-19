@@ -228,3 +228,261 @@ test "invariant: mixed document" {
     ,
   )
 }
+
+// =============================================================================
+// Extended pattern coverage
+// =============================================================================
+
+///|
+test "invariant: heading all levels" {
+  assert_overlay_invariant(
+    "# h1\n\n## h2\n\n### h3\n\n#### h4\n\n##### h5\n\n###### h6\n",
+  )
+}
+
+///|
+test "invariant: setext heading" {
+  assert_overlay_invariant("Title\n===\n")
+}
+
+///|
+test "invariant: setext heading level 2" {
+  assert_overlay_invariant("Subtitle\n---\n")
+}
+
+///|
+test "invariant: hard break backslash" {
+  assert_overlay_invariant("one\\\ntwo\n")
+}
+
+///|
+test "invariant: link with title" {
+  assert_overlay_invariant("[label](https://example.com \"a title\")\n")
+}
+
+///|
+test "invariant: image without title" {
+  assert_overlay_invariant("![alt text](pic.png)\n")
+}
+
+///|
+test "invariant: image with title" {
+  assert_overlay_invariant("![alt](pic.png \"caption\")\n")
+}
+
+///|
+test "invariant: reference link" {
+  assert_overlay_invariant("[ref][label]\n\n[label]: https://example.com\n")
+}
+
+///|
+test "invariant: reference image" {
+  assert_overlay_invariant("![alt][label]\n\n[label]: pic.png\n")
+}
+
+///|
+test "invariant: autolink email" {
+  assert_overlay_invariant("<mail@example.com>\n")
+}
+
+///|
+test "invariant: code span with backtick inside" {
+  assert_overlay_invariant("``code with ` inside``\n")
+}
+
+///|
+test "invariant: strikethrough" {
+  assert_overlay_invariant("~~struck~~ text\n")
+}
+
+///|
+test "invariant: task list" {
+  assert_overlay_invariant("- [x] done\n- [ ] pending\n")
+}
+
+///|
+test "invariant: nested ordered in bullet" {
+  assert_overlay_invariant("- outer\n  1. inner ordered\n  2. another\n")
+}
+
+///|
+test "invariant: thematic break dashes" {
+  assert_overlay_invariant("***\n")
+}
+
+///|
+test "invariant: indented code block" {
+  assert_overlay_invariant("    fn main() {}\n    return 0\n")
+}
+
+///|
+test "invariant: fenced code without language" {
+  assert_overlay_invariant("```\nplain code\n```\n")
+}
+
+///|
+test "invariant: fenced code with content containing backticks" {
+  assert_overlay_invariant("```\nhas ``` triple backticks inside\n```\n")
+}
+
+///|
+test "invariant: gfm table left align" {
+  assert_overlay_invariant("| a | b |\n| :-- | --: |\n| 1 | 2 |\n")
+}
+
+///|
+test "invariant: gfm table center align" {
+  assert_overlay_invariant("| a | b |\n| :-: | --- |\n| x | y |\n")
+}
+
+///|
+test "invariant: html block" {
+  assert_overlay_invariant("<div>raw html</div>\n")
+}
+
+///|
+test "invariant: html inline" {
+  assert_overlay_invariant("a <span>raw</span> b\n")
+}
+
+///|
+test "invariant: footnote reference + definition" {
+  assert_overlay_invariant("Look here[^1].\n\n[^1]: aside\n")
+}
+
+///|
+test "invariant: deeply nested lists" {
+  assert_overlay_invariant("- a\n  - b\n    - c\n")
+}
+
+///|
+test "invariant: ordered list with different start" {
+  assert_overlay_invariant("3. three\n4. four\n5. five\n")
+}
+
+///|
+test "invariant: blockquote with heading" {
+  assert_overlay_invariant("> # H1 inside\n> body\n")
+}
+
+///|
+test "invariant: paragraph spanning multiple lines" {
+  assert_overlay_invariant("line one\nline two\nline three\n")
+}
+
+///|
+test "invariant: empty document" {
+  assert_overlay_invariant("")
+}
+
+// =============================================================================
+// Source-position attribute tests
+// =============================================================================
+
+///|
+test "positions: heading data-src spans the source range" {
+  let html = md_to_html_literal("## Intro\n", positions=true)
+  @debug.debug_inspect(html.contains("data-src-start=\"0\""), content="true")
+  @debug.debug_inspect(html.contains("data-src-end=\"9\""), content="true")
+}
+
+///|
+test "positions: default omits data-src attributes" {
+  let html = md_to_html_literal("## Intro\n")
+  @debug.debug_inspect(html.contains("data-src-start"), content="false")
+}
+
+///|
+test "positions: inline elements are NOT annotated" {
+  let html = md_to_html_literal("a **bold** b\n", positions=true)
+  @debug.debug_inspect(html.contains("<strong data-src"), content="false")
+  @debug.debug_inspect(html.contains("<em data-src"), content="false")
+  @debug.debug_inspect(html.contains("<code data-src"), content="false")
+}
+
+///|
+/// Walk the rendered HTML and verify that every block-level
+/// `data-src-start` attribute equals the visible-text offset of that
+/// tag's open position. This is the invariant the editor's
+/// click-to-cursor mapping relies on.
+fn assert_block_positions(src : String) -> Unit raise {
+  let doc = parse(src).document
+  let html = render_html_literal(doc, positions=true)
+  let len = html.length()
+  let mut i = 0
+  let mut visible_offset = 0
+  while i < len {
+    match html.get_char(i) {
+      Some('<') => {
+        let tag_start = i
+        let mut j = i + 1
+        while j < len && html.get_char(j) != Some('>') {
+          j += 1
+        }
+        let tag = html.unsafe_substring(start=tag_start, end=j + 1)
+        let needle = "data-src-start=\""
+        match tag.find(needle) {
+          Some(pos) => {
+            let val_start = pos + needle.length()
+            let mut k = val_start
+            while k < tag.length() && tag.get_char(k) != Some('"') {
+              k += 1
+            }
+            let val_str = tag.unsafe_substring(start=val_start, end=k)
+            let mut val = 0
+            for ch in val_str {
+              val = val * 10 + (ch.to_int() - '0'.to_int())
+            }
+            assert_eq(val, visible_offset)
+          }
+          None => ()
+        }
+        i = j + 1
+      }
+      Some('&') =>
+        if i + 4 <= len && html.unsafe_substring(start=i, end=i + 4) == "&lt;" {
+          visible_offset += 1
+          i += 4
+        } else if i + 4 <= len && html.unsafe_substring(start=i, end=i + 4) == "&gt;" {
+          visible_offset += 1
+          i += 4
+        } else if i + 5 <= len && html.unsafe_substring(start=i, end=i + 5) == "&amp;" {
+          visible_offset += 1
+          i += 5
+        } else if i + 6 <= len && html.unsafe_substring(start=i, end=i + 6) == "&quot;" {
+          visible_offset += 1
+          i += 6
+        } else if i + 5 <= len && html.unsafe_substring(start=i, end=i + 5) == "&#39;" {
+          visible_offset += 1
+          i += 5
+        } else {
+          visible_offset += 1
+          i += 1
+        }
+      _ => {
+        visible_offset += 1
+        i += 1
+      }
+    }
+  }
+}
+
+///|
+test "positions: single heading block position matches source" {
+  assert_block_positions("## Intro\n")
+}
+
+///|
+test "positions: multi-block positions match source" {
+  assert_block_positions("# H1\n\n## H2\n\nbody paragraph\n")
+}
+
+///|
+test "positions: list item positions" {
+  assert_block_positions("- one\n- two\n- three\n")
+}
+
+///|
+test "positions: blockquote with nested heading" {
+  assert_block_positions("> # H1 inside\n> body\n")
+}

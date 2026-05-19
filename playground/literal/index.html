@@ -29,38 +29,36 @@
         line-height: 1.6;
       }
       h1 {
-        margin: 0 0 16px;
+        margin: 0 0 12px;
         font-family: ui-sans-serif, system-ui, sans-serif;
         font-size: 20px;
         font-weight: 600;
       }
       p.lede {
-        margin: 0 0 24px;
-        max-width: 60em;
+        margin: 0 0 16px;
+        max-width: 68em;
         color: #8b949e;
         font-family: ui-sans-serif, system-ui, sans-serif;
       }
       .toolbar {
         display: flex;
-        gap: 12px;
+        gap: 16px;
+        align-items: center;
         margin-bottom: 16px;
         font-family: ui-sans-serif, system-ui, sans-serif;
         font-size: 13px;
+        flex-wrap: wrap;
       }
       .toolbar label { cursor: pointer; user-select: none; }
-      .columns {
-        display: grid;
-        grid-template-columns: 1fr 1fr;
-        gap: 16px;
-      }
-      .pane {
+      .stage {
+        position: relative;
         border: 1px solid var(--border);
         border-radius: 6px;
         padding: 16px;
         min-height: 60vh;
         background: #161b22;
       }
-      .pane h2 {
+      .stage h2 {
         margin: 0 0 12px;
         font-family: ui-sans-serif, system-ui, sans-serif;
         font-size: 12px;
@@ -69,73 +67,90 @@
         letter-spacing: 0.06em;
         color: #8b949e;
       }
-      textarea.source-edit {
-        width: 100%;
-        min-height: 50vh;
-        margin: 0;
-        padding: 0;
-        background: transparent;
-        color: inherit;
-        border: 0;
-        outline: none;
-        resize: vertical;
-        font: inherit;
-        white-space: pre-wrap;
-      }
-      .overlay-host {
+      /* The preview pane lives in `.preview-host`; the textarea overlays
+       * it identically when in edit mode. */
+      .preview-host {
         position: relative;
         min-height: 50vh;
       }
-      .overlay-host .md-literal {
+      .preview-host .md-literal {
         margin: 0;
         padding: 0;
+        /* Cursor hint: preview is clickable. */
+        cursor: text;
       }
-      /* Overlay mode: stack rendered output on top of a highlighted source view. */
-      body.overlay .overlay-host .md-overlay-source {
+      .preview-host textarea.source-edit {
         position: absolute;
         inset: 0;
-        opacity: 0.5;
+        margin: 0;
+        padding: 0;
+        background: transparent;
+        color: var(--fg);
+        border: 0;
+        outline: 2px solid #1f6feb;
+        outline-offset: 4px;
+        resize: none;
+        font: inherit;
+        white-space: pre-wrap;
+        z-index: 2;
+      }
+      /* Show only the preview in preview mode, only the textarea in edit
+       * mode. The textarea is visually identical to the preview because
+       * both use the monospace + pre-wrap baseline from overlay.css. */
+      body[data-mode="preview"] textarea.source-edit { display: none; }
+      body[data-mode="edit"]    #rendered            { visibility: hidden; }
+      body[data-mode="edit"]    #source-view         { visibility: hidden; }
+      /* Overlay mode (independent of edit / preview): stack the rendered
+       * output on top of a faded source view to verify the alignment. */
+      body.overlay #source-view {
+        position: absolute;
+        inset: 0;
+        opacity: 0.45;
         pointer-events: none;
         color: #79c0ff;
         white-space: pre-wrap;
+        font: inherit;
+        margin: 0;
       }
-      body.overlay .overlay-host .md-overlay-rendered {
+      body.overlay #rendered {
         position: absolute;
         inset: 0;
       }
+      .badge {
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        font-size: 12px;
+        color: #8b949e;
+        font-weight: 500;
+      }
+      .badge strong { color: var(--fg); }
     </style>
   </head>
-  <body>
-    <h1>Markdown literal renderer</h1>
+  <body data-mode="preview">
+    <h1>Markdown literal renderer — click-to-edit demo</h1>
     <p class="lede">
-      Source-preserving rendering: the visible text equals the lossless
-      serialization of the document, so the rendered HTML can be overlaid
-      on a syntax-highlighted source view glyph-for-glyph. Markers
-      (<code>#</code>, <code>**</code>, <code>`</code>, list bullets, fence
-      ticks, blockquote <code>&gt;</code>) are wrapped in
-      <code>&lt;span class="md-marker" aria-hidden="true"&gt;</code> so
-      screen readers skip them.
+      The preview below is the output of
+      <code>toHtmlLiteral(source, { positions: true })</code>. Every visible
+      glyph corresponds to a character in the source. Click anywhere in the
+      preview to switch into edit mode with the cursor placed at the exact
+      source offset under the click; press <kbd>Escape</kbd> (or unfocus)
+      to return to preview.
     </p>
     <div class="toolbar">
+      <span class="badge"><strong>mode:</strong> <span id="cursor-indicator">click to edit</span></span>
       <label>
         <input type="checkbox" id="overlay-toggle" />
-        Overlay source + rendered (verify glyph alignment)
+        Overlay source + rendered (VRT alignment check)
       </label>
       <span id="invariant-state"></span>
     </div>
-    <div class="columns">
-      <section class="pane">
-        <h2>Markdown source</h2>
-        <textarea class="source-edit" id="source"></textarea>
-      </section>
-      <section class="pane">
-        <h2>Literal renderer output</h2>
-        <div class="overlay-host" id="host">
-          <pre class="md-literal md-overlay-source" id="source-view"></pre>
-          <div class="md-literal md-overlay-rendered" id="rendered"></div>
-        </div>
-      </section>
-    </div>
+    <section class="stage">
+      <h2>Preview / source</h2>
+      <div class="preview-host" id="host">
+        <pre class="md-literal" id="source-view"></pre>
+        <div class="md-literal" id="rendered"></div>
+        <textarea class="source-edit md-literal" id="source"></textarea>
+      </div>
+    </section>
     <script type="module" src="./main.ts"></script>
   </body>
 </html>

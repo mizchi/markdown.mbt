@@ -80,7 +80,11 @@ test.describe("literal renderer overlay invariant", () => {
 
   test("overlay screenshot: source view vs rendered view align", async ({ page }) => {
     await page.goto("/literal/");
-    await page.fill("#source", SAMPLES.find((s) => s.name === "mixed")!.md);
+    await page.evaluate((md) => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.value = md;
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    }, SAMPLES.find((s) => s.name === "mixed")!.md);
     await page.locator("#overlay-toggle").check();
     // Give the layout a frame to settle.
     await page.waitForTimeout(50);
@@ -92,5 +96,64 @@ test.describe("literal renderer overlay invariant", () => {
     await expect(host).toHaveScreenshot("literal-overlay-mixed.png", {
       maxDiffPixelRatio: 0.02,
     });
+  });
+
+  // Click on a known glyph in the preview, then verify that the textarea
+  // ends up focused with its caret at the correct source offset.
+  test("click-to-cursor: heading marker maps to source position 0", async ({ page }) => {
+    await page.goto("/literal/");
+    await page.evaluate(() => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.value = "# Title\n\nbody paragraph\n";
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    // Click the very first character of the rendered output — the '#' of
+    // the heading marker. Its source offset is 0.
+    const h1 = page.locator("#rendered h1");
+    const box = await h1.boundingBox();
+    if (!box) throw new Error("h1 has no bounding box");
+    // Click 2px in from the left edge to land on the first `#`.
+    await page.mouse.click(box.x + 2, box.y + box.height / 2);
+    // The demo flips into edit mode and focuses the textarea (via rAF)
+    // with the cursor at offset 0.
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+    const caret = await page.evaluate(
+      () => (document.getElementById("source") as HTMLTextAreaElement).selectionStart,
+    );
+    expect(caret).toBe(0);
+  });
+
+  test("click-to-cursor: clicking inside body paragraph lands inside body", async ({ page }) => {
+    await page.goto("/literal/");
+    await page.evaluate(() => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.value = "# Title\n\nbody paragraph\n";
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    // Click roughly the middle of the rendered <p> ("body paragraph").
+    const p = page.locator("#rendered p");
+    const box = await p.boundingBox();
+    if (!box) throw new Error("p has no bounding box");
+    await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+    const caret = await page.evaluate(
+      () => (document.getElementById("source") as HTMLTextAreaElement).selectionStart,
+    );
+    // "# Title\n\n" is 9 chars; "body paragraph\n" is 15. The paragraph
+    // sits at source offsets 9..23. A click in the middle of the paragraph
+    // must land somewhere in that range.
+    expect(caret).toBeGreaterThanOrEqual(9);
+    expect(caret).toBeLessThanOrEqual(23);
+  });
+
+  test("preview-mode → edit-mode flip on click", async ({ page }) => {
+    await page.goto("/literal/");
+    await expect(page.locator("body")).toHaveAttribute("data-mode", "preview");
+    const h1 = page.locator("#rendered h1").first();
+    await h1.click();
+    await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
+    // Pressing Escape returns to preview mode.
+    await page.keyboard.press("Escape");
+    await expect(page.locator("body")).toHaveAttribute("data-mode", "preview");
   });
 });

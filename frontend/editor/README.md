@@ -204,6 +204,65 @@ sample set on every CI run.
 - `<a href>` is preserved; the `[text](url)` characters all sit inside
   the anchor so the link target is unambiguous to keyboard users.
 
+### Click-to-cursor source positions
+
+Pass `{ positions: true }` to `toHtmlLiteral` and every top-level block
+element gains `data-src-start` / `data-src-end` attributes pointing into
+the original Markdown source:
+
+```tsx
+import { toHtmlLiteral } from "@mizchi/markdown";
+
+const html = toHtmlLiteral(source, { positions: true });
+// <h2 data-src-start="0" data-src-end="9">...</h2>
+// <p data-src-start="9" data-src-end="24">...</p>
+```
+
+This is intended as the foundation for a "preview by default, edit when
+you click" experience. Because the literal renderer's visible text equals
+the source byte-for-byte, the offset of any character inside a positioned
+element equals `data-src-start + character-index-within-the-element`.
+Combined with the browser's `caretRangeFromPoint`, a click handler can
+compute the exact source offset of the clicked glyph:
+
+```ts
+function findPositionedAncestor(node: Node | null): HTMLElement | null {
+  let el = node instanceof Element ? node : node?.parentElement ?? null;
+  while (el && !(el instanceof HTMLElement && el.dataset.srcStart != null)) {
+    el = el.parentElement;
+  }
+  return el;
+}
+
+function sourceOffsetFromPoint(x: number, y: number): number | null {
+  const range = document.caretRangeFromPoint?.(x, y);
+  if (!range) return null;
+  const ancestor = findPositionedAncestor(range.startContainer);
+  if (!ancestor) return null;
+  const base = Number(ancestor.dataset.srcStart);
+  // Count text characters from the ancestor's start up to the caret.
+  let within = 0;
+  const walker = document.createTreeWalker(ancestor, NodeFilter.SHOW_TEXT);
+  for (let n = walker.nextNode(); n; n = walker.nextNode()) {
+    if (n === range.startContainer) return base + within + range.startOffset;
+    within += (n as Text).data.length;
+  }
+  return base + within;
+}
+```
+
+Inline elements (`<em>`, `<strong>`, `<code>`, `<a>`, …) deliberately do
+**not** carry `data-src-*`, because the inline parser's spans are relative
+to the surrounding block's content, not to the document. Walking up to
+the nearest annotated block ancestor is always correct and the visible-text
+invariant guarantees that the per-character offset within that block is a
+1:1 mapping to source offsets.
+
+`playground/literal/` ships a runnable end-to-end demo of this pattern
+(preview → click → cursor placement → edit → Escape → preview), and
+`e2e/literal-overlay.spec.ts` exercises both the alignment invariant and
+the click-to-cursor flow on every CI run.
+
 ## Exports
 
 | Subpath | Contents |
