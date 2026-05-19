@@ -70,6 +70,16 @@ export class LiteralEditor {
     this.current = next;
     return stats;
   }
+
+  /**
+   * Re-render the current source — useful when the renderer's options
+   * (image preview, wikilinks, …) changed and the output therefore
+   * differs even though the source string did not.
+   */
+  rerender(): PatchStats {
+    const newHtml = this.render(this.current);
+    return patchTopLevelChildren(this.container, newHtml);
+  }
 }
 
 /**

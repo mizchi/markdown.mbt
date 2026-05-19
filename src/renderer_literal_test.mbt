@@ -486,3 +486,73 @@ test "positions: list item positions" {
 test "positions: blockquote with nested heading" {
   assert_block_positions("> # H1 inside\n> body\n")
 }
+
+// =============================================================================
+// Image preview opt-in
+// =============================================================================
+
+///|
+test "image preview: opt-in emits an <img> alongside source chars" {
+  let html = md_to_html_literal("![cat](/img/cat.png)\n", image_preview=true)
+  // The wrapper span contains both the <img> preview and the source chars.
+  @debug.debug_inspect(html.contains("<img class=\"md-image-preview\""), content="true")
+  @debug.debug_inspect(html.contains("src=\"/img/cat.png\""), content="true")
+  @debug.debug_inspect(html.contains("alt=\"cat\""), content="true")
+  // The source characters `![cat](/img/cat.png)` are still in the output.
+  @debug.debug_inspect(
+    html.contains("![") && html.contains("](/img/cat.png)"),
+    content="true",
+  )
+}
+
+///|
+test "image preview: default does not emit <img>" {
+  let html = md_to_html_literal("![cat](/img/cat.png)\n")
+  @debug.debug_inspect(html.contains("<img class=\"md-image-preview\""), content="false")
+}
+
+///|
+test "image preview: preserves overlay invariant" {
+  // The <img> carries no visible text, so stripped HTML must still equal
+  // the serializer output.
+  let src = "![logo](https://example.com/logo.png \"title\")\n"
+  let doc = parse(src).document
+  let html = render_html_literal(doc, image_preview=true)
+  let stripped = strip_html(html)
+  assert_eq(stripped, serialize(doc))
+}
+
+///|
+test "image preview: invariant holds with title" {
+  let src = "look ![cat](/cat.png \"a cat\") here\n"
+  let doc = parse(src).document
+  assert_eq(strip_html(render_html_literal(doc, image_preview=true)), serialize(doc))
+}
+
+///|
+test "image preview: invariant holds with multiple images in one paragraph" {
+  let src = "![one](/1.png) and ![two](/2.png)\n"
+  let doc = parse(src).document
+  assert_eq(strip_html(render_html_literal(doc, image_preview=true)), serialize(doc))
+}
+
+///|
+test "image preview: reference image emits data-md-image-ref slot" {
+  let src = "![logo][L]\n\n[L]: /logo.png\n"
+  let html = md_to_html_literal(src, image_preview=true)
+  // RefImage slot is emitted without a resolved src; the consumer's JS
+  // looks up [L] in the document's link definitions and fills it in.
+  @debug.debug_inspect(html.contains("data-md-image-ref=\"L\""), content="true")
+  @debug.debug_inspect(html.contains("src="), content="false")
+}
+
+///|
+test "image preview: combines with positions" {
+  let html = md_to_html_literal(
+    "intro\n\n![hi](/p.png)\n",
+    image_preview=true,
+    positions=true,
+  )
+  @debug.debug_inspect(html.contains("data-src-start"), content="true")
+  @debug.debug_inspect(html.contains("md-image-preview"), content="true")
+}

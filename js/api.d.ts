@@ -177,6 +177,22 @@ export interface LiteralOptions extends MarkdownOptions {
    * Defaults to false.
    */
   positions?: boolean;
+
+  /**
+   * When true, each `<span class="md-image">` wrapper also contains an
+   * `<img class="md-image-preview" src=… alt=… title=…>` slot alongside
+   * the source characters `![alt](url)`. The `<img>` carries no visible
+   * text so the source/preview overlay invariant is preserved.
+   *
+   * `@mizchi/markdown/editor/overlay.css` hides the slot by default;
+   * the consumer opts in by adding `.with-image-preview` to a container
+   * above the rendered output. Reference images (`![alt][label]`) emit
+   * an empty-`src` slot carrying `data-md-image-ref="label"` so the
+   * consumer can resolve the URL from their link-definition map.
+   *
+   * Defaults to false.
+   */
+  imagePreview?: boolean;
 }
 
 export function toHtmlLiteral(source: string, options?: LiteralOptions): string;

@@ -125,6 +125,25 @@
   opacity: var(--md-literal-marker-opacity, 1);
 }
 
+/* ---- Image preview slot. Off by default so the `![alt](url)` source
+ *      characters are the only visible content. Opt in by adding
+ *      `.with-image-preview` on a container above `.md-literal`. The
+ *      `<img>` contributes no `textContent`, so the overlay invariant
+ *      (`stripHtml(literal) === toMarkdown(source)`) is preserved
+ *      regardless of whether the slot is rendered. */
+.md-literal .md-image-preview { display: none; }
+
+.with-image-preview .md-literal .md-image-preview,
+.md-literal.with-image-preview .md-image-preview {
+  display: inline-block;
+  vertical-align: text-bottom;
+  max-width: 100%;
+  max-height: var(--md-literal-image-max-height, 1.5em);
+  margin: 0 var(--md-literal-image-gap, 0.25em);
+  border-radius: 2px;
+  box-shadow: 0 0 0 1px var(--md-literal-image-border, rgba(110, 118, 129, 0.4));
+}
+
 .md-literal .md-table-separator .md-marker {
   /* The separator row carries only markers; keep them visible but make
    * the row itself collapse into the visible flow without extra height. */

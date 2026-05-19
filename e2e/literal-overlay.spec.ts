@@ -197,6 +197,26 @@ test.describe("literal renderer overlay invariant", () => {
     expect(stats).toMatch(/reused \d+/);
   });
 
+  test("image preview: toggle inserts <img> without breaking the overlay invariant", async ({ page }) => {
+    await page.goto("/literal/");
+    await page.evaluate(() => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.value = "intro\n\n![cat](/img/cat.png)\n";
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    // Off by default: no <img> in the output.
+    expect(await page.locator("#rendered img.md-image-preview").count()).toBe(0);
+    // Toggle on.
+    await page.locator("#image-preview-toggle").check();
+    const imgCount = await page.locator("#rendered img.md-image-preview").count();
+    expect(imgCount).toBe(1);
+    // The body still hosts the source characters `![cat](/img/cat.png)`.
+    const text = await page.locator("#rendered").innerText();
+    expect(text).toContain("![cat](/img/cat.png)");
+    // The overlay invariant indicator stays green — img has empty textContent.
+    await expect(page.locator("#invariant-state")).toHaveText(/overlay invariant holds/);
+  });
+
   test("partial update: shifted blocks keep DOM identity, only attrs change", async ({ page }) => {
     await page.goto("/literal/");
     await page.evaluate(() => {

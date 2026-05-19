@@ -310,6 +310,47 @@ container element and makes no assumptions about UI libraries.
 `patchTopLevelChildren(container, newHtml)` is exposed separately for
 callers that manage their own state.
 
+### Inline image preview (Phase 0)
+
+`toHtmlLiteral(source, { imagePreview: true })` adds an
+`<img class="md-image-preview" src=… alt=… title=… loading="lazy">` slot
+inside every `<span class="md-image">` wrapper, alongside the
+`![alt](url)` source characters. The slot is a real `<img>` so the
+browser fetches and renders the image, but its `textContent` is empty so
+the overlay invariant continues to hold.
+
+```ts
+import { toHtmlLiteral } from "@mizchi/markdown";
+import "@mizchi/markdown/editor/overlay.css";
+
+container.innerHTML = toHtmlLiteral(source, {
+  positions: true,
+  imagePreview: true,
+});
+container.classList.add("with-image-preview");
+```
+
+`overlay.css` hides `.md-image-preview` by default. Opt in by adding
+`.with-image-preview` to a container above the rendered output (or on
+the `.md-literal` element itself). CSS variables override the defaults:
+
+```css
+.with-image-preview .md-image-preview {
+  --md-literal-image-max-height: 2em;
+  --md-literal-image-gap: 0.5em;
+}
+```
+
+Reference images (`![alt][label]`) emit an empty-`src` slot carrying
+`data-md-image-ref="label"`; the consumer's JS resolves the URL from the
+document's link-definition map and assigns `src` later.
+
+The runnable demo in `playground/literal/` has a toggle for the feature
+so the side-by-side behaviour can be inspected. Phase 1 (an editing
+mode that keeps images visible while you type — likely
+contenteditable-based) is deferred; the rendering / CSS contract above
+is forward-compatible with that work.
+
 ## Exports
 
 | Subpath | Contents |

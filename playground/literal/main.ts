@@ -37,6 +37,9 @@ const SAMPLE = [
   "",
   "This paragraph contains *italic*, **bold**, ~~strike~~, and `inline code`.",
   "",
+  "Inline image example: ![placeholder](https://placehold.co/40x40/161b22/c9d1d9?text=A)",
+  "and ![another](https://placehold.co/40x40/161b22/79c0ff?text=B).",
+  "",
   "> Block quotes also render with their leading `> ` marker visible.",
   "> Second line of the quote.",
   "",
@@ -53,13 +56,16 @@ const renderedEl = document.getElementById("rendered") as HTMLDivElement;
 const sourceViewEl = document.getElementById("source-view") as HTMLPreElement;
 const invariantEl = document.getElementById("invariant-state") as HTMLSpanElement;
 const overlayToggle = document.getElementById("overlay-toggle") as HTMLInputElement;
+const imagePreviewToggle = document.getElementById("image-preview-toggle") as HTMLInputElement;
 const cursorIndicatorEl = document.getElementById("cursor-indicator") as HTMLSpanElement | null;
 const patchStatsEl = document.getElementById("patch-stats") as HTMLSpanElement | null;
 
 sourceEl.value = SAMPLE;
 
+let imagePreviewOn = false;
+
 const renderLiteral = (src: string): string =>
-  toHtmlLiteral(src, { positions: true });
+  toHtmlLiteral(src, { positions: true, imagePreview: imagePreviewOn });
 
 const editor = new LiteralEditor(renderedEl, renderLiteral, SAMPLE);
 
@@ -190,6 +196,13 @@ sourceEl.addEventListener("input", () => {
 
 overlayToggle.addEventListener("change", () => {
   document.body.classList.toggle("overlay", overlayToggle.checked);
+});
+
+imagePreviewToggle.addEventListener("change", () => {
+  imagePreviewOn = imagePreviewToggle.checked;
+  document.body.classList.toggle("with-image-preview", imagePreviewOn);
+  editor.rerender();
+  refreshInvariant(sourceEl.value);
 });
 
 update(SAMPLE);

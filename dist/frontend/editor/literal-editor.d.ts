@@ -41,6 +41,12 @@ export declare class LiteralEditor {
      * one-by-one and only the changed range is replaced.
      */
     setSource(next: string): PatchStats;
+    /**
+     * Re-render the current source — useful when the renderer's options
+     * (image preview, wikilinks, …) changed and the output therefore
+     * differs even though the source string did not.
+     */
+    rerender(): PatchStats;
 }
 /**
  * Replace `container`'s top-level child nodes with the nodes obtained by

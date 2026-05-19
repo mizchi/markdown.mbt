@@ -166,6 +166,23 @@ pub fn md_to_html_literal_with_positions_and_wikilinks(
   @markdown.md_to_html_literal(source, wikilinks=true, positions=true)
 }
 
+///|
+/// Emit `<img class="md-image-preview" src=...>` slots inside each
+/// `<span class="md-image">` wrapper, in addition to the source
+/// characters. CSS in `@mizchi/markdown/editor/overlay.css` hides the
+/// slot by default; the consumer opts in by adding `.with-image-preview`.
+pub fn md_to_html_literal_with_image_preview(source : String) -> String {
+  @markdown.md_to_html_literal(source, image_preview=true)
+}
+
+///|
+/// Both positions and image_preview on.
+pub fn md_to_html_literal_with_positions_and_image_preview(
+  source : String,
+) -> String {
+  @markdown.md_to_html_literal(source, positions=true, image_preview=true)
+}
+
 // =============================================================================
 // Handle-based render APIs
 // =============================================================================
