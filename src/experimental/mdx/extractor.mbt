@@ -33,45 +33,36 @@ pub fn extract_mdx_metadata(doc : @markdown.Document) -> MdxMetadata {
 }
 
 ///|
-/// Extract only import declarations
-pub fn extract_imports(doc : @markdown.Document) -> Array[MdxBlock] {
-  let blocks = parse_mdx_blocks(doc)
+/// Collect MDX blocks satisfying the given predicate.
+fn extract_blocks(
+  doc : @markdown.Document,
+  predicate : (MdxBlock) -> Bool,
+) -> Array[MdxBlock] {
   let result : Array[MdxBlock] = []
-  for block in blocks {
-    match block {
-      ImportDecl(..) => result.push(block)
-      _ => ()
+  for block in parse_mdx_blocks(doc) {
+    if predicate(block) {
+      result.push(block)
     }
   }
   result
+}
+
+///|
+/// Extract only import declarations
+pub fn extract_imports(doc : @markdown.Document) -> Array[MdxBlock] {
+  extract_blocks(doc, MdxBlock::is_import)
 }
 
 ///|
 /// Extract only export declarations
 pub fn extract_exports(doc : @markdown.Document) -> Array[MdxBlock] {
-  let blocks = parse_mdx_blocks(doc)
-  let result : Array[MdxBlock] = []
-  for block in blocks {
-    match block {
-      ExportDecl(..) => result.push(block)
-      _ => ()
-    }
-  }
-  result
+  extract_blocks(doc, MdxBlock::is_export)
 }
 
 ///|
 /// Extract all JSX/Web Component elements
 pub fn extract_jsx_elements(doc : @markdown.Document) -> Array[MdxBlock] {
-  let blocks = parse_mdx_blocks(doc)
-  let result : Array[MdxBlock] = []
-  for block in blocks {
-    match block {
-      JsxElement(..) => result.push(block)
-      _ => ()
-    }
-  }
-  result
+  extract_blocks(doc, MdxBlock::is_jsx)
 }
 
 ///|

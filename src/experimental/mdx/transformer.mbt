@@ -29,66 +29,42 @@ pub fn strip_mdx_blocks(doc : @markdown.Document) -> @markdown.Document {
 }
 
 ///|
-/// Strip only import declarations
-pub fn strip_imports(doc : @markdown.Document) -> @markdown.Document {
-  let blocks = parse_mdx_blocks(doc)
-  let import_spans : Array[@markdown.Span] = []
-  for block in blocks {
-    match block {
-      ImportDecl(span~, ..) => import_spans.push(span)
-      _ => ()
+/// Strip blocks from `doc` selected by the given MdxBlock predicate.
+fn strip_blocks(
+  doc : @markdown.Document,
+  predicate : (MdxBlock) -> Bool,
+) -> @markdown.Document {
+  let strip_spans : Array[@markdown.Span] = []
+  for block in parse_mdx_blocks(doc) {
+    if predicate(block) {
+      strip_spans.push(block.span())
     }
   }
   let new_children : Array[@markdown.Block] = []
   for block in doc.children {
-    let block_span = get_block_span(block)
-    if !span_in_list(block_span, import_spans) {
+    if !span_in_list(get_block_span(block), strip_spans) {
       new_children.push(block)
     }
   }
   { frontmatter: doc.frontmatter, children: new_children, span: doc.span }
+}
+
+///|
+/// Strip only import declarations
+pub fn strip_imports(doc : @markdown.Document) -> @markdown.Document {
+  strip_blocks(doc, MdxBlock::is_import)
 }
 
 ///|
 /// Strip only export declarations
 pub fn strip_exports(doc : @markdown.Document) -> @markdown.Document {
-  let blocks = parse_mdx_blocks(doc)
-  let export_spans : Array[@markdown.Span] = []
-  for block in blocks {
-    match block {
-      ExportDecl(span~, ..) => export_spans.push(span)
-      _ => ()
-    }
-  }
-  let new_children : Array[@markdown.Block] = []
-  for block in doc.children {
-    let block_span = get_block_span(block)
-    if !span_in_list(block_span, export_spans) {
-      new_children.push(block)
-    }
-  }
-  { frontmatter: doc.frontmatter, children: new_children, span: doc.span }
+  strip_blocks(doc, MdxBlock::is_export)
 }
 
 ///|
 /// Strip only JSX elements
 pub fn strip_jsx_elements(doc : @markdown.Document) -> @markdown.Document {
-  let blocks = parse_mdx_blocks(doc)
-  let jsx_spans : Array[@markdown.Span] = []
-  for block in blocks {
-    match block {
-      JsxElement(span~, ..) => jsx_spans.push(span)
-      _ => ()
-    }
-  }
-  let new_children : Array[@markdown.Block] = []
-  for block in doc.children {
-    let block_span = get_block_span(block)
-    if !span_in_list(block_span, jsx_spans) {
-      new_children.push(block)
-    }
-  }
-  { frontmatter: doc.frontmatter, children: new_children, span: doc.span }
+  strip_blocks(doc, MdxBlock::is_jsx)
 }
 
 // =============================================================================

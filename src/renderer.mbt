@@ -391,8 +391,9 @@ fn render_inline_html(
 }
 
 ///|
-/// Escape HTML special characters in text content
-fn escape_html(s : String) -> String {
+/// Escape HTML special characters in text content.
+/// Pass `attr=true` to also escape `'` (for attribute values).
+fn escape_html(s : String, attr~ : Bool = false) -> String {
   let buf = StringBuilder::new()
   for c in s {
     match c {
@@ -400,6 +401,7 @@ fn escape_html(s : String) -> String {
       '<' => buf.write_string("&lt;")
       '>' => buf.write_string("&gt;")
       '"' => buf.write_string("&quot;")
+      '\'' if attr => buf.write_string("&#39;")
       _ => buf.write_char(c)
     }
   }
@@ -409,18 +411,7 @@ fn escape_html(s : String) -> String {
 ///|
 /// Escape HTML special characters in attribute values
 fn escape_html_attr(s : String) -> String {
-  let buf = StringBuilder::new()
-  for c in s {
-    match c {
-      '&' => buf.write_string("&amp;")
-      '<' => buf.write_string("&lt;")
-      '>' => buf.write_string("&gt;")
-      '"' => buf.write_string("&quot;")
-      '\'' => buf.write_string("&#39;")
-      _ => buf.write_char(c)
-    }
-  }
-  buf.to_string()
+  escape_html(s, attr=true)
 }
 
 ///|
@@ -432,16 +423,6 @@ pub fn md_to_html(
 ) -> String {
   let result = parse(source, wikilinks~)
   render_html(result.document, autolink~)
-}
-
-///|
-/// Parse markdown and render to HTML with bare URL text autolinked
-pub fn md_to_html_autolink(
-  source : String,
-  wikilinks? : Bool = false,
-) -> String {
-  let result = parse(source, wikilinks~)
-  render_html(result.document, autolink=true)
 }
 
 ///|
