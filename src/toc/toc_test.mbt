@@ -77,12 +77,16 @@ test "extract_from_blocks: basic headings" {
   ]
   let toc = extract_from_blocks(blocks)
   // h1 is skipped, only h2-h4 included
-  inspect(toc.length(), content="3")
-  inspect(toc[0].level, content="2")
-  inspect(toc[0].text, content="Section 1")
-  inspect(toc[0].id, content="section-1")
-  inspect(toc[1].level, content="3")
-  inspect(toc[2].level, content="2")
+  @debug.debug_inspect(toc.length(), content="3")
+  @debug.debug_inspect(toc[0].level, content="2")
+  @debug.debug_inspect(toc[0].text, content=(
+    #|"Section 1"
+  ))
+  @debug.debug_inspect(toc[0].id, content=(
+    #|"section-1"
+  ))
+  @debug.debug_inspect(toc[1].level, content="3")
+  @debug.debug_inspect(toc[2].level, content="2")
 }
 
 ///|
@@ -93,10 +97,16 @@ test "extract_from_blocks: nested containers preserve heading order" {
     make_ordered_list([[make_heading(4, "Nested Ordered")]]),
   ]
   let toc = extract_from_blocks(blocks)
-  inspect(toc.length(), content="3")
-  inspect(toc[0].text, content="Quoted")
-  inspect(toc[1].text, content="Nested Bullet")
-  inspect(toc[2].text, content="Nested Ordered")
+  @debug.debug_inspect(toc.length(), content="3")
+  @debug.debug_inspect(toc[0].text, content=(
+    #|"Quoted"
+  ))
+  @debug.debug_inspect(toc[1].text, content=(
+    #|"Nested Bullet"
+  ))
+  @debug.debug_inspect(toc[2].text, content=(
+    #|"Nested Ordered"
+  ))
 }
 
 ///|
@@ -106,8 +116,9 @@ test "extract_description_from_blocks: first paragraph" {
     make_paragraph("This is the description."),
   ]
   let desc = extract_description_from_blocks(blocks)
-  inspect(desc, content=(
-    #|Some(This is the description.)
+  @debug.debug_inspect(desc, content=(
+    #|Some("This is the description.")
+
   ))
 }
 
@@ -117,7 +128,7 @@ test "extract_description_from_blocks: truncation" {
   let blocks = [make_paragraph(long_text)]
   let desc = extract_description_from_blocks(blocks, max_length=50)
   match desc {
-    Some(s) => inspect(s.has_suffix("..."), content="true")
+    Some(s) => @debug.debug_inspect(s.has_suffix("..."), content="true")
     None => fail("Expected Some")
   }
 }
@@ -126,8 +137,9 @@ test "extract_description_from_blocks: truncation" {
 test "extract_description_from_blocks: prefers word boundary" {
   let blocks = [make_paragraph("alpha beta gamma delta")]
   let desc = extract_description_from_blocks(blocks, max_length=18)
-  inspect(desc, content=(
-    #|Some(alpha beta gamma...)
+  @debug.debug_inspect(desc, content=(
+    #|Some("alpha beta gamma...")
+
   ))
 }
 
@@ -142,7 +154,9 @@ test "extract_text_from_inlines: basic text" {
     ),
   ]
   let text = extract_text_from_inlines(inlines)
-  inspect(text, content="Hello World")
+  @debug.debug_inspect(text, content=(
+    #|"Hello World"
+  ))
 }
 
 ///|
@@ -173,5 +187,7 @@ test "extract_text_from_inlines: nested formatting and skips html" {
     @md.Inline::FootnoteReference(label="note", span=@md.Span::empty()),
   ]
   let text = extract_text_from_inlines(inlines)
-  inspect(text, content="Intro nested link diagram[^note]")
+  @debug.debug_inspect(text, content=(
+    #|"Intro nested link diagram[^note]"
+  ))
 }

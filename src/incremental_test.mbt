@@ -13,15 +13,15 @@ test "incremental: edit in middle paragraph" {
       let result = parse_incremental(old_doc, old_source, new_source, edit)
 
       // Should reuse blocks before and after the edit
-      inspect(
+      @debug.debug_inspect(
         result.reused_before > 0 || result.reused_after > 0,
         content="true",
       )
-      inspect(result.reparsed >= 1, content="true")
+      @debug.debug_inspect(result.reparsed >= 1, content="true")
 
       // Result should match full parse
       let full_result = parse(new_source)
-      inspect(
+      @debug.debug_inspect(
         result.document.children.length(),
         content=full_result.document.children.length().to_string(),
       )
@@ -41,11 +41,11 @@ test "incremental: insert at end" {
   let result = parse_incremental(old_doc, old_source, new_source, edit)
 
   // Should reuse existing blocks
-  inspect(result.reused_before >= 2, content="true") // Title, BlankLines, Paragraph
+  @debug.debug_inspect(result.reused_before >= 2, content="true") // Title, BlankLines, Paragraph
 
   // Result should match full parse
   let full_result = parse(new_source)
-  inspect(
+  @debug.debug_inspect(
     result.document.children.length(),
     content=full_result.document.children.length().to_string(),
   )
@@ -66,7 +66,7 @@ test "incremental: delete paragraph" {
 
       // Should still have blocks reused
       let total = result.reused_before + result.reparsed + result.reused_after
-      inspect(total > 0, content="true")
+      @debug.debug_inspect(total > 0, content="true")
     }
     None => fail("Could not find 'Paragraph two' in source")
   }
@@ -83,7 +83,7 @@ test "incremental: edit heading" {
   let result = parse_incremental(old_doc, old_source, new_source, edit)
 
   // Should re-parse the heading
-  inspect(result.reparsed >= 1, content="true")
+  @debug.debug_inspect(result.reparsed >= 1, content="true")
 }
 
 ///|
@@ -100,7 +100,7 @@ test "incremental: edit code block" {
       let result = parse_incremental(old_doc, old_source, new_source, edit)
 
       // Paragraph after should be reusable
-      inspect(
+      @debug.debug_inspect(
         result.reused_after >= 1 || result.reused_before >= 1,
         content="true",
       )
@@ -118,7 +118,7 @@ test "incremental: multiple edits same block" {
   let new_source = "Para ONE two three.\n"
   let edit = EditInfo::replace(5, 3, 3)
   let result = parse_incremental(old_doc, old_source, new_source, edit)
-  inspect(result.reparsed >= 1, content="true")
+  @debug.debug_inspect(result.reparsed >= 1, content="true")
 }
 
 ///|
@@ -136,7 +136,7 @@ test "incremental: preserves frontmatter" {
 
       // Frontmatter should be preserved
       match result.document.frontmatter {
-        Some(fm) => inspect(fm.entries.length(), content="1")
+        Some(fm) => @debug.debug_inspect(fm.entries.length(), content="1")
         None => fail("Frontmatter should be preserved")
       }
     }
@@ -161,11 +161,11 @@ test "incremental result stats" {
       let total_blocks = result.reused_before +
         result.reparsed +
         result.reused_after
-      inspect(total_blocks > 0, content="true")
+      @debug.debug_inspect(total_blocks > 0, content="true")
 
       // Verify at least some reuse happened
       let reused = result.reused_before + result.reused_after
-      inspect(reused >= 0, content="true") // Might be 0 depending on implementation
+      @debug.debug_inspect(reused >= 0, content="true") // Might be 0 depending on implementation
     }
     None => fail("Could not find 'P3' in source")
   }

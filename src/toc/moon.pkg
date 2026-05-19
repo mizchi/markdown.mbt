@@ -1,4 +1,5 @@
 import {
   "mizchi/markdown" @md,
   "mizchi/markdown/slug" @slug,
+  "moonbitlang/core/debug" @debug,
 }

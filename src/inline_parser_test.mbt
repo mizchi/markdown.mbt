@@ -2,9 +2,11 @@
 /// Inline parser tests
 test "parse inline text" {
   let inlines = parse_inlines("Hello World")
-  inspect(inlines.length(), content="1")
+  @debug.debug_inspect(inlines.length(), content="1")
   match inlines[0] {
-    Inline::Text(content~, ..) => inspect(content, content="Hello World")
+    Inline::Text(content~, ..) => @debug.debug_inspect(content, content=(
+      #|"Hello World"
+    ))
     _ => fail("Expected Text")
   }
 }
@@ -12,11 +14,11 @@ test "parse inline text" {
 ///|
 test "parse emphasis with asterisk" {
   let inlines = parse_inlines("Hello *world*")
-  inspect(inlines.length(), content="2")
+  @debug.debug_inspect(inlines.length(), content="2")
   match inlines[1] {
     Inline::Emphasis(marker~, children~, ..) => {
-      inspect(marker, content="Asterisk")
-      inspect(children.length(), content="1")
+      @debug.debug_inspect(marker, content="Asterisk")
+      @debug.debug_inspect(children.length(), content="1")
     }
     _ => fail("Expected Emphasis")
   }
@@ -25,9 +27,9 @@ test "parse emphasis with asterisk" {
 ///|
 test "parse emphasis with underscore" {
   let inlines = parse_inlines("Hello _world_")
-  inspect(inlines.length(), content="2")
+  @debug.debug_inspect(inlines.length(), content="2")
   match inlines[1] {
-    Inline::Emphasis(marker~, ..) => inspect(marker, content="Underscore")
+    Inline::Emphasis(marker~, ..) => @debug.debug_inspect(marker, content="Underscore")
     _ => fail("Expected Emphasis")
   }
 }
@@ -35,11 +37,11 @@ test "parse emphasis with underscore" {
 ///|
 test "parse strong with asterisk" {
   let inlines = parse_inlines("Hello **world**")
-  inspect(inlines.length(), content="2")
+  @debug.debug_inspect(inlines.length(), content="2")
   match inlines[1] {
     Inline::Strong(marker~, children~, ..) => {
-      inspect(marker, content="Asterisk")
-      inspect(children.length(), content="1")
+      @debug.debug_inspect(marker, content="Asterisk")
+      @debug.debug_inspect(children.length(), content="1")
     }
     _ => fail("Expected Strong")
   }
@@ -48,9 +50,9 @@ test "parse strong with asterisk" {
 ///|
 test "parse strong with underscore" {
   let inlines = parse_inlines("Hello __world__")
-  inspect(inlines.length(), content="2")
+  @debug.debug_inspect(inlines.length(), content="2")
   match inlines[1] {
-    Inline::Strong(marker~, ..) => inspect(marker, content="Underscore")
+    Inline::Strong(marker~, ..) => @debug.debug_inspect(marker, content="Underscore")
     _ => fail("Expected Strong")
   }
 }
@@ -58,11 +60,13 @@ test "parse strong with underscore" {
 ///|
 test "parse inline code" {
   let inlines = parse_inlines("Hello `code` world")
-  inspect(inlines.length(), content="3")
+  @debug.debug_inspect(inlines.length(), content="3")
   match inlines[1] {
     Inline::Code(content~, backtick_count~, ..) => {
-      inspect(content, content="code")
-      inspect(backtick_count, content="1")
+      @debug.debug_inspect(content, content=(
+        #|"code"
+      ))
+      @debug.debug_inspect(backtick_count, content="1")
     }
     _ => fail("Expected Code")
   }
@@ -73,8 +77,8 @@ test "parse inline code with double backticks" {
   let inlines = parse_inlines("Use ``code with `backticks` inside``")
   match inlines[1] {
     Inline::Code(content~, backtick_count~, ..) => {
-      inspect(backtick_count, content="2")
-      inspect(content.contains("`"), content="true")
+      @debug.debug_inspect(backtick_count, content="2")
+      @debug.debug_inspect(content.contains("`"), content="true")
     }
     _ => fail("Expected Code")
   }
@@ -83,12 +87,16 @@ test "parse inline code with double backticks" {
 ///|
 test "parse link" {
   let inlines = parse_inlines("Click [here](https://example.com)")
-  inspect(inlines.length(), content="2")
+  @debug.debug_inspect(inlines.length(), content="2")
   match inlines[1] {
     Inline::Link(url~, title~, children~, ..) => {
-      inspect(url, content="https://example.com")
-      inspect(title, content="")
-      inspect(children.length(), content="1")
+      @debug.debug_inspect(url, content=(
+        #|"https://example.com"
+      ))
+      @debug.debug_inspect(title, content=(
+        #|""
+      ))
+      @debug.debug_inspect(children.length(), content="1")
     }
     _ => fail("Expected Link")
   }
@@ -99,8 +107,12 @@ test "parse link with title" {
   let inlines = parse_inlines("[link](https://example.com \"Title\")")
   match inlines[0] {
     Inline::Link(url~, title~, ..) => {
-      inspect(url, content="https://example.com")
-      inspect(title, content="Title")
+      @debug.debug_inspect(url, content=(
+        #|"https://example.com"
+      ))
+      @debug.debug_inspect(title, content=(
+        #|"Title"
+      ))
     }
     _ => fail("Expected Link")
   }
@@ -111,8 +123,10 @@ test "parse reference link" {
   let inlines = parse_inlines("[text][ref]")
   match inlines[0] {
     Inline::RefLink(label~, children~, ..) => {
-      inspect(label, content="ref")
-      inspect(children.length(), content="1")
+      @debug.debug_inspect(label, content=(
+        #|"ref"
+      ))
+      @debug.debug_inspect(children.length(), content="1")
     }
     _ => fail("Expected RefLink")
   }
@@ -123,9 +137,15 @@ test "parse image" {
   let inlines = parse_inlines("![alt text](image.png)")
   match inlines[0] {
     Inline::Image(alt~, url~, title~, ..) => {
-      inspect(alt, content="alt text")
-      inspect(url, content="image.png")
-      inspect(title, content="")
+      @debug.debug_inspect(alt, content=(
+        #|"alt text"
+      ))
+      @debug.debug_inspect(url, content=(
+        #|"image.png"
+      ))
+      @debug.debug_inspect(title, content=(
+        #|""
+      ))
     }
     _ => fail("Expected Image")
   }
@@ -136,9 +156,15 @@ test "parse image with title" {
   let inlines = parse_inlines("![alt](image.png \"Title\")")
   match inlines[0] {
     Inline::Image(alt~, url~, title~, ..) => {
-      inspect(alt, content="alt")
-      inspect(url, content="image.png")
-      inspect(title, content="Title")
+      @debug.debug_inspect(alt, content=(
+        #|"alt"
+      ))
+      @debug.debug_inspect(url, content=(
+        #|"image.png"
+      ))
+      @debug.debug_inspect(title, content=(
+        #|"Title"
+      ))
     }
     _ => fail("Expected Image")
   }
@@ -149,8 +175,12 @@ test "parse reference image" {
   let inlines = parse_inlines("![alt][ref]")
   match inlines[0] {
     Inline::RefImage(alt~, label~, ..) => {
-      inspect(alt, content="alt")
-      inspect(label, content="ref")
+      @debug.debug_inspect(alt, content=(
+        #|"alt"
+      ))
+      @debug.debug_inspect(label, content=(
+        #|"ref"
+      ))
     }
     _ => fail("Expected RefImage")
   }
@@ -161,8 +191,10 @@ test "parse autolink URL" {
   let inlines = parse_inlines("<https://example.com>")
   match inlines[0] {
     Inline::Autolink(url~, is_email~, ..) => {
-      inspect(url, content="https://example.com")
-      inspect(is_email, content="false")
+      @debug.debug_inspect(url, content=(
+        #|"https://example.com"
+      ))
+      @debug.debug_inspect(is_email, content="false")
     }
     _ => fail("Expected Autolink")
   }
@@ -173,8 +205,10 @@ test "parse autolink email" {
   let inlines = parse_inlines("<user@example.com>")
   match inlines[0] {
     Inline::Autolink(url~, is_email~, ..) => {
-      inspect(url, content="user@example.com")
-      inspect(is_email, content="true")
+      @debug.debug_inspect(url, content=(
+        #|"user@example.com"
+      ))
+      @debug.debug_inspect(is_email, content="true")
     }
     _ => fail("Expected Autolink")
   }
@@ -183,10 +217,10 @@ test "parse autolink email" {
 ///|
 test "parse strikethrough" {
   let inlines = parse_inlines("Hello ~~deleted~~ world")
-  inspect(inlines.length(), content="3")
+  @debug.debug_inspect(inlines.length(), content="3")
   match inlines[1] {
     Inline::Strikethrough(children~, ..) =>
-      inspect(children.length(), content="1")
+      @debug.debug_inspect(children.length(), content="1")
     _ => fail("Expected Strikethrough")
   }
 }
@@ -203,7 +237,7 @@ test "parse hard break two spaces" {
         _ => false
       }
     })
-  inspect(has_hard_break, content="true")
+  @debug.debug_inspect(has_hard_break, content="true")
 }
 
 ///|
@@ -217,7 +251,7 @@ test "parse hard break backslash" {
         _ => false
       }
     })
-  inspect(has_hard_break, content="true")
+  @debug.debug_inspect(has_hard_break, content="true")
 }
 
 ///|
@@ -231,7 +265,7 @@ test "parse soft break" {
         _ => false
       }
     })
-  inspect(has_soft_break, content="true")
+  @debug.debug_inspect(has_soft_break, content="true")
 }
 
 ///|
@@ -246,7 +280,7 @@ test "parse escaped character" {
         _ => false
       }
     })
-  inspect(is_all_text, content="true")
+  @debug.debug_inspect(is_all_text, content="true")
 }
 
 ///|
@@ -266,5 +300,5 @@ test "parse nested emphasis in link" {
 ///|
 test "parse mixed inline content" {
   let inlines = parse_inlines("Hello *world* and `code`")
-  inspect(inlines.length() >= 4, content="true")
+  @debug.debug_inspect(inlines.length() >= 4, content="true")
 }

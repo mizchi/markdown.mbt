@@ -3,14 +3,16 @@
 test "parse heading" {
   let result = parse("# Hello World\n")
   let blocks = result.document.children
-  inspect(blocks.length(), content="1")
+  @debug.debug_inspect(blocks.length(), content="1")
   match blocks[0] {
     Block::Heading(level~, style~, children~, ..) => {
-      inspect(level, content="1")
-      inspect(style, content="Atx")
-      inspect(children.length(), content="1")
+      @debug.debug_inspect(level, content="1")
+      @debug.debug_inspect(style, content="Atx")
+      @debug.debug_inspect(children.length(), content="1")
       match children[0] {
-        Inline::Text(content~, ..) => inspect(content, content="Hello World")
+        Inline::Text(content~, ..) => @debug.debug_inspect(content, content=(
+          #|"Hello World"
+        ))
         _ => fail("Expected text")
       }
     }
@@ -24,7 +26,7 @@ test "parse heading level 2-6" {
     let prefix = String::make(level, '#')
     let result = parse("\{prefix} Test\n")
     match result.document.children[0] {
-      Block::Heading(level=l, ..) => inspect(l == level, content="true")
+      Block::Heading(level=l, ..) => @debug.debug_inspect(l == level, content="true")
       _ => fail("Expected heading")
     }
   }
@@ -35,8 +37,8 @@ test "parse heading with closing hashes" {
   let result = parse("## Title ##\n")
   match result.document.children[0] {
     Block::Heading(level~, closing_hashes~, ..) => {
-      inspect(level, content="2")
-      inspect(closing_hashes, content="2")
+      @debug.debug_inspect(level, content="2")
+      @debug.debug_inspect(closing_hashes, content="2")
     }
     _ => fail("Expected heading")
   }
@@ -48,7 +50,9 @@ test "parse paragraph" {
   match result.document.children[0] {
     Block::Paragraph(children~, ..) =>
       match children[0] {
-        Inline::Text(content~, ..) => inspect(content, content="Hello world.")
+        Inline::Text(content~, ..) => @debug.debug_inspect(content, content=(
+          #|"Hello world."
+        ))
         _ => fail("Expected text")
       }
     _ => fail("Expected paragraph")
@@ -61,9 +65,11 @@ test "parse multiline paragraph" {
   match result.document.children[0] {
     Block::Paragraph(children~, ..) => {
       // With inline parsing: "Line 1" + SoftBreak + "Line 2"
-      inspect(children.length() >= 2, content="true")
+      @debug.debug_inspect(children.length() >= 2, content="true")
       match children[0] {
-        Inline::Text(content~, ..) => inspect(content, content="Line 1")
+        Inline::Text(content~, ..) => @debug.debug_inspect(content, content=(
+          #|"Line 1"
+        ))
         _ => fail("Expected text")
       }
     }
@@ -76,10 +82,14 @@ test "parse fenced code block" {
   let result = parse("```js\nconsole.log('hello');\n```\n")
   match result.document.children[0] {
     Block::FencedCode(info~, code~, fence_marker~, fence_length~, ..) => {
-      inspect(info, content="js")
-      inspect(code, content="console.log('hello');\n")
-      inspect(fence_marker, content="Backtick")
-      inspect(fence_length, content="3")
+      @debug.debug_inspect(info, content=(
+        #|"js"
+      ))
+      @debug.debug_inspect(code, content=(
+        #|"console.log('hello');\n"
+      ))
+      @debug.debug_inspect(fence_marker, content="Backtick")
+      @debug.debug_inspect(fence_length, content="3")
     }
     _ => fail("Expected fenced code")
   }
@@ -90,8 +100,10 @@ test "parse fenced code with tilde" {
   let result = parse("~~~python\nprint('hello')\n~~~\n")
   match result.document.children[0] {
     Block::FencedCode(info~, fence_marker~, ..) => {
-      inspect(info, content="python")
-      inspect(fence_marker, content="Tilde")
+      @debug.debug_inspect(info, content=(
+        #|"python"
+      ))
+      @debug.debug_inspect(fence_marker, content="Tilde")
     }
     _ => fail("Expected fenced code")
   }
@@ -101,7 +113,9 @@ test "parse fenced code with tilde" {
 test "parse fenced code with filename" {
   let result = parse("```json:package.json\n{\"name\": \"test\"}\n```\n")
   match result.document.children[0] {
-    Block::FencedCode(info~, ..) => inspect(info, content="json:package.json")
+    Block::FencedCode(info~, ..) => @debug.debug_inspect(info, content=(
+      #|"json:package.json"
+    ))
     _ => fail("Expected fenced code")
   }
 }
@@ -116,21 +130,21 @@ test "parse thematic break" {
   for block in children {
     match block {
       Block::ThematicBreak(marker~, count~, ..) => {
-        inspect(marker == '-', content="true")
-        inspect(count, content="3")
+        @debug.debug_inspect(marker == '-', content="true")
+        @debug.debug_inspect(count, content="3")
         found = true
       }
       _ => ()
     }
   }
-  inspect(found, content="true")
+  @debug.debug_inspect(found, content="true")
 }
 
 ///|
 test "parse thematic break with asterisk" {
   let result = parse("***\n")
   match result.document.children[0] {
-    Block::ThematicBreak(marker~, ..) => inspect(marker == '*', content="true")
+    Block::ThematicBreak(marker~, ..) => @debug.debug_inspect(marker == '*', content="true")
     _ => fail("Expected thematic break")
   }
 }
@@ -140,11 +154,13 @@ test "parse blockquote" {
   let result = parse("> Quote\n")
   match result.document.children[0] {
     Block::Blockquote(children~, ..) => {
-      inspect(children.length(), content="1")
+      @debug.debug_inspect(children.length(), content="1")
       match children[0] {
         Block::Paragraph(children=p_children, ..) =>
           match p_children[0] {
-            Inline::Text(content~, ..) => inspect(content, content="Quote")
+            Inline::Text(content~, ..) => @debug.debug_inspect(content, content=(
+              #|"Quote"
+            ))
             _ => fail("Expected text")
           }
         _ => fail("Expected paragraph in blockquote")
@@ -159,9 +175,9 @@ test "parse bullet list" {
   let result = parse("- Item 1\n- Item 2\n")
   match result.document.children[0] {
     Block::BulletList(marker~, items~, tight~, ..) => {
-      inspect(marker, content="Dash")
-      inspect(items.length(), content="2")
-      inspect(tight, content="true")
+      @debug.debug_inspect(marker, content="Dash")
+      @debug.debug_inspect(items.length(), content="2")
+      @debug.debug_inspect(tight, content="true")
     }
     _ => fail("Expected bullet list")
   }
@@ -172,9 +188,9 @@ test "parse ordered list" {
   let result = parse("1. First\n2. Second\n")
   match result.document.children[0] {
     Block::OrderedList(start~, delimiter~, items~, ..) => {
-      inspect(start, content="1")
-      inspect(delimiter, content="Dot")
-      inspect(items.length(), content="2")
+      @debug.debug_inspect(start, content="1")
+      @debug.debug_inspect(delimiter, content="Dot")
+      @debug.debug_inspect(items.length(), content="2")
     }
     _ => fail("Expected ordered list")
   }
@@ -185,7 +201,9 @@ test "parse indented code" {
   let result = parse("    code line\n    more code\n")
   match result.document.children[0] {
     Block::IndentedCode(code~, ..) =>
-      inspect(code, content="code line\nmore code")
+      @debug.debug_inspect(code, content=(
+        #|"code line\nmore code"
+      ))
     _ => fail("Expected indented code")
   }
 }
@@ -195,8 +213,8 @@ test "parse setext heading h1" {
   let result = parse("Title\n=====\n")
   match result.document.children[0] {
     Block::Heading(level~, style~, ..) => {
-      inspect(level, content="1")
-      inspect(style, content="Setext")
+      @debug.debug_inspect(level, content="1")
+      @debug.debug_inspect(style, content="Setext")
     }
     _ => fail("Expected setext heading")
   }
@@ -207,8 +225,8 @@ test "parse setext heading h2" {
   let result = parse("Title\n-----\n")
   match result.document.children[0] {
     Block::Heading(level~, style~, ..) => {
-      inspect(level, content="2")
-      inspect(style, content="Setext")
+      @debug.debug_inspect(level, content="2")
+      @debug.debug_inspect(style, content="Setext")
     }
     _ => fail("Expected setext heading")
   }
@@ -219,10 +237,14 @@ test "parse frontmatter" {
   let result = parse("---\ntitle: Hello\nauthor: World\n---\n# Content\n")
   match result.document.frontmatter {
     Some(fm) => {
-      inspect(fm.entries.length(), content="2")
+      @debug.debug_inspect(fm.entries.length(), content="2")
       let (k1, v1) = fm.entries[0]
-      inspect(k1, content="title")
-      inspect(v1, content="Hello")
+      @debug.debug_inspect(k1, content=(
+        #|"title"
+      ))
+      @debug.debug_inspect(v1, content=(
+        #|"Hello"
+      ))
     }
     None => fail("Expected frontmatter")
   }
@@ -231,11 +253,17 @@ test "parse frontmatter" {
 ///|
 test "parse link definition" {
   let result = parse("[link]: https://example.com \"Title\"\n")
-  inspect(result.definitions.length(), content="1")
+  @debug.debug_inspect(result.definitions.length(), content="1")
   let def = result.definitions[0]
-  inspect(def.label, content="link")
-  inspect(def.url, content="https://example.com")
-  inspect(def.title, content="Title")
+  @debug.debug_inspect(def.label, content=(
+    #|"link"
+  ))
+  @debug.debug_inspect(def.url, content=(
+    #|"https://example.com"
+  ))
+  @debug.debug_inspect(def.title, content=(
+    #|"Title"
+  ))
 }
 
 ///|
@@ -254,9 +282,9 @@ test "parse mixed content" {
       _ => ()
     }
   }
-  inspect(heading_count, content="1")
-  inspect(para_count, content="1")
-  inspect(code_count, content="1")
+  @debug.debug_inspect(heading_count, content="1")
+  @debug.debug_inspect(para_count, content="1")
+  @debug.debug_inspect(code_count, content="1")
 }
 
 ///|
@@ -265,9 +293,9 @@ test "parse simple table" {
   let result = parse(source)
   match result.document.children[0] {
     Block::Table(header~, alignments~, rows~, ..) => {
-      inspect(header.length(), content="2")
-      inspect(alignments.length(), content="2")
-      inspect(rows.length(), content="1")
+      @debug.debug_inspect(header.length(), content="2")
+      @debug.debug_inspect(alignments.length(), content="2")
+      @debug.debug_inspect(rows.length(), content="1")
     }
     _ => fail("Expected Table")
   }
@@ -279,9 +307,9 @@ test "parse table with alignment" {
   let result = parse(source)
   match result.document.children[0] {
     Block::Table(alignments~, ..) => {
-      inspect(alignments[0], content="Left")
-      inspect(alignments[1], content="Center")
-      inspect(alignments[2], content="Right")
+      @debug.debug_inspect(alignments[0], content="Left")
+      @debug.debug_inspect(alignments[1], content="Center")
+      @debug.debug_inspect(alignments[2], content="Right")
     }
     _ => fail("Expected Table")
   }
@@ -293,8 +321,8 @@ test "parse table with multiple rows" {
   let result = parse(source)
   match result.document.children[0] {
     Block::Table(rows~, header~, ..) => {
-      inspect(header.length(), content="2")
-      inspect(rows.length(), content="3")
+      @debug.debug_inspect(header.length(), content="2")
+      @debug.debug_inspect(rows.length(), content="3")
     }
     _ => fail("Expected Table")
   }
@@ -328,11 +356,13 @@ test "parse nested code block with 4 backticks" {
   let result = parse(source)
   match result.document.children[0] {
     Block::FencedCode(info~, code~, fence_length~, ..) => {
-      inspect(fence_length, content="4")
-      inspect(info, content="md")
+      @debug.debug_inspect(fence_length, content="4")
+      @debug.debug_inspect(info, content=(
+        #|"md"
+      ))
       // The inner code block should be preserved as content
-      inspect(code.contains("```js"), content="true")
-      inspect(code.contains("console.log"), content="true")
+      @debug.debug_inspect(code.contains("```js"), content="true")
+      @debug.debug_inspect(code.contains("console.log"), content="true")
     }
     _ => fail("Expected fenced code block")
   }
@@ -343,7 +373,9 @@ test "parse code block with lang and filename" {
   let result = parse("```typescript:src/index.ts\nconst x = 1;\n```\n")
   match result.document.children[0] {
     Block::FencedCode(info~, ..) =>
-      inspect(info, content="typescript:src/index.ts")
+      @debug.debug_inspect(info, content=(
+        #|"typescript:src/index.ts"
+      ))
     _ => fail("Expected fenced code")
   }
 }
@@ -356,7 +388,9 @@ test "parse code block with lang, filename, and meta" {
   )
   match result.document.children[0] {
     Block::FencedCode(info~, ..) =>
-      inspect(info, content="js:app.js {highlight=[1,3]}")
+      @debug.debug_inspect(info, content=(
+        #|"js:app.js {highlight=[1,3]}"
+      ))
     _ => fail("Expected fenced code")
   }
 }
@@ -366,10 +400,10 @@ test "serialize table roundtrip" {
   let source = "| A | B |\n|:---|---:|\n| 1 | 2 |\n"
   let result = parse(source)
   let output = serialize(result.document)
-  inspect(output.contains("| A |"), content="true")
+  @debug.debug_inspect(output.contains("| A |"), content="true")
   // remark-gfm style: | :-- | (left) and | --: | (right)
-  inspect(output.contains("| :-- |"), content="true")
-  inspect(output.contains("| --: |"), content="true")
+  @debug.debug_inspect(output.contains("| :-- |"), content="true")
+  @debug.debug_inspect(output.contains("| --: |"), content="true")
 }
 
 ///|
@@ -377,8 +411,8 @@ test "parse task list unchecked" {
   let result = parse("- [ ] todo item\n")
   match result.document.children[0] {
     Block::BulletList(items~, ..) => {
-      inspect(items.length(), content="1")
-      inspect(items[0].checked, content="Some(false)")
+      @debug.debug_inspect(items.length(), content="1")
+      @debug.debug_inspect(items[0].checked, content="Some(false)")
     }
     _ => fail("Expected BulletList")
   }
@@ -389,8 +423,8 @@ test "parse task list checked lowercase" {
   let result = parse("- [x] done item\n")
   match result.document.children[0] {
     Block::BulletList(items~, ..) => {
-      inspect(items.length(), content="1")
-      inspect(items[0].checked, content="Some(true)")
+      @debug.debug_inspect(items.length(), content="1")
+      @debug.debug_inspect(items[0].checked, content="Some(true)")
     }
     _ => fail("Expected BulletList")
   }
@@ -401,8 +435,8 @@ test "parse task list checked uppercase" {
   let result = parse("- [X] done item\n")
   match result.document.children[0] {
     Block::BulletList(items~, ..) => {
-      inspect(items.length(), content="1")
-      inspect(items[0].checked, content="Some(true)")
+      @debug.debug_inspect(items.length(), content="1")
+      @debug.debug_inspect(items[0].checked, content="Some(true)")
     }
     _ => fail("Expected BulletList")
   }
@@ -413,9 +447,9 @@ test "parse task list mixed" {
   let result = parse("- [ ] foo\n- [x] bar\n")
   match result.document.children[0] {
     Block::BulletList(items~, ..) => {
-      inspect(items.length(), content="2")
-      inspect(items[0].checked, content="Some(false)")
-      inspect(items[1].checked, content="Some(true)")
+      @debug.debug_inspect(items.length(), content="2")
+      @debug.debug_inspect(items[0].checked, content="Some(false)")
+      @debug.debug_inspect(items[1].checked, content="Some(true)")
     }
     _ => fail("Expected BulletList")
   }
@@ -426,18 +460,18 @@ test "serialize task list roundtrip" {
   let source = "- [ ] foo\n- [x] bar\n"
   let result = parse(source)
   let output = serialize(result.document)
-  inspect(output.contains("[ ] foo"), content="true")
-  inspect(output.contains("[x] bar"), content="true")
+  @debug.debug_inspect(output.contains("[ ] foo"), content="true")
+  @debug.debug_inspect(output.contains("[x] bar"), content="true")
 }
 
 ///|
 test "parse custom element single line" {
   let result = parse("<my-component>content</my-component>\n")
-  inspect(result.document.children.length(), content="1")
+  @debug.debug_inspect(result.document.children.length(), content="1")
   match result.document.children[0] {
     Block::HtmlBlock(html~, ..) => {
-      inspect(html.contains("my-component"), content="true")
-      inspect(html.contains("content"), content="true")
+      @debug.debug_inspect(html.contains("my-component"), content="true")
+      @debug.debug_inspect(html.contains("content"), content="true")
     }
     _ => fail("Expected HtmlBlock")
   }
@@ -452,12 +486,12 @@ test "parse custom element multi-line" {
     #|</my-component>
     #|
   let result = parse(source)
-  inspect(result.document.children.length(), content="1")
+  @debug.debug_inspect(result.document.children.length(), content="1")
   match result.document.children[0] {
     Block::HtmlBlock(html~, ..) => {
-      inspect(html.contains("<my-component>"), content="true")
-      inspect(html.contains("</my-component>"), content="true")
-      inspect(html.contains("Content here"), content="true")
+      @debug.debug_inspect(html.contains("<my-component>"), content="true")
+      @debug.debug_inspect(html.contains("</my-component>"), content="true")
+      @debug.debug_inspect(html.contains("Content here"), content="true")
     }
     _ => fail("Expected HtmlBlock for multi-line custom element")
   }
@@ -466,11 +500,11 @@ test "parse custom element multi-line" {
 ///|
 test "parse custom element self-closing" {
   let result = parse("<my-component attr=\"value\" />\n")
-  inspect(result.document.children.length(), content="1")
+  @debug.debug_inspect(result.document.children.length(), content="1")
   match result.document.children[0] {
     Block::HtmlBlock(html~, ..) => {
-      inspect(html.contains("my-component"), content="true")
-      inspect(html.contains("/>"), content="true")
+      @debug.debug_inspect(html.contains("my-component"), content="true")
+      @debug.debug_inspect(html.contains("/>"), content="true")
     }
     _ => fail("Expected HtmlBlock for self-closing custom element")
   }
@@ -484,12 +518,12 @@ test "parse custom element with attributes" {
     #|</custom-button>
     #|
   let result = parse(source)
-  inspect(result.document.children.length(), content="1")
+  @debug.debug_inspect(result.document.children.length(), content="1")
   match result.document.children[0] {
     Block::HtmlBlock(html~, ..) => {
-      inspect(html.contains("custom-button"), content="true")
-      inspect(html.contains("class=\"primary\""), content="true")
-      inspect(html.contains("data-id=\"123\""), content="true")
+      @debug.debug_inspect(html.contains("custom-button"), content="true")
+      @debug.debug_inspect(html.contains("class=\"primary\""), content="true")
+      @debug.debug_inspect(html.contains("data-id=\"123\""), content="true")
     }
     _ => fail("Expected HtmlBlock")
   }
@@ -507,12 +541,12 @@ test "parse custom element with BEM class names (double underscore)" {
     #|</styled-checkbox-demo>
     #|
   let result = parse(source)
-  inspect(result.document.children.length(), content="1")
+  @debug.debug_inspect(result.document.children.length(), content="1")
   match result.document.children[0] {
     Block::HtmlBlock(html~, ..) => {
       // Verify the double underscores are preserved
-      inspect(html.contains("checkbox__control"), content="true")
-      inspect(html.contains("checkbox__icon--check"), content="true")
+      @debug.debug_inspect(html.contains("checkbox__control"), content="true")
+      @debug.debug_inspect(html.contains("checkbox__icon--check"), content="true")
     }
     _ => fail("Expected HtmlBlock for custom element with BEM classes")
   }
@@ -522,11 +556,11 @@ test "parse custom element with BEM class names (double underscore)" {
 test "parse custom element single line with BEM classes" {
   let source = "<my-demo><span class=\"switch__thumb\"></span></my-demo>\n"
   let result = parse(source)
-  inspect(result.document.children.length(), content="1")
+  @debug.debug_inspect(result.document.children.length(), content="1")
   match result.document.children[0] {
     Block::HtmlBlock(html~, ..) =>
       // __ must be preserved, not treated as strong/bold markdown
-      inspect(html.contains("switch__thumb"), content="true")
+      @debug.debug_inspect(html.contains("switch__thumb"), content="true")
     _ => fail("Expected HtmlBlock")
   }
 }
@@ -534,9 +568,11 @@ test "parse custom element single line with BEM classes" {
 ///|
 test "parse html comment block" {
   let result = parse("<!-- comment -->\n\n# Title\n")
-  inspect(result.document.children.length(), content="3")
+  @debug.debug_inspect(result.document.children.length(), content="3")
   match result.document.children[0] {
-    Block::HtmlBlock(html~, ..) => inspect(html, content="<!-- comment -->\n")
+    Block::HtmlBlock(html~, ..) => @debug.debug_inspect(html, content=(
+      #|"<!-- comment -->\n"
+    ))
     _ => fail("Expected HtmlBlock for HTML comment")
   }
 }
@@ -549,12 +585,12 @@ test "parse multiline html comment block" {
     #|-->
     #|
   let result = parse(source)
-  inspect(result.document.children.length(), content="1")
+  @debug.debug_inspect(result.document.children.length(), content="1")
   match result.document.children[0] {
     Block::HtmlBlock(html~, ..) => {
-      inspect(html.contains("<!--"), content="true")
-      inspect(html.contains("comment"), content="true")
-      inspect(html.contains("-->"), content="true")
+      @debug.debug_inspect(html.contains("<!--"), content="true")
+      @debug.debug_inspect(html.contains("comment"), content="true")
+      @debug.debug_inspect(html.contains("-->"), content="true")
     }
     _ => fail("Expected HtmlBlock for multiline HTML comment")
   }
