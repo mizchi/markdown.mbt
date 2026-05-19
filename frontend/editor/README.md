@@ -192,7 +192,16 @@ The repo's `playground/literal/` is a runnable demo, and
 `e2e/literal-overlay.spec.ts` runs the alignment assertion across a fixed
 sample set on every CI run.
 
-### Accessibility notes
+### Accessibility
+
+[`docs/literal-rendering.md`](../../docs/literal-rendering.md) covers the
+overall accessibility model. The repo runs
+[axe-core](https://github.com/dequelabs/axe-core) over the literal
+output on a fixture document that exercises every block / inline
+variant ([`e2e/literal-axe.spec.ts`](../../e2e/literal-axe.spec.ts)); it
+must report zero WCAG 2.0/2.1 A or AA violations on every CI run.
+
+
 
 - Marker spans carry `aria-hidden="true"`. Assistive tech never reads the
   raw Markdown syntax; it gets `<h1>`, `<strong>`, `<a href>`, `<ul>` etc.

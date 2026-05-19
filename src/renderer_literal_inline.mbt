@@ -178,7 +178,12 @@ fn render_inline_literal(
       buf.write_string("</span>")
     }
     Inline::FootnoteReference(label~, ..) => {
+      // The `[^label]` source characters are the only content, but they
+      // sit inside an `aria-hidden` marker span — without an explicit
+      // `aria-label` the `<a>` would be focusable yet nameless.
       buf.write_string("<sup class=\"footnote-ref\"><a href=\"#fn-")
+      escape_html_attr_into(buf, label)
+      buf.write_string("\" aria-label=\"Footnote ")
       escape_html_attr_into(buf, label)
       buf.write_string("\">")
       write_marker(buf, "[^" + label + "]")

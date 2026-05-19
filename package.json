@@ -73,13 +73,17 @@
     "@luna_ui/luna": "^0.11.0"
   },
   "peerDependenciesMeta": {
-    "@luna_ui/luna": { "optional": true }
+    "@luna_ui/luna": {
+      "optional": true
+    }
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.11.3",
     "@luna_ui/luna": "^0.11.0",
     "@playwright/test": "^1.58.2",
     "@types/mdast": "^4.0.4",
     "@types/unist": "^3.0.3",
+    "axe-core": "^4.11.4",
     "playwright": "^1.58.2",
     "preact": "^10.28.4",
     "puppeteer": "^24.38.0",

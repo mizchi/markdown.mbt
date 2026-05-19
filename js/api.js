@@ -10,11 +10,6 @@ import {
   md_to_html_with_wikilinks_and_autolink,
   md_to_html_with_wikilinks_without_autolink,
   md_to_html_literal,
-  md_to_html_literal_with_wikilinks,
-  md_to_html_literal_with_positions,
-  md_to_html_literal_with_positions_and_wikilinks,
-  md_to_html_literal_with_image_preview,
-  md_to_html_literal_with_positions_and_image_preview,
   md_to_markdown,
   md_to_markdown_with_wikilinks,
   md_to_ast_json,
@@ -102,21 +97,17 @@ export function toMarkdown(source, options = {}) {
  * @param {{ wikilinks?: boolean }} [options] - Parser extensions
  * @returns {string} HTML
  */
+/** Bit flags accepted by the literal renderer FFI export. */
+const LITERAL_WIKILINKS = 1;
+const LITERAL_POSITIONS = 2;
+const LITERAL_IMAGE_PREVIEW = 4;
+
 export function toHtmlLiteral(source, options = {}) {
-  const wikilinks = useWikilinks(options);
-  const positions = options?.positions === true;
-  const imagePreview = options?.imagePreview === true;
-  // Five canonical combinations are exposed as separate FFI exports; the
-  // others fall back to picking the smallest superset (we always have a
-  // function that does *at least* what was asked).
-  if (imagePreview && positions) {
-    return md_to_html_literal_with_positions_and_image_preview(source);
-  }
-  if (imagePreview) return md_to_html_literal_with_image_preview(source);
-  if (positions && wikilinks) return md_to_html_literal_with_positions_and_wikilinks(source);
-  if (positions) return md_to_html_literal_with_positions(source);
-  if (wikilinks) return md_to_html_literal_with_wikilinks(source);
-  return md_to_html_literal(source);
+  let flags = 0;
+  if (useWikilinks(options)) flags |= LITERAL_WIKILINKS;
+  if (options?.positions === true) flags |= LITERAL_POSITIONS;
+  if (options?.imagePreview === true) flags |= LITERAL_IMAGE_PREVIEW;
+  return md_to_html_literal(source, flags);
 }
 
 // =============================================================================

@@ -478,6 +478,18 @@ fn render_block_literal(
 }
 
 ///|
+/// Render a GFM table.
+///
+/// We deliberately avoid native `<table>` / `<tr>` / `<td>` elements
+/// here: HTML parses interleave `<span class="md-marker">` siblings
+/// between cells (each `|` separator, the separator-row dashes, the
+/// row-trailing newline) which would be foster-parented out of the
+/// table by the spec's "in table" insertion mode and end up *above* the
+/// table in the DOM. Instead we emit ARIA-roled `<div>` / `<span>`
+/// elements that carry the same semantic information (role="table",
+/// "rowgroup", "row", "columnheader", "cell") while letting the
+/// surrounding flow place the markers wherever they belong in the
+/// source.
 fn render_table_literal(
   header : Array[TableCell],
   alignments : Array[TableAlign],
@@ -486,22 +498,18 @@ fn render_table_literal(
   buf : StringBuilder,
   opts : LiteralOpts,
 ) -> Unit {
-  buf.write_string("<table")
+  buf.write_string("<div class=\"md-table\" role=\"table\"")
   write_pos_attrs(buf, span, opts.positions)
   buf.write_char('>')
-  buf.write_string("<thead><tr>")
-  write_marker(buf, "|")
-  for i, cell in header {
-    let align = if i < alignments.length() {
-      alignments[i]
-    } else {
-      TableAlign::None
-    }
-    render_table_cell_literal(cell, "th", align, buf, opts)
-  }
-  buf.write_char('\n')
-  buf.write_string("</tr></thead>")
-  buf.write_string("<tr aria-hidden=\"true\" class=\"md-table-separator\">")
+  // Header row, wrapped in a row group for AT navigation.
+  buf.write_string("<div class=\"md-table-rowgroup\" role=\"rowgroup\">")
+  write_table_row_literal(header, alignments, "columnheader", buf, opts)
+  buf.write_string("</div>")
+  // Separator row — purely syntactic, so the entire row is hidden from
+  // AT. Visible text matches the serializer: `| :-- | --- | …`.
+  buf.write_string(
+    "<div class=\"md-table-separator\" aria-hidden=\"true\">",
+  )
   write_marker(buf, "|")
   for align in alignments {
     let sep = match align {
@@ -513,55 +521,59 @@ fn render_table_literal(
     write_marker(buf, sep)
   }
   buf.write_char('\n')
-  buf.write_string("</tr>")
+  buf.write_string("</div>")
   if rows.length() > 0 {
-    buf.write_string("<tbody>")
+    buf.write_string("<div class=\"md-table-rowgroup\" role=\"rowgroup\">")
     for row in rows {
-      buf.write_string("<tr>")
-      write_marker(buf, "|")
-      for i, cell in row {
-        let align = if i < alignments.length() {
-          alignments[i]
-        } else {
-          TableAlign::None
-        }
-        render_table_cell_literal(cell, "td", align, buf, opts)
-      }
-      buf.write_char('\n')
-      buf.write_string("</tr>")
+      write_table_row_literal(row, alignments, "cell", buf, opts)
     }
-    buf.write_string("</tbody>")
+    buf.write_string("</div>")
   }
-  buf.write_string("</table>")
+  buf.write_string("</div>")
 }
 
 ///|
-fn render_table_cell_literal(
-  cell : TableCell,
-  tag : String,
-  align : TableAlign,
+/// Emit a single table row using ARIA roles. `cell_role` is the role
+/// assigned to each cell (`columnheader` for the header row, `cell` for
+/// data rows). All markers and content stay inside the `<div role="row">`
+/// — no native table elements are used, so HTML parser foster-parenting
+/// can't relocate them outside the table.
+fn write_table_row_literal(
+  row : Array[TableCell],
+  alignments : Array[TableAlign],
+  cell_role : String,
   buf : StringBuilder,
   opts : LiteralOpts,
 ) -> Unit {
-  // Cell spans are relative to the cell content, not the document.
-  // The enclosing <table data-src-*> covers the whole grid; the click
-  // handler walks up from a cell click to there.
-  let align_attr = match align {
-    TableAlign::Left => " style=\"text-align: left\""
-    TableAlign::Center => " style=\"text-align: center\""
-    TableAlign::Right => " style=\"text-align: right\""
-    TableAlign::None => ""
+  buf.write_string("<div class=\"md-table-row\" role=\"row\">")
+  // The row-opening `|` plus the leading space of the first cell are
+  // emitted together so screen readers don't hear the pipe.
+  write_marker(buf, "|")
+  for i, cell in row {
+    let align = if i < alignments.length() {
+      alignments[i]
+    } else {
+      TableAlign::None
+    }
+    let style_attr = match align {
+      TableAlign::Left => " style=\"text-align: left\""
+      TableAlign::Center => " style=\"text-align: center\""
+      TableAlign::Right => " style=\"text-align: right\""
+      TableAlign::None => ""
+    }
+    buf.write_string("<span class=\"md-table-cell\" role=\"")
+    buf.write_string(cell_role)
+    buf.write_char('"')
+    buf.write_string(style_attr)
+    buf.write_char('>')
+    write_marker(buf, " ")
+    render_inlines_literal(cell.children, buf, opts)
+    write_marker(buf, " ")
+    buf.write_string("</span>")
+    write_marker(buf, "|")
   }
-  buf.write_char('<')
-  buf.write_string(tag)
-  buf.write_string(align_attr)
-  buf.write_char('>')
-  write_marker(buf, " ")
-  render_inlines_literal(cell.children, buf, opts)
-  buf.write_string("</")
-  buf.write_string(tag)
-  buf.write_char('>')
-  write_marker(buf, " |")
+  buf.write_char('\n')
+  buf.write_string("</div>")
 }
 
 ///|

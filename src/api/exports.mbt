@@ -137,50 +137,18 @@ pub fn md_to_ast_json_with_wikilinks(source : String) -> String {
 
 ///|
 /// Parse markdown and render using the source-preserving "literal" mode.
-/// The visible text of the output (with HTML tags stripped) equals the
-/// lossless serialization of the parsed document.
-pub fn md_to_html_literal(source : String) -> String {
-  @markdown.md_to_html_literal(source)
-}
-
-///|
-/// Same as `md_to_html_literal`, with wikilinks parsing enabled.
-pub fn md_to_html_literal_with_wikilinks(source : String) -> String {
-  @markdown.md_to_html_literal(source, wikilinks=true)
-}
-
-///|
-/// Same as `md_to_html_literal`, but every top-level block also carries
-/// `data-src-start` / `data-src-end` attributes. Click handlers can walk
-/// the DOM to the nearest annotated ancestor and use those offsets to
-/// place a cursor in the original source.
-pub fn md_to_html_literal_with_positions(source : String) -> String {
-  @markdown.md_to_html_literal(source, positions=true)
-}
-
-///|
-/// `md_to_html_literal_with_positions` with wikilinks parsing enabled.
-pub fn md_to_html_literal_with_positions_and_wikilinks(
-  source : String,
-) -> String {
-  @markdown.md_to_html_literal(source, wikilinks=true, positions=true)
-}
-
-///|
-/// Emit `<img class="md-image-preview" src=...>` slots inside each
-/// `<span class="md-image">` wrapper, in addition to the source
-/// characters. CSS in `@mizchi/markdown/editor/overlay.css` hides the
-/// slot by default; the consumer opts in by adding `.with-image-preview`.
-pub fn md_to_html_literal_with_image_preview(source : String) -> String {
-  @markdown.md_to_html_literal(source, image_preview=true)
-}
-
-///|
-/// Both positions and image_preview on.
-pub fn md_to_html_literal_with_positions_and_image_preview(
-  source : String,
-) -> String {
-  @markdown.md_to_html_literal(source, positions=true, image_preview=true)
+/// The visible text of the output (HTML tags stripped, basic character
+/// references decoded) equals the lossless serialization of the parsed
+/// document.
+///
+/// `flags` is a bitmask over `LITERAL_WIKILINKS` (1), `LITERAL_POSITIONS`
+/// (2) and `LITERAL_IMAGE_PREVIEW` (4). Pass `0` for the default
+/// behavior; OR the constants together for combinations.
+pub fn md_to_html_literal(source : String, flags : Int) -> String {
+  let wikilinks = (flags & 1) != 0
+  let positions = (flags & 2) != 0
+  let image_preview = (flags & 4) != 0
+  @markdown.md_to_html_literal(source, wikilinks~, positions~, image_preview~)
 }
 
 // =============================================================================

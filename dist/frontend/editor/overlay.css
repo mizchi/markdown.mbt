@@ -53,14 +53,12 @@
 .md-literal blockquote,
 .md-literal pre,
 .md-literal code,
-.md-literal table,
-.md-literal thead,
-.md-literal tbody,
-.md-literal tr,
-.md-literal th,
-.md-literal td,
 .md-literal div[role="separator"],
 .md-literal div.md-fenced-code,
+.md-literal div.md-table,
+.md-literal div.md-table-rowgroup,
+.md-literal div.md-table-row,
+.md-literal div.md-table-separator,
 .md-literal .footnote,
 .md-literal sup.footnote-ref {
   display: inline;
