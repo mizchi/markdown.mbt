@@ -1,6 +1,6 @@
 import { jsx as _jsx, jsxs as _jsxs } from "@luna_ui/luna/jsx-runtime";
 import { createEffect, onMount, onCleanup, createSignal, createMemo, For } from "@luna_ui/luna";
-import { getLoadedHighlighter, loadHighlighter, normalizeHighlightLanguage, } from "../frontend/highlight/index.js";
+import { getLoadedHighlighter, loadHighlighter, normalizeHighlightLanguage, } from "../highlight/index.js";
 // Cache for code block highlighting - avoids re-highlighting unchanged blocks
 const codeBlockCache = new Map();
 // Cache for markdown line highlighting

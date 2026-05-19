@@ -2,7 +2,7 @@ import { render, createSignal, createEffect, createMemo, onMount, onCleanup, Sho
 import { parse } from "../js/api.js";
 import type { Root } from "mdast";
 import type { RendererCallbacks } from "./ast-renderer";
-import { SyntaxHighlightEditor, type SyntaxHighlightEditorHandle } from "./SyntaxHighlightEditor";
+import { SyntaxHighlightEditor, type SyntaxHighlightEditorHandle } from "../frontend/editor/SyntaxHighlightEditor";
 import { PreviewPane } from "./PreviewPane";
 
 // IndexedDB for content (reliable async storage)

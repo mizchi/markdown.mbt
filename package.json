@@ -68,6 +68,12 @@
   "author": "mizchi <miz404@gmail.com>",
   "license": "MIT",
   "packageManager": "pnpm@10.23.0",
+  "peerDependencies": {
+    "@luna_ui/luna": "^0.11.0"
+  },
+  "peerDependenciesMeta": {
+    "@luna_ui/luna": { "optional": true }
+  },
   "devDependencies": {
     "@luna_ui/luna": "^0.11.0",
     "@playwright/test": "^1.58.2",
@@ -89,7 +95,13 @@
   },
   "files": [
     "js",
-    "dist",
-    "_build/js/release/build"
+    "dist/frontend",
+    "_build/js/release/build/highlight_typescript",
+    "_build/js/release/build/highlight_moonbit",
+    "_build/js/release/build/highlight_json",
+    "_build/js/release/build/highlight_html",
+    "_build/js/release/build/highlight_css",
+    "_build/js/release/build/highlight_bash",
+    "_build/js/release/build/highlight_rust"
   ]
 }

@@ -3,16 +3,15 @@
   "compilerOptions": {
     "noEmit": false,
     "emitDeclarationOnly": false,
-    "outDir": "dist",
-    "rootDir": ".",
+    "outDir": "dist/frontend",
+    "rootDir": "frontend",
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true
   },
   "include": [
     "frontend/**/*.ts",
-    "frontend/**/*.tsx",
-    "playground/SyntaxHighlightEditor.tsx"
+    "frontend/**/*.tsx"
   ],
   "exclude": [
     "frontend/**/*.test.ts"

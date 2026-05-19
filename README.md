@@ -162,6 +162,15 @@ pnpm exec vite
 bundling syntax highlighters into the initial module. Code block highlighters
 are loaded on demand through dynamic imports under `@mizchi/markdown/highlight`.
 
+The editor uses [`@luna_ui/luna`](https://www.npmjs.com/package/@luna_ui/luna)
+as a JSX runtime and signal library; it is declared as an **optional peer
+dependency** — install it alongside `@mizchi/markdown` only if you use the
+editor entry. See `frontend/editor/README.md` for the editor-specific docs.
+
+```bash
+pnpm add @mizchi/markdown @luna_ui/luna
+```
+
 ```tsx
 import { SyntaxHighlightEditor } from "@mizchi/markdown/editor";
 import "@mizchi/markdown/editor/style.css";

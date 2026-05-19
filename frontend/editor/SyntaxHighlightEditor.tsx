@@ -3,7 +3,7 @@ import {
   getLoadedHighlighter,
   loadHighlighter,
   normalizeHighlightLanguage,
-} from "../frontend/highlight/index.js";
+} from "../highlight/index.js";
 
 export interface SyntaxHighlightEditorProps {
   value: () => string;  // Always accessor for fine-grained reactivity

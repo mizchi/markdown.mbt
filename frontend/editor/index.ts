@@ -2,7 +2,7 @@ export {
   SyntaxHighlightEditor,
   type SyntaxHighlightEditorHandle,
   type SyntaxHighlightEditorProps,
-} from "../../playground/SyntaxHighlightEditor.js";
+} from "./SyntaxHighlightEditor.js";
 
 export {
   getLoadedHighlighter,
