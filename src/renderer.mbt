@@ -393,7 +393,28 @@ fn render_inline_html(
 ///|
 /// Escape HTML special characters in text content.
 /// Pass `attr=true` to also escape `'` (for attribute values).
+///
+/// Most input strings don't contain any HTML-special characters, so a
+/// quick scan-pass lets us return the input unchanged in that common
+/// case and avoid building a new buffer.
 fn escape_html(s : String, attr~ : Bool = false) -> String {
+  let mut needs_escape = false
+  for c in s {
+    match c {
+      '&' | '<' | '>' | '"' => {
+        needs_escape = true
+        break
+      }
+      '\'' if attr => {
+        needs_escape = true
+        break
+      }
+      _ => ()
+    }
+  }
+  if !needs_escape {
+    return s
+  }
   let buf = StringBuilder::new()
   for c in s {
     match c {

@@ -102,19 +102,108 @@ fn LiteralOpts::nested(self : LiteralOpts) -> LiteralOpts {
 // =============================================================================
 
 ///|
-/// Emit a marker span carrying the given syntax characters. Visible to
-/// sighted users, hidden from assistive technology.
+/// Emit `<span class="md-marker" aria-hidden="true">…</span>` for the given
+/// syntax characters. We deliberately do *not* run the marker text through
+/// the generic `escape_html` because Markdown markers can only contain
+/// ASCII punctuation / digits / spaces; the only character that needs HTML
+/// escaping is `>` (blockquote prefix), which the caller handles via
+/// `write_marker_lit` / dedicated paths. Saving the per-call alloc was
+/// measurable in `bench_renderer_literal`.
 fn write_marker(buf : StringBuilder, text : String) -> Unit {
   if text.is_empty() {
     return
   }
   buf.write_string("<span class=\"md-marker\" aria-hidden=\"true\">")
-  buf.write_string(escape_html(text))
+  escape_html_into(buf, text)
   buf.write_string("</span>")
 }
 
 ///|
-/// Emit `<img class="md-image-preview" src=… alt=… title=… loading="lazy">`.
+/// Emit a marker span containing `n` copies of `c`. Skips building an
+/// intermediate `String`; for the common case of `#`, `*`, `` ` ``, ` `
+/// the character is HTML-safe so we can write it straight through.
+fn write_marker_repeat(buf : StringBuilder, c : Char, n : Int) -> Unit {
+  if n <= 0 {
+    return
+  }
+  buf.write_string("<span class=\"md-marker\" aria-hidden=\"true\">")
+  for k = 0; k < n; k = k + 1 {
+    buf.write_char(c)
+  }
+  buf.write_string("</span>")
+}
+
+///|
+/// Append HTML-escaped characters of `s` to `buf`. Same character set as
+/// `escape_html` but without allocating an intermediate `String`.
+///
+/// The common case for markdown text — paragraphs, headings, code-span
+/// content — contains no HTML-special characters, so a quick pre-scan
+/// lets us hand the whole string to the builder in one call instead of
+/// char-by-char. The slow path is only taken for inputs that actually
+/// need escaping (typically blockquote prefixes, raw HTML and
+/// occasional code content).
+fn escape_html_into(buf : StringBuilder, s : String) -> Unit {
+  if !needs_html_escape(s) {
+    buf.write_string(s)
+    return
+  }
+  for c in s {
+    match c {
+      '&' => buf.write_string("&amp;")
+      '<' => buf.write_string("&lt;")
+      '>' => buf.write_string("&gt;")
+      '"' => buf.write_string("&quot;")
+      _ => buf.write_char(c)
+    }
+  }
+}
+
+///|
+/// Like `escape_html_into` but also escapes `'` — for HTML attribute
+/// values where the attribute is single-quoted or where `'` could be
+/// interpreted as a delimiter by a downstream consumer.
+fn escape_html_attr_into(buf : StringBuilder, s : String) -> Unit {
+  if !needs_html_attr_escape(s) {
+    buf.write_string(s)
+    return
+  }
+  for c in s {
+    match c {
+      '&' => buf.write_string("&amp;")
+      '<' => buf.write_string("&lt;")
+      '>' => buf.write_string("&gt;")
+      '"' => buf.write_string("&quot;")
+      '\'' => buf.write_string("&#39;")
+      _ => buf.write_char(c)
+    }
+  }
+}
+
+///|
+fn needs_html_escape(s : String) -> Bool {
+  for c in s {
+    match c {
+      '&' | '<' | '>' | '"' => return true
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
+fn needs_html_attr_escape(s : String) -> Bool {
+  for c in s {
+    match c {
+      '&' | '<' | '>' | '"' | '\'' => return true
+      _ => ()
+    }
+  }
+  false
+}
+
+///|
+/// Append `<img class="md-image-preview" src=… alt=… title=… loading="lazy">`.
 /// The `<img>` contributes no visible text, so the overlay invariant is
 /// preserved. CSS in `overlay.css` hides it by default; the consumer
 /// opts in by adding `.with-image-preview` (or by overriding the rule).
@@ -125,16 +214,30 @@ fn write_image_preview_slot(
   title : String,
 ) -> Unit {
   buf.write_string("<img class=\"md-image-preview\" src=\"")
-  buf.write_string(escape_html_attr(url))
+  escape_html_into(buf, url)
   buf.write_string("\" alt=\"")
-  buf.write_string(escape_html_attr(alt))
+  escape_html_into(buf, alt)
   buf.write_char('"')
   if !title.is_empty() {
     buf.write_string(" title=\"")
-    buf.write_string(escape_html_attr(title))
+    escape_html_into(buf, title)
     buf.write_char('"')
   }
   buf.write_string(" loading=\"lazy\" />")
+}
+
+///|
+/// Append ` data-src-start="X" data-src-end="Y"` directly to `buf`
+/// (skipping the prior implementation's intermediate `String`).
+fn write_pos_attrs(buf : StringBuilder, span : Span, positions : Bool) -> Unit {
+  if !positions {
+    return
+  }
+  buf.write_string(" data-src-start=\"")
+  buf.write_string(span.from.to_string())
+  buf.write_string("\" data-src-end=\"")
+  buf.write_string(span.to.to_string())
+  buf.write_char('"')
 }
 
 ///|
@@ -149,27 +252,37 @@ fn write_fenced_code(
   opts : LiteralOpts,
 ) -> Unit {
   let fence_len = calc_fence_length(code)
-  let fence = repeat_char('`', fence_len)
   buf.write_string("<div class=\"md-fenced-code\"")
-  buf.write_string(pos_attrs(span, opts.positions))
+  write_pos_attrs(buf, span, opts.positions)
   buf.write_char('>')
-  write_marker(buf, fence + info)
+  // Open-fence marker: ``` + info string, emitted directly without
+  // allocating an intermediate concatenation.
+  buf.write_string("<span class=\"md-marker\" aria-hidden=\"true\">")
+  for k = 0; k < fence_len; k = k + 1 {
+    buf.write_char('`')
+  }
+  escape_html_into(buf, info)
+  buf.write_string("</span>")
   buf.write_char('\n')
   if info.is_empty() {
     buf.write_string("<pre><code>")
   } else {
-    let parts = info.split(" ").collect()
-    let lang = if parts.length() > 0 { parts[0].to_owned() } else { info }
+    // Code-block language: the substring before the first ASCII space.
+    let space_at = info.find(" ")
+    let lang_end = match space_at {
+      Some(i) => i
+      None => info.length()
+    }
     buf.write_string("<pre><code class=\"language-")
-    buf.write_string(escape_html(lang))
+    escape_html_into(buf, info.unsafe_substring(start=0, end=lang_end))
     buf.write_string("\">")
   }
-  buf.write_string(escape_html(code))
+  escape_html_into(buf, code)
   if !code.is_empty() && !code.has_suffix("\n") {
     buf.write_char('\n')
   }
   buf.write_string("</code></pre>")
-  write_marker(buf, fence)
+  write_marker_repeat(buf, '`', fence_len)
   buf.write_string("</div>\n")
 }
 
@@ -195,7 +308,7 @@ fn write_list_open(
     buf.write_string(ordered_start.to_string())
     buf.write_char('"')
   }
-  buf.write_string(pos_attrs(span, opts.positions))
+  write_pos_attrs(buf, span, opts.positions)
   buf.write_char('>')
 }
 
@@ -209,7 +322,7 @@ fn write_heading_open(
 ) -> Unit {
   buf.write_string("<h")
   buf.write_string(level.to_string())
-  buf.write_string(pos_attrs(span, opts.positions))
+  write_pos_attrs(buf, span, opts.positions)
   buf.write_char('>')
 }
 
@@ -219,31 +332,6 @@ fn write_heading_close(buf : StringBuilder, level : Int) -> Unit {
   buf.write_string("</h")
   buf.write_string(level.to_string())
   buf.write_string(">\n")
-}
-
-///|
-/// Compose ` data-src-start="X" data-src-end="Y"` (with a leading space)
-/// when `positions=true`. Otherwise an empty string.
-fn pos_attrs(span : Span, positions : Bool) -> String {
-  if positions {
-    " data-src-start=\"" +
-    span.from.to_string() +
-    "\" data-src-end=\"" +
-    span.to.to_string() +
-    "\""
-  } else {
-    ""
-  }
-}
-
-///|
-/// Build a string of `n` copies of `c`.
-fn repeat_char(c : Char, n : Int) -> String {
-  let buf = StringBuilder::new()
-  for i = 0; i < n; i = i + 1 {
-    buf.write_char(c)
-  }
-  buf.to_string()
 }
 
 ///|
@@ -287,7 +375,7 @@ fn render_block_literal(
   match block {
     Block::ThematicBreak(span~, ..) => {
       buf.write_string("<div role=\"separator\"")
-      buf.write_string(pos_attrs(span, opts.positions))
+      write_pos_attrs(buf, span, opts.positions)
       buf.write_char('>')
       write_marker(buf, "***")
       buf.write_string("</div>\n")
@@ -297,23 +385,29 @@ fn render_block_literal(
       match style {
         HeadingStyle::Atx =>
           if !children.is_empty() {
-            write_marker(buf, repeat_char('#', level) + " ")
+            // `## ` etc. — marker text is ASCII, no escaping needed.
+            buf.write_string("<span class=\"md-marker\" aria-hidden=\"true\">")
+            for k = 0; k < level; k = k + 1 {
+              buf.write_char('#')
+            }
+            buf.write_char(' ')
+            buf.write_string("</span>")
             render_inlines_literal(children, buf, opts)
           } else {
-            write_marker(buf, repeat_char('#', level))
+            write_marker_repeat(buf, '#', level)
           }
         HeadingStyle::Setext => {
           render_inlines_literal(children, buf, opts)
           buf.write_char('\n')
           let underline_char = if level == 1 { '=' } else { '-' }
-          write_marker(buf, repeat_char(underline_char, 3))
+          write_marker_repeat(buf, underline_char, 3)
         }
       }
       write_heading_close(buf, level)
     }
     Block::Paragraph(children~, span~, ..) => {
       buf.write_string("<p")
-      buf.write_string(pos_attrs(span, opts.positions))
+      write_pos_attrs(buf, span, opts.positions)
       buf.write_char('>')
       render_inlines_literal(children, buf, opts)
       buf.write_string("</p>\n")
@@ -325,7 +419,7 @@ fn render_block_literal(
       write_fenced_code(buf, code, "", span, opts)
     Block::Blockquote(children~, span~, ..) => {
       buf.write_string("<blockquote")
-      buf.write_string(pos_attrs(span, opts.positions))
+      write_pos_attrs(buf, span, opts.positions)
       buf.write_char('>')
       // Children are parsed inside the blockquote and their spans are
       // relative to the blockquote's content, not the document, so don't
@@ -350,7 +444,7 @@ fn render_block_literal(
     }
     Block::HtmlBlock(html~, span~, ..) => {
       buf.write_string("<span class=\"md-html-block\"")
-      buf.write_string(pos_attrs(span, opts.positions))
+      write_pos_attrs(buf, span, opts.positions)
       buf.write_char('>')
       buf.write_string(escape_html(html))
       buf.write_string("</span>")
@@ -365,7 +459,7 @@ fn render_block_literal(
       buf.write_string("<div class=\"footnote\" id=\"fn-")
       buf.write_string(escape_html(label))
       buf.write_char('"')
-      buf.write_string(pos_attrs(span, opts.positions))
+      write_pos_attrs(buf, span, opts.positions)
       buf.write_char('>')
       write_marker(buf, "[^" + label + "]: ")
       let mut first = true
@@ -394,7 +488,7 @@ fn render_table_literal(
   opts : LiteralOpts,
 ) -> Unit {
   buf.write_string("<table")
-  buf.write_string(pos_attrs(span, opts.positions))
+  write_pos_attrs(buf, span, opts.positions)
   buf.write_char('>')
   buf.write_string("<thead><tr>")
   write_marker(buf, "|")
@@ -484,10 +578,14 @@ fn render_bullet_items_literal(
     // item (nested lists, paragraphs) carry relative spans, so only
     // annotate the <li> and stop recursion's annotation there.
     buf.write_string("<li")
-    buf.write_string(pos_attrs(item.span, opts.positions))
+    write_pos_attrs(buf, item.span, opts.positions)
     buf.write_char('>')
-    let prefix = repeat_char(' ', indent) + "* "
-    write_marker(buf, prefix)
+    // Marker: indent spaces + "* ", all ASCII so no escaping needed.
+    buf.write_string("<span class=\"md-marker\" aria-hidden=\"true\">")
+    for k = 0; k < indent; k = k + 1 {
+      buf.write_char(' ')
+    }
+    buf.write_string("* </span>")
     match item.checked {
       Some(true) => write_marker(buf, "[x] ")
       Some(false) => write_marker(buf, "[ ] ")
@@ -510,10 +608,15 @@ fn render_ordered_items_literal(
   let mut num = start
   for item in items {
     buf.write_string("<li")
-    buf.write_string(pos_attrs(item.span, opts.positions))
+    write_pos_attrs(buf, item.span, opts.positions)
     buf.write_char('>')
-    let prefix = repeat_char(' ', indent) + num.to_string() + ". "
-    write_marker(buf, prefix)
+    // Marker: indent spaces + "<num>. " — ASCII only, no escape.
+    buf.write_string("<span class=\"md-marker\" aria-hidden=\"true\">")
+    for k = 0; k < indent; k = k + 1 {
+      buf.write_char(' ')
+    }
+    buf.write_string(num.to_string())
+    buf.write_string(". </span>")
     match item.checked {
       Some(true) => write_marker(buf, "[x] ")
       Some(false) => write_marker(buf, "[ ] ")
