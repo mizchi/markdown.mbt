@@ -8,7 +8,7 @@ fn split_wikilink_destination(destination : String) -> (String, String) {
   if parts.length() <= 1 {
     (destination, "")
   } else {
-    (parts[0].to_string(), parts[1].to_string())
+    (parts[0].to_owned(), parts[1].to_owned())
   }
 }
 
@@ -29,13 +29,13 @@ fn InlineParser::try_parse_wikilink(
     match self.scanner.peek() {
       Some(']') if char_is(self.scanner.peek_at(1), ']') => {
         self.scanner.advance(2)
-        let raw_target = target_buf.to_string().trim(chars=" \t").to_string()
+        let raw_target = target_buf.to_string().trim(chars=" \t").to_owned()
         if raw_target.is_empty() {
           self.scanner.restore(start)
           return None
         }
         let raw_label = if in_label {
-          label_buf.to_string().trim(chars=" \t").to_string()
+          label_buf.to_string().trim(chars=" \t").to_owned()
         } else {
           ""
         }

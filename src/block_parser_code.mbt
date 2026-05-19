@@ -28,7 +28,7 @@ fn BlockParser::try_parse_fenced_code(
 
   // Read info string (language + optional filename)
   let _ = self.scanner.skip_spaces()
-  let info = self.scanner.read_line().trim_end(chars=" \t").to_string()
+  let info = self.scanner.read_line().trim_end(chars=" \t").to_owned()
 
   // Skip newline
   if char_is(self.scanner.peek(), '\n') {
@@ -134,7 +134,7 @@ fn BlockParser::try_parse_indented_code(
       }
     }
   }
-  let code = code_buf.to_string().trim_end(chars="\n").to_string()
+  let code = code_buf.to_string().trim_end(chars="\n").to_owned()
   if code.is_empty() {
     return None
   }

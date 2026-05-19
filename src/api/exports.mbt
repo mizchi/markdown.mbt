@@ -18,7 +18,7 @@ priv struct AstEntry {
 let ast_store : Map[Int, AstEntry] = {}
 
 ///|
-let ast_next_handle : Ref[Int] = Ref::new(1)
+let ast_next_handle : Ref[Int] = { val: 1 }
 
 ///|
 /// Allocate a new handle for the given entry and store it.

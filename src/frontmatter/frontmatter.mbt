@@ -18,7 +18,7 @@ fn find_entry_value(entries : Array[(String, String)], key : String) -> String? 
 fn parse_list_value(value : String) -> Array[String] {
   let items : Array[String] = []
   for part in value.split(",") {
-    let trimmed = part.to_string().trim(chars=" \t\n\r").to_string()
+    let trimmed = part.to_owned().trim(chars=" \t\n\r").to_owned()
     if !trimmed.is_empty() {
       items.push(trimmed)
     }

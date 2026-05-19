@@ -58,7 +58,7 @@ fn BlockParser::try_parse_atx_heading(
 ///|
 /// Parse heading content, returning (content, closing_hash_count)
 fn parse_heading_content(line : String) -> (String, Int) {
-  let trimmed = line.trim_end(chars=" \t").to_string()
+  let trimmed = line.trim_end(chars=" \t").to_owned()
 
   // Count trailing #
   let mut hash_count = 0
@@ -84,7 +84,7 @@ fn parse_heading_content(line : String) -> (String, Int) {
     let content = trimmed
       .unsafe_substring(start=0, end=idx + 1)
       .trim_end(chars=" \t")
-      .to_string()
+      .to_owned()
     (content, hash_count)
   } else {
     (trimmed, 0)
@@ -134,7 +134,7 @@ fn BlockParser::try_parse_setext_heading(
   if char_is(self.scanner.peek(), '\n') {
     self.scanner.advance(1)
   }
-  let content_str = content.trim(chars=" \t\n\r").to_string()
+  let content_str = content.trim(chars=" \t\n\r").to_owned()
   let children = parse_inlines(
     content_str,
     strict=self.strict,

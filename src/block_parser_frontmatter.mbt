@@ -68,7 +68,7 @@ fn parse_simple_yaml(yaml : String) -> Array[(String, String)] {
   let entries : Array[(String, String)] = []
   let lines = yaml.split("\n")
   for line in lines {
-    let trimmed = line.to_string().trim(chars=" \t\n\r")
+    let trimmed = line.to_owned().trim(chars=" \t\n\r")
     if trimmed.is_empty() || trimmed.has_prefix("#") {
       continue
     }
@@ -76,14 +76,14 @@ fn parse_simple_yaml(yaml : String) -> Array[(String, String)] {
       Some(colon_idx) => {
         let key = trimmed
           .view(end_offset=colon_idx)
-          .to_string()
+          .to_owned()
           .trim(chars=" \t\n\r")
-          .to_string()
+          .to_owned()
         let value = trimmed
           .view(start_offset=colon_idx + 1)
-          .to_string()
+          .to_owned()
           .trim(chars=" \t\n\r")
-          .to_string()
+          .to_owned()
         // Remove quotes if present
         let clean_value = if value.has_prefix("\"") && value.has_suffix("\"") {
           value.unsafe_substring(start=1, end=value.length() - 1)

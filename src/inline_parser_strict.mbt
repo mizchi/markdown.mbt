@@ -492,7 +492,7 @@ fn parse_segment_simple(
       Some('\n') => {
         // Check for hard break (2+ trailing spaces before newline)
         let content = text_buf.to_string()
-        let trimmed = content.trim_end(chars=" ").to_string()
+        let trimmed = content.trim_end(chars=" ").to_owned()
         let trailing_spaces = content.length() - trimmed.length()
         let is_hard_break = trailing_spaces >= 2
         if !trimmed.is_empty() {

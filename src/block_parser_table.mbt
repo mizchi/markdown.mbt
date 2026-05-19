@@ -92,7 +92,7 @@ fn parse_table_alignments(line : String) -> Array[TableAlign] {
   let alignments : Array[TableAlign] = []
   let cells = split_table_cells(line)
   for cell in cells {
-    let trimmed = cell.trim(chars=" \t\n\r").to_string()
+    let trimmed = cell.trim(chars=" \t\n\r").to_owned()
     if trimmed.is_empty() {
       continue
     }
@@ -141,7 +141,7 @@ fn parse_table_row(
     if i >= expected_cols {
       break
     }
-    let content = cell.trim(chars=" \t\n\r").to_string()
+    let content = cell.trim(chars=" \t\n\r").to_owned()
     let children = parse_inlines(content, strict~, wikilinks~)
     cells.push({ children, span: Span::new(0, content.length()) }, // Simplified span
     )
@@ -187,7 +187,7 @@ fn split_table_cells(line : String) -> Array[String] {
 
   // Remove first cell if empty (leading |)
   if cells.length() > 0 {
-    match cells[0].trim(chars=" \t\n\r").to_string() {
+    match cells[0].trim(chars=" \t\n\r").to_owned() {
       "" => {
         let _ = cells.remove(0)
       }

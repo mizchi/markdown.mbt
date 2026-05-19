@@ -41,7 +41,7 @@ fn render_block_html(
       } else {
         // Extract language from info string (first word)
         let parts = info.split(" ").collect()
-        let lang = if parts.length() > 0 { parts[0].to_string() } else { info }
+        let lang = if parts.length() > 0 { parts[0].to_owned() } else { info }
         buf.write_string("<pre><code class=\"language-")
         buf.write_string(escape_html(lang))
         buf.write_string("\">")

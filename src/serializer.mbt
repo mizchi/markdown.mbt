@@ -193,7 +193,7 @@ fn serialize_block(block : Block, buf : StringBuilder) -> Unit {
         serialize_block(child, child_buf)
         let child_str = child_buf.to_string()
         for line in child_str.split("\n") {
-          let line_str = line.to_string()
+          let line_str = line.to_owned()
           if !line_str.is_empty() {
             buf.write_string("> ")
             buf.write_string(line_str)
@@ -276,7 +276,7 @@ fn serialize_block(block : Block, buf : StringBuilder) -> Unit {
         }
         let child_buf = StringBuilder::new()
         serialize_block(child, child_buf)
-        let child_str = child_buf.to_string().trim_end(chars="\n").to_string()
+        let child_str = child_buf.to_string().trim_end(chars="\n").to_owned()
         buf.write_string(child_str)
         first = false
       }
