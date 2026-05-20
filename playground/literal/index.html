@@ -16,11 +16,12 @@
         --md-literal-link: #58a6ff;
         --md-literal-code: #f0883e;
         --md-literal-marker: #6e7681;
+        --literal-bottom-scroll-reserve: max(96px, 24vh);
       }
       * { box-sizing: border-box; }
       body {
         margin: 0;
-        padding: 24px;
+        padding: 24px 24px var(--literal-bottom-scroll-reserve);
         background: var(--bg);
         color: var(--fg);
         font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -88,10 +89,39 @@
         caret-color: var(--fg);
         border: 0;
         outline: none;
+        overflow: hidden;
         resize: none;
         font: inherit;
         white-space: pre-wrap;
         z-index: 2;
+      }
+      body.with-image-preview[data-mode="edit"] textarea.source-edit {
+        caret-color: transparent;
+      }
+      body.with-image-preview[data-mode="edit"] textarea.source-edit::selection {
+        background: transparent;
+      }
+      .source-caret {
+        position: absolute;
+        display: none;
+        width: 1px;
+        background: var(--fg);
+        pointer-events: none;
+        z-index: 3;
+      }
+      body.with-image-preview[data-mode="edit"] .source-caret {
+        display: block;
+      }
+      .source-selection {
+        position: absolute;
+        inset: 0;
+        display: none;
+        pointer-events: none;
+        z-index: 1;
+      }
+      .source-selection-rect {
+        position: absolute;
+        background: rgba(56, 139, 253, 0.32);
       }
       /* Show only the preview in preview mode, only the textarea in edit
        * mode. The textarea is visually identical to the preview because
@@ -120,6 +150,11 @@
         opacity: 1;
         color: var(--fg);
         visibility: visible;
+      }
+      body.with-image-preview[data-mode="edit"] #source-view.md-literal
+        .md-image-preview-spacer .md-image-preview {
+        visibility: visible;
+        box-shadow: 0 0 0 1px var(--md-literal-image-border, rgba(110, 118, 129, 0.4));
       }
       body.overlay #rendered {
         position: absolute;
@@ -198,6 +233,8 @@
         <pre class="md-literal" id="source-view"></pre>
         <div class="md-literal" id="rendered"></div>
         <textarea class="source-edit md-literal" id="source"></textarea>
+        <div class="source-selection" id="source-selection" aria-hidden="true"></div>
+        <div class="source-caret" id="source-caret" aria-hidden="true"></div>
       </div>
     </section>
     <script type="module" src="./main.ts"></script>

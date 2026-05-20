@@ -38,14 +38,21 @@ fn render_paragraph_inlines_literal(
         render_inline_literal(inline, buf, opts)
         at_line_start = true
       }
+      Inline::Image(alt~, url~, title~, ..) => {
+        if opts.image_preview &&
+          at_line_start &&
+          is_line_end_after(inlines, i) &&
+          is_previewable_image_url(url) {
+          render_inline_literal(inline, buf, opts.without_image_preview())
+          write_image_preview_block_slot(buf, url, alt, title)
+          at_line_start = false
+        } else {
+          render_inline_literal(inline, buf, opts)
+          at_line_start = false
+        }
+      }
       _ => {
         render_inline_literal(inline, buf, opts)
-        if opts.image_preview && at_line_start && is_line_end_after(inlines, i) {
-          match standalone_image_url_from_inline(inline) {
-            Some(url) => write_image_preview_block_slot(buf, url)
-            None => ()
-          }
-        }
         at_line_start = false
       }
     }

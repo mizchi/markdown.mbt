@@ -93,11 +93,24 @@ test "serialize bullet list" {
   let source = "- Item 1\n- Item 2\n"
   let result = parse(source)
   let output = serialize(result.document)
-  // Output is normalized to * for GFM compatibility
+  // Output is normalized to - for stable editor/source rendering.
   @debug.debug_inspect(
     output,
     content=(
-      #|"* Item 1\n* Item 2\n"
+      #|"- Item 1\n- Item 2\n"
+    ),
+  )
+}
+
+///|
+test "serialize bullet list normalizes asterisk to dash" {
+  let source = "* Item 1\n* Item 2\n"
+  let result = parse(source)
+  let output = serialize(result.document)
+  @debug.debug_inspect(
+    output,
+    content=(
+      #|"- Item 1\n- Item 2\n"
     ),
   )
 }

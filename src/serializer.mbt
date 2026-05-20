@@ -202,7 +202,7 @@ fn serialize_block(block : Block, buf : StringBuilder) -> Unit {
         }
       }
     Block::BulletList(items~, ..) =>
-      // GFM style: always use *, no marker_offset
+      // Stable editor/source style: always use -, no marker_offset.
       serialize_bullet_list_items(items, buf, 0)
     Block::OrderedList(start~, items~, ..) =>
       // GFM style: always use ., no marker_offset
@@ -315,7 +315,7 @@ fn serialize_bullet_list_items(
   for item in items {
     // Write indentation
     write_chars(buf, ' ', indent)
-    buf.write_string("* ")
+    buf.write_string("- ")
 
     // Task list checkbox
     match item.checked {

@@ -118,10 +118,9 @@ test.describe("literal renderer overlay invariant", () => {
         ta.dispatchEvent(new Event("input", { bubbles: true }));
       }, sample.md);
 
-      // The demo writes a green `✓` into #invariant-state if the rendered
-      // output's visible text equals `toMarkdown(source)`. That covers the
-      // entire byte-for-byte equality check.
-      await expect(page.locator("#invariant-state")).toHaveText(/overlay invariant holds/);
+      // The demo writes a green `✓` into #invariant-state if the patched
+      // DOM still matches a fresh literal render.
+      await expect(page.locator("#invariant-state")).toHaveText(/literal DOM matches fresh render/);
     });
   }
 
@@ -143,6 +142,119 @@ test.describe("literal renderer overlay invariant", () => {
     await expect(host).toHaveScreenshot("literal-overlay-mixed.png", {
       maxDiffPixelRatio: 0.02,
     });
+  });
+
+  test("overlay VRT: edit roundtrip rendered layer matches source layer pixels", async ({ page }) => {
+    await page.setViewportSize({ width: 968, height: 572 });
+    await page.goto("/literal/");
+    await page.evaluate((md) => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.value = md;
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    }, [
+      "# Compression Dictionary Transport 用の Toolkit",
+      "",
+      "## Intro",
+      "",
+      "CDT は あらかじめ辞書を作って クライアントに取得させておき、それを用いて 転送を圧縮することができる。",
+      "",
+      "- コマンドラインツール `cdt-toolkit` を定義した",
+      "  - Rust で実装し crates.io で公開中",
+      "- 詳細は <https://github.com/example/cdt-toolkit> を参照",
+      "",
+    ].join("\n"));
+    await page.locator("#overlay-toggle").check();
+    await page.evaluate(() => document.fonts.ready);
+
+    await page.locator("#rendered h1").click();
+    await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+    await page.keyboard.press("Escape");
+    await expect(page.locator("body")).toHaveAttribute("data-mode", "preview");
+    await page.waitForTimeout(50);
+
+    const host = page.locator("#host");
+    const normalizeLayers = `
+      #host { background: #161b22 !important; }
+      #source-view,
+      #rendered {
+        background: transparent !important;
+        color: #fff !important;
+        opacity: 1 !important;
+      }
+      #source-view [class^="md-src-"],
+      #rendered,
+      #rendered * {
+        background: transparent !important;
+        box-shadow: none !important;
+        color: #fff !important;
+        font: inherit !important;
+        opacity: 1 !important;
+        text-decoration: none !important;
+      }
+    `;
+    const sourcePng = await host.screenshot({
+      style: `${normalizeLayers}
+        #rendered { visibility: hidden !important; }
+        #source-view { visibility: visible !important; }
+      `,
+    });
+    const renderedPng = await host.screenshot({
+      style: `${normalizeLayers}
+        #source-view { visibility: hidden !important; }
+        #rendered { visibility: visible !important; }
+      `,
+    });
+    const diff = await page.evaluate(
+      async ({ rendered, source }) => {
+        const decode = async (base64: string) => {
+          const img = new Image();
+          img.src = `data:image/png;base64,${base64}`;
+          await img.decode();
+          const canvas = document.createElement("canvas");
+          canvas.width = img.naturalWidth;
+          canvas.height = img.naturalHeight;
+          const ctx = canvas.getContext("2d");
+          if (!ctx) throw new Error("missing 2d canvas context");
+          ctx.drawImage(img, 0, 0);
+          return {
+            width: canvas.width,
+            height: canvas.height,
+            data: ctx.getImageData(0, 0, canvas.width, canvas.height).data,
+          };
+        };
+        const renderedImage = await decode(rendered);
+        const sourceImage = await decode(source);
+        if (
+          renderedImage.width !== sourceImage.width ||
+          renderedImage.height !== sourceImage.height
+        ) {
+          throw new Error(
+            `screenshot size mismatch: rendered ${renderedImage.width}x${renderedImage.height}, ` +
+              `source ${sourceImage.width}x${sourceImage.height}`,
+          );
+        }
+        let mismatched = 0;
+        for (let i = 0; i < renderedImage.data.length; i += 4) {
+          const dr = Math.abs(renderedImage.data[i]! - sourceImage.data[i]!);
+          const dg = Math.abs(renderedImage.data[i + 1]! - sourceImage.data[i + 1]!);
+          const db = Math.abs(renderedImage.data[i + 2]! - sourceImage.data[i + 2]!);
+          const da = Math.abs(renderedImage.data[i + 3]! - sourceImage.data[i + 3]!);
+          if (dr + dg + db + da > 8) mismatched++;
+        }
+        const total = renderedImage.width * renderedImage.height;
+        return {
+          mismatched,
+          total,
+          ratio: mismatched / total,
+        };
+      },
+      {
+        rendered: renderedPng.toString("base64"),
+        source: sourcePng.toString("base64"),
+      },
+    );
+    expect(diff.ratio, JSON.stringify(diff)).toBeLessThan(0.002);
   });
 
   // Click on a known glyph in the preview, then verify that the textarea
@@ -218,6 +330,9 @@ test.describe("literal renderer overlay invariant", () => {
         ({ selector, needle }) => {
           const root = document.querySelector(selector);
           if (!root) throw new Error(`missing ${selector}`);
+          const host = document.getElementById("host");
+          if (!host) throw new Error("missing #host");
+          const hostRect = host.getBoundingClientRect();
           const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
           for (let node = walker.nextNode(); node; node = walker.nextNode()) {
             const text = node.textContent ?? "";
@@ -227,7 +342,7 @@ test.describe("literal renderer overlay invariant", () => {
               range.setStart(node, offset);
               range.setEnd(node, offset + 1);
               const rect = range.getBoundingClientRect();
-              return { left: rect.left, top: rect.top };
+              return { left: rect.left - hostRect.left, top: rect.top - hostRect.top };
             }
           }
           throw new Error(`missing ${needle}`);
@@ -270,6 +385,364 @@ test.describe("literal renderer overlay invariant", () => {
     expect(textareaColor).toBe("rgba(0, 0, 0, 0)");
   });
 
+  test("edit-mode textarea grows to content instead of scrolling the source layer", async ({ page }) => {
+    const md = Array.from({ length: 80 }, (_, i) => `line ${String(i + 1).padStart(2, "0")}`)
+      .join("\n") + "\n";
+    await page.goto("/literal/");
+    await page.evaluate((source) => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.value = source;
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    }, md);
+
+    await page.locator("#rendered").click({ position: { x: 4, y: 4 } });
+    await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
+
+    const beforeScroll = await page.evaluate(() => {
+      const host = document.getElementById("host");
+      const source = document.getElementById("source-view");
+      const textarea = document.getElementById("source") as HTMLTextAreaElement | null;
+      if (!host || !source || !textarea) throw new Error("missing nodes");
+      const hostRect = host.getBoundingClientRect();
+      const sourceRect = source.getBoundingClientRect();
+      return {
+        hostHeight: hostRect.height,
+        hostLeft: hostRect.left,
+        hostTop: hostRect.top,
+        sourceLeft: sourceRect.left,
+        sourceTop: sourceRect.top,
+        sourceTransform: getComputedStyle(source).transform,
+        textareaClientHeight: textarea.clientHeight,
+        textareaScrollHeight: textarea.scrollHeight,
+        textareaScrollTop: textarea.scrollTop,
+      };
+    });
+
+    const afterScrollAttempt = await page.evaluate(() => {
+      const textarea = document.getElementById("source") as HTMLTextAreaElement | null;
+      const source = document.getElementById("source-view");
+      const host = document.getElementById("host");
+      if (!textarea || !source || !host) throw new Error("missing nodes");
+      textarea.scrollTop = 192;
+      textarea.scrollLeft = 12;
+      textarea.dispatchEvent(new Event("scroll", { bubbles: true }));
+      const hostRect = host.getBoundingClientRect();
+      const sourceRect = source.getBoundingClientRect();
+      return {
+        hostLeft: hostRect.left,
+        hostTop: hostRect.top,
+        sourceLeft: sourceRect.left,
+        sourceTop: sourceRect.top,
+        sourceTransform: getComputedStyle(source).transform,
+        textareaClientHeight: textarea.clientHeight,
+        textareaScrollHeight: textarea.scrollHeight,
+        textareaScrollLeft: textarea.scrollLeft,
+        textareaScrollTop: textarea.scrollTop,
+      };
+    });
+
+    expect(beforeScroll.hostHeight).toBeGreaterThan(1000);
+    expect(beforeScroll.textareaClientHeight).toBeGreaterThanOrEqual(
+      beforeScroll.textareaScrollHeight - 1,
+    );
+    expect(beforeScroll.textareaScrollTop).toBe(0);
+    expect(beforeScroll.sourceTransform).toBe("none");
+    expect(beforeScroll.sourceLeft).toBeCloseTo(beforeScroll.hostLeft, 1);
+    expect(beforeScroll.sourceTop).toBeCloseTo(beforeScroll.hostTop, 1);
+
+    expect(afterScrollAttempt.textareaClientHeight).toBeGreaterThanOrEqual(
+      afterScrollAttempt.textareaScrollHeight - 1,
+    );
+    expect(afterScrollAttempt.textareaScrollLeft).toBe(0);
+    expect(afterScrollAttempt.textareaScrollTop).toBe(0);
+    expect(afterScrollAttempt.sourceTransform).toBe("none");
+    expect(afterScrollAttempt.sourceLeft).toBeCloseTo(afterScrollAttempt.hostLeft, 1);
+    expect(afterScrollAttempt.sourceTop).toBeCloseTo(afterScrollAttempt.hostTop, 1);
+  });
+
+  test("edit-mode trailing Enter keeps caret at the document end while growing", async ({ page }) => {
+    const md = Array.from({ length: 42 }, (_, i) => `line ${String(i + 1).padStart(2, "0")}`)
+      .join("\n");
+    await page.goto("/literal/");
+    await page.evaluate((source) => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.value = source;
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    }, md);
+
+    await page.locator("#rendered").click({ position: { x: 4, y: 4 } });
+    await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+    await page.evaluate(() => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+    });
+
+    const before = await page.evaluate(() => {
+      const host = document.getElementById("host");
+      const ta = document.getElementById("source") as HTMLTextAreaElement | null;
+      if (!host || !ta) throw new Error("missing nodes");
+      return {
+        hostHeight: host.getBoundingClientRect().height,
+        selectionStart: ta.selectionStart,
+        valueLength: ta.value.length,
+      };
+    });
+
+    for (let i = 0; i < 12; i++) {
+      await page.keyboard.press("Enter");
+    }
+    await page.waitForTimeout(50);
+
+    const after = await page.evaluate(() => {
+      const host = document.getElementById("host");
+      const ta = document.getElementById("source") as HTMLTextAreaElement | null;
+      if (!host || !ta) throw new Error("missing nodes");
+      return {
+        clientHeight: ta.clientHeight,
+        hostHeight: host.getBoundingClientRect().height,
+        scrollHeight: ta.scrollHeight,
+        scrollTop: ta.scrollTop,
+        selectionEnd: ta.selectionEnd,
+        selectionStart: ta.selectionStart,
+        value: ta.value,
+        valueLength: ta.value.length,
+      };
+    });
+
+    expect(before.selectionStart).toBe(before.valueLength);
+    expect(after.value.endsWith("\n".repeat(12))).toBe(true);
+    expect(after.selectionStart).toBe(after.valueLength);
+    expect(after.selectionEnd).toBe(after.valueLength);
+    expect(after.scrollTop).toBe(0);
+    expect(after.clientHeight).toBeGreaterThanOrEqual(after.scrollHeight - 1);
+    expect(after.hostHeight).toBeGreaterThanOrEqual(before.hostHeight);
+  });
+
+  test("edit-mode trailing Enter preserves page scroll near the caret", async ({ page }) => {
+    const md = Array.from({ length: 120 }, (_, i) => `line ${String(i + 1).padStart(3, "0")}`)
+      .join("\n");
+    await page.setViewportSize({ width: 900, height: 520 });
+    await page.goto("/literal/");
+    await page.evaluate((source) => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.value = source;
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    }, md);
+
+    await page.locator("#rendered").click({ position: { x: 4, y: 4 } });
+    await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+    await page.evaluate(() => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+      window.scrollTo(0, document.documentElement.scrollHeight);
+    });
+
+    const before = await page.evaluate(() => ({
+      documentHeight: document.documentElement.scrollHeight,
+      scrollY: window.scrollY,
+    }));
+
+    await page.keyboard.press("Enter");
+    await page.waitForTimeout(50);
+
+    const after = await page.evaluate(() => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      return {
+        documentHeight: document.documentElement.scrollHeight,
+        selectionStart: ta.selectionStart,
+        scrollY: window.scrollY,
+        valueLength: ta.value.length,
+      };
+    });
+
+    expect(before.scrollY).toBeGreaterThan(500);
+    expect(after.selectionStart).toBe(after.valueLength);
+    expect(after.documentHeight).toBeGreaterThanOrEqual(before.documentHeight);
+    expect(after.scrollY).toBeGreaterThan(before.scrollY - 80);
+  });
+
+  test("edit-mode keeps a bottom scroll reserve for the trailing caret", async ({ page }) => {
+    const md = Array.from({ length: 64 }, (_, i) => `line ${String(i + 1).padStart(2, "0")}`)
+      .join("\n");
+    await page.setViewportSize({ width: 900, height: 420 });
+    await page.goto("/literal/");
+    await page.evaluate((source) => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.value = source;
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    }, md);
+
+    await page.locator("#rendered").click({ position: { x: 4, y: 4 } });
+    await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+    await page.evaluate(() => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+      window.scrollTo(0, document.documentElement.scrollHeight);
+    });
+
+    for (let i = 0; i < 8; i++) {
+      await page.keyboard.press("Enter");
+    }
+    await page.waitForTimeout(50);
+
+    const state = await page.evaluate(() => {
+      const stage = document.querySelector(".stage");
+      const ta = document.getElementById("source") as HTMLTextAreaElement | null;
+      if (!stage || !ta) throw new Error("missing nodes");
+      const stageBottom = stage.getBoundingClientRect().bottom + window.scrollY;
+      return {
+        bottomGap: document.documentElement.scrollHeight - stageBottom,
+        selectionStart: ta.selectionStart,
+        valueLength: ta.value.length,
+        visualBottom: estimateTextareaCaretBottom(ta),
+        viewportHeight: window.innerHeight,
+      };
+
+      function estimateTextareaCaretBottom(el: HTMLTextAreaElement): number {
+        const style = getComputedStyle(el);
+        const fontSize = Number.parseFloat(style.fontSize);
+        const lineHeight = Number.parseFloat(style.lineHeight) || fontSize * 1.6;
+        const charWidth = measureCharWidth(style);
+        const contentWidth = Math.max(1, el.clientWidth);
+        const columns = Math.max(1, Math.floor(contentWidth / charWidth));
+        const before = el.value.slice(0, el.selectionStart);
+        const lines = before.split("\n");
+        let visualLine = 0;
+        for (let i = 0; i < lines.length; i++) {
+          if (i > 0) visualLine += 1;
+          visualLine += Math.max(0, Math.ceil(lines[i]!.length / columns) - 1);
+        }
+        return el.getBoundingClientRect().top + visualLine * lineHeight + lineHeight;
+      }
+
+      function measureCharWidth(style: CSSStyleDeclaration): number {
+        const canvas = document.createElement("canvas");
+        const ctx = canvas.getContext("2d");
+        if (!ctx) return 8;
+        ctx.font = `${style.fontStyle} ${style.fontVariant} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+        return Math.max(1, ctx.measureText("M").width);
+      }
+    });
+
+    expect(state.selectionStart).toBe(state.valueLength);
+    expect(state.bottomGap).toBeGreaterThanOrEqual(96);
+    expect(state.visualBottom).toBeLessThanOrEqual(state.viewportHeight - 48);
+  });
+
+  test("edit-mode repeated trailing Enter grows past the minimum height without resetting caret", async ({ page }) => {
+    const md = "# Title\n\nshort body";
+    await page.setViewportSize({ width: 900, height: 520 });
+    await page.goto("/literal/");
+    await page.evaluate((source) => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.value = source;
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    }, md);
+
+    await page.locator("#rendered h1").click();
+    await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+    await page.evaluate(() => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+    });
+
+    for (let i = 0; i < 40; i++) {
+      await page.keyboard.press("Enter");
+    }
+    await page.waitForTimeout(50);
+
+    const state = await page.evaluate(() => {
+      const host = document.getElementById("host");
+      const ta = document.getElementById("source") as HTMLTextAreaElement | null;
+      if (!host || !ta) throw new Error("missing nodes");
+      return {
+        clientHeight: ta.clientHeight,
+        hostHeight: host.getBoundingClientRect().height,
+        scrollHeight: ta.scrollHeight,
+        scrollTop: ta.scrollTop,
+        selectionEnd: ta.selectionEnd,
+        selectionStart: ta.selectionStart,
+        viewportHeight: window.innerHeight,
+        windowScrollY: window.scrollY,
+        value: ta.value,
+        valueLength: ta.value.length,
+      };
+    });
+
+    expect(state.value.endsWith("\n".repeat(40))).toBe(true);
+    expect(state.selectionStart).toBe(state.valueLength);
+    expect(state.selectionEnd).toBe(state.valueLength);
+    expect(state.scrollTop).toBe(0);
+    expect(state.clientHeight).toBeGreaterThanOrEqual(state.scrollHeight - 1);
+    expect(state.hostHeight).toBeGreaterThan(700);
+    expect(state.windowScrollY).toBeGreaterThan(100);
+  });
+
+  test("image preview: repeated trailing Enter keeps caret visible after reserved inline slot", async ({ page }) => {
+    const md = "before ![cat:w260](/images/literal-preview-a.svg) after";
+    await page.setViewportSize({ width: 620, height: 420 });
+    await page.goto("/literal/");
+    await page.evaluate((source) => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.value = source;
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    }, md);
+    await page.locator("#image-preview-toggle").check();
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const images = Array.from(
+            document.querySelectorAll("#rendered img.md-image-preview, #source-view img.md-image-preview"),
+          ) as HTMLImageElement[];
+          return images.length === 2 &&
+            images.every((img) => img.complete && img.naturalWidth > 0 && img.naturalHeight > 0);
+        }),
+      )
+      .toBe(true);
+
+    await page.locator("#rendered").click({ position: { x: 4, y: 4 } });
+    await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+    await page.evaluate(() => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+    });
+
+    for (let i = 0; i < 34; i++) {
+      await page.keyboard.press("Enter");
+    }
+    await page.waitForTimeout(50);
+
+    const state = await page.evaluate(() => {
+      const host = document.getElementById("host");
+      const source = document.getElementById("source-view");
+      const ta = document.getElementById("source") as HTMLTextAreaElement | null;
+      if (!host || !source || !ta) throw new Error("missing nodes");
+      return {
+        clientHeight: ta.clientHeight,
+        hostHeight: host.getBoundingClientRect().height,
+        scrollHeight: ta.scrollHeight,
+        scrollTop: ta.scrollTop,
+        selectionEnd: ta.selectionEnd,
+        selectionStart: ta.selectionStart,
+        sourceHeight: source.scrollHeight,
+        valueLength: ta.value.length,
+        windowScrollY: window.scrollY,
+      };
+    });
+
+    expect(state.selectionStart).toBe(state.valueLength);
+    expect(state.selectionEnd).toBe(state.valueLength);
+    expect(state.scrollTop).toBe(0);
+    expect(state.clientHeight).toBeGreaterThanOrEqual(state.scrollHeight - 1);
+    expect(state.hostHeight).toBeGreaterThanOrEqual(state.sourceHeight - 1);
+    expect(state.windowScrollY).toBeGreaterThan(100);
+  });
+
   test("preview overlay stays monochrome and aligned after edit roundtrip", async ({ page }) => {
     const md = "# Title\n\nalpha *italic* beta **bold** gamma `code` delta\n";
     await page.goto("/literal/");
@@ -281,6 +754,7 @@ test.describe("literal renderer overlay invariant", () => {
 
     await page.locator("#rendered h1").click();
     await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
     await page.keyboard.press("Escape");
     await expect(page.locator("body")).toHaveAttribute("data-mode", "preview");
 
@@ -317,6 +791,63 @@ test.describe("literal renderer overlay invariant", () => {
     });
 
     expect(state.codeColor).toBe(state.sourceColor);
+    for (const point of state.points) {
+      expect(Math.abs(point.rendered.left - point.source.left), point.needle).toBeLessThan(1);
+      expect(Math.abs(point.rendered.top - point.source.top), point.needle).toBeLessThan(1);
+    }
+  });
+
+  test("blank lines: literal preview preserves source vertical grid", async ({ page }) => {
+    const md = [
+      "# Title",
+      "body without blank before it",
+      "",
+      "",
+      "- one",
+      "- two",
+      "",
+      "> quote after list",
+      "",
+    ].join("\n");
+    await page.goto("/literal/");
+    await page.evaluate((source) => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.value = source;
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    }, md);
+    await expect(page.locator("#invariant-state")).toHaveText(/literal DOM matches fresh render/);
+
+    const state = await page.evaluate(() => {
+      const rectForText = (selector: string, needle: string) => {
+        const root = document.querySelector(selector);
+        if (!root) throw new Error(`missing ${selector}`);
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+          const text = node.textContent ?? "";
+          const offset = text.indexOf(needle);
+          if (offset >= 0) {
+            const range = document.createRange();
+            range.setStart(node, offset);
+            range.setEnd(node, offset + 1);
+            const rect = range.getBoundingClientRect();
+            return { left: rect.left, top: rect.top };
+          }
+        }
+        throw new Error(`missing ${needle}`);
+      };
+      return {
+        renderedText: document.getElementById("rendered")?.textContent,
+        points: ["body without", "one", "two", "quote after"].map((needle) => ({
+          needle,
+          rendered: rectForText("#rendered", needle),
+          source: rectForText("#source-view", needle),
+        })),
+      };
+    });
+
+    expect(state.renderedText).toBe(
+      "# Title\nbody without blank before it\n\n\n- one\n- two\n\n> quote after list\n",
+    );
     for (const point of state.points) {
       expect(Math.abs(point.rendered.left - point.source.left), point.needle).toBeLessThan(1);
       expect(Math.abs(point.rendered.top - point.source.top), point.needle).toBeLessThan(1);
@@ -380,7 +911,7 @@ test.describe("literal renderer overlay invariant", () => {
     const text = await page.locator("#rendered").innerText();
     expect(text).toContain("![cat](/images/literal-preview-a.svg)");
     // The overlay invariant indicator stays green — img has empty textContent.
-    await expect(page.locator("#invariant-state")).toHaveText(/overlay invariant holds/);
+    await expect(page.locator("#invariant-state")).toHaveText(/literal DOM matches fresh render/);
   });
 
   test("image preview: demo sample uses debuggable local images", async ({ page }) => {
@@ -507,6 +1038,14 @@ test.describe("literal renderer overlay invariant", () => {
     const afterLeftWithoutPreview = await followingTextLeft();
 
     await page.locator("#image-preview-toggle").check();
+    await expect
+      .poll(() =>
+        page.locator("#rendered img.md-image-preview").first().evaluate((img) => {
+          const image = img as HTMLImageElement;
+          return image.complete && image.naturalWidth > 0 && image.naturalHeight > 0;
+        }),
+      )
+      .toBe(true);
 
     const afterLeftWithPreview = await followingTextLeft();
     const slot = page.locator("#rendered .md-image-preview-slot").first();
@@ -534,6 +1073,17 @@ test.describe("literal renderer overlay invariant", () => {
     });
 
     await page.locator("#image-preview-toggle").check();
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const images = Array.from(
+            document.querySelectorAll("#rendered img.md-image-preview, #source-view img.md-image-preview"),
+          ) as HTMLImageElement[];
+          return images.length === 2 &&
+            images.every((img) => img.complete && img.naturalWidth > 0 && img.naturalHeight > 0);
+        }),
+      )
+      .toBe(true);
     const textBox = await page.locator("#rendered p").boundingBox();
     if (!textBox) throw new Error("missing paragraph box");
     await page.mouse.click(textBox.x + 2, textBox.y + textBox.height / 2);
@@ -553,6 +1103,354 @@ test.describe("literal renderer overlay invariant", () => {
     );
     expect(caret).toBe(0);
     await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+  });
+
+  test("image preview: edit-mode source layer shows the reserved image overlay", async ({ page }) => {
+    await page.goto("/literal/");
+    await page.evaluate(() => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.value = "before ![cat:w120](/images/literal-preview-a.svg) after\n";
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    await page.locator("#image-preview-toggle").check();
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const images = Array.from(
+            document.querySelectorAll("#rendered img.md-image-preview, #source-view img.md-image-preview"),
+          ) as HTMLImageElement[];
+          return images.length === 2 &&
+            images.every((img) => img.complete && img.naturalWidth > 0 && img.naturalHeight > 0);
+        }),
+      )
+      .toBe(true);
+
+    const textBox = await page.locator("#rendered p").boundingBox();
+    if (!textBox) throw new Error("missing paragraph box");
+    await page.mouse.click(textBox.x + 2, textBox.y + textBox.height / 2);
+    await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+
+    const state = await page.evaluate(() => {
+      const slot = document.querySelector("#source-view .md-image-preview-slot") as HTMLElement | null;
+      const image = document.querySelector("#source-view img.md-image-preview") as HTMLImageElement | null;
+      if (!slot || !image) throw new Error("missing source image slot");
+      const slotRect = slot.getBoundingClientRect();
+      const imageRect = image.getBoundingClientRect();
+      return {
+        imageAlt: image.alt,
+        imageVisibility: getComputedStyle(image).visibility,
+        imageWidth: imageRect.width,
+        slotWidth: slotRect.width,
+      };
+    });
+
+    expect(state.imageAlt).toBe("cat");
+    expect(state.imageVisibility).toBe("visible");
+    expect(state.slotWidth).toBeCloseTo(120, 0);
+    expect(state.imageWidth).toBeCloseTo(120, 0);
+  });
+
+  test("image preview: edit-mode source image stays mounted while surrounding text updates", async ({ page }) => {
+    await page.goto("/literal/");
+    await page.evaluate(() => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.value = "before ![cat:w120](/images/literal-preview-a.svg) after\n";
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    await page.locator("#image-preview-toggle").check();
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const img = document.querySelector("#source-view img.md-image-preview") as HTMLImageElement | null;
+          return img?.complete === true && img.naturalWidth > 0 && img.naturalHeight > 0;
+        }),
+      )
+      .toBe(true);
+
+    const textBox = await page.locator("#rendered p").boundingBox();
+    if (!textBox) throw new Error("missing paragraph box");
+    await page.mouse.click(textBox.x + 2, textBox.y + textBox.height / 2);
+    await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
+
+    await page.evaluate(() => {
+      const win = window as unknown as { __sourceImage: HTMLImageElement };
+      win.__sourceImage = document.querySelector("#source-view img.md-image-preview") as HTMLImageElement;
+    });
+
+    await page.evaluate(() => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.value = "before edited ![cat:w120](/images/literal-preview-a.svg) after\n";
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    const sameNode = await page.evaluate(() => {
+      const win = window as unknown as { __sourceImage: HTMLImageElement };
+      return document.querySelector("#source-view img.md-image-preview") === win.__sourceImage;
+    });
+    expect(sameNode).toBe(true);
+  });
+
+  test("image preview: edit-mode caret is drawn on the highlighted source grid after reserved slots", async ({ page }) => {
+    const md = "before ![cat:w160](/images/literal-preview-a.svg) after\n";
+    await page.goto("/literal/");
+    await page.evaluate((source) => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.value = source;
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    }, md);
+
+    await page.locator("#image-preview-toggle").check();
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const images = Array.from(
+            document.querySelectorAll("#rendered img.md-image-preview, #source-view img.md-image-preview"),
+          ) as HTMLImageElement[];
+          return images.length === 2 &&
+            images.every((img) => img.complete && img.naturalWidth > 0 && img.naturalHeight > 0);
+        }),
+      )
+      .toBe(true);
+
+    await page.locator("#rendered").click({ position: { x: 4, y: 4 } });
+    await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+    await page.evaluate(() => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      const offset = ta.value.indexOf(" after");
+      ta.setSelectionRange(offset, offset);
+      document.dispatchEvent(new Event("selectionchange"));
+    });
+
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const caret = document.getElementById("source-caret");
+          const source = document.getElementById("source-view");
+          if (!caret || !source) return Number.POSITIVE_INFINITY;
+          const walker = document.createTreeWalker(source, NodeFilter.SHOW_TEXT);
+          for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+            const text = node.textContent ?? "";
+            const offset = text.indexOf(" after");
+            if (offset >= 0) {
+              const range = document.createRange();
+              range.setStart(node, offset);
+              range.setEnd(node, offset + 1);
+              const rect = range.getBoundingClientRect();
+              const caretRect = caret.getBoundingClientRect();
+              return Math.abs(caretRect.left - rect.left);
+            }
+          }
+          return Number.POSITIVE_INFINITY;
+        }),
+      )
+      .toBeLessThan(1);
+
+    const state = await page.evaluate(() => {
+      const caret = document.getElementById("source-caret");
+      const source = document.getElementById("source-view");
+      if (!caret || !source) throw new Error("missing caret/source layer");
+      const walker = document.createTreeWalker(source, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const text = node.textContent ?? "";
+        const offset = text.indexOf(" after");
+        if (offset >= 0) {
+          const range = document.createRange();
+          range.setStart(node, offset);
+          range.setEnd(node, offset + 1);
+          const rect = range.getBoundingClientRect();
+          const caretRect = caret.getBoundingClientRect();
+          return {
+            caretDisplay: getComputedStyle(caret).display,
+            caretLeft: caretRect.left,
+            caretTop: caretRect.top,
+            textLeft: rect.left,
+            textTop: rect.top,
+          };
+        }
+      }
+      throw new Error("missing following text");
+    });
+
+    expect(state.caretDisplay).not.toBe("none");
+    expect(Math.abs(state.caretLeft - state.textLeft)).toBeLessThan(1);
+    expect(Math.abs(state.caretTop - state.textTop)).toBeLessThan(2);
+  });
+
+  test("image preview: composition anchor follows the shifted source caret", async ({ page }) => {
+    const md = "before ![cat:w180](/images/literal-preview-a.svg) after\n";
+    await page.goto("/literal/");
+    await page.evaluate((source) => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.value = source;
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    }, md);
+
+    await page.locator("#image-preview-toggle").check();
+    await page.locator("#rendered").click({ position: { x: 4, y: 4 } });
+    await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+
+    const state = await page.evaluate(() => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      const offset = ta.value.indexOf(" after");
+      ta.setSelectionRange(offset, offset);
+      ta.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true, data: "あ" }));
+      const transform = getComputedStyle(ta).transform;
+      if (transform === "none") return { tx: 0, transform };
+      const values = transform.match(/matrix\(([^)]+)\)/)?.[1]?.split(",").map((v) => Number(v.trim())) ?? [];
+      return { tx: values[4] ?? 0, transform };
+    });
+
+    expect(state.transform).not.toBe("none");
+    expect(state.tx).toBeGreaterThan(80);
+  });
+
+  test("image preview: edit-mode caret on trailing blank line stays at line start", async ({ page }) => {
+    const md = "```rust\nfn main() {\n    println!(\"hello\");\n}\n```\n\nAaa\n\n";
+    await page.goto("/literal/");
+    await page.evaluate((source) => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.value = source;
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    }, md);
+
+    await page.locator("#image-preview-toggle").check();
+    await page.locator("#rendered").click({ position: { x: 4, y: 4 } });
+    await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+    await page.evaluate(() => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+      document.dispatchEvent(new Event("selectionchange"));
+    });
+
+    const state = await page.evaluate(() => {
+      const caret = document.getElementById("source-caret");
+      const source = document.getElementById("source-view");
+      if (!caret || !source) throw new Error("missing nodes");
+      const walker = document.createTreeWalker(source, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const text = node.textContent ?? "";
+        const offset = text.indexOf("Aaa");
+        if (offset >= 0) {
+          const range = document.createRange();
+          range.setStart(node, offset);
+          range.setEnd(node, offset + 1);
+          const anchor = range.getBoundingClientRect();
+          const caretRect = caret.getBoundingClientRect();
+          return {
+            anchorLeft: anchor.left,
+            caretDisplay: getComputedStyle(caret).display,
+            caretLeft: caretRect.left,
+          };
+        }
+      }
+      throw new Error("missing Aaa");
+    });
+    expect(state.caretDisplay).not.toBe("none");
+    expect(state.caretLeft).toBeCloseTo(state.anchorLeft, 1);
+  });
+
+  test("image preview: edit-mode caret after a single trailing newline stays at line start", async ({ page }) => {
+    const md = "Aaa\n";
+    await page.goto("/literal/");
+    await page.evaluate((source) => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.value = source;
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    }, md);
+
+    await page.locator("#image-preview-toggle").check();
+    await page.locator("#rendered").click({ position: { x: 4, y: 4 } });
+    await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+    await page.evaluate(() => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.setSelectionRange(ta.value.length, ta.value.length);
+      document.dispatchEvent(new Event("selectionchange"));
+    });
+
+    const state = await page.evaluate(() => {
+      const caret = document.getElementById("source-caret");
+      const source = document.getElementById("source-view");
+      if (!caret || !source) throw new Error("missing nodes");
+      const walker = document.createTreeWalker(source, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const text = node.textContent ?? "";
+        const offset = text.indexOf("Aaa");
+        if (offset >= 0) {
+          const range = document.createRange();
+          range.setStart(node, offset);
+          range.setEnd(node, offset + 1);
+          const anchor = range.getBoundingClientRect();
+          const caretRect = caret.getBoundingClientRect();
+          return {
+            anchorLeft: anchor.left,
+            caretDisplay: getComputedStyle(caret).display,
+            caretLeft: caretRect.left,
+          };
+        }
+      }
+      throw new Error("missing Aaa");
+    });
+    expect(state.caretDisplay).not.toBe("none");
+    expect(state.caretLeft).toBeCloseTo(state.anchorLeft, 1);
+  });
+
+  test("image preview: edit-mode click after reserved slot maps to the highlighted source offset", async ({ page }) => {
+    const md = "before ![cat:w160](/images/literal-preview-a.svg) after\n";
+    await page.goto("/literal/");
+    await page.evaluate((source) => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.value = source;
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    }, md);
+
+    await page.locator("#image-preview-toggle").check();
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          const images = Array.from(
+            document.querySelectorAll("#rendered img.md-image-preview, #source-view img.md-image-preview"),
+          ) as HTMLImageElement[];
+          return images.length === 2 &&
+            images.every((img) => img.complete && img.naturalWidth > 0 && img.naturalHeight > 0);
+        }),
+      )
+      .toBe(true);
+
+    await page.locator("#rendered").click({ position: { x: 4, y: 4 } });
+    await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+
+    const target = await page.evaluate(() => {
+      const source = document.getElementById("source-view");
+      if (!source) throw new Error("missing source layer");
+      const walker = document.createTreeWalker(source, NodeFilter.SHOW_TEXT);
+      for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+        const text = node.textContent ?? "";
+        const offset = text.indexOf(" after");
+        if (offset >= 0) {
+          const range = document.createRange();
+          range.setStart(node, offset + 1);
+          range.setEnd(node, offset + 2);
+          const rect = range.getBoundingClientRect();
+          return { x: rect.left + 2, y: rect.top + rect.height / 2 };
+        }
+      }
+      throw new Error("missing following text");
+    });
+
+    await page.mouse.click(target.x, target.y);
+    const caret = await page.evaluate(() => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      return ta.selectionStart;
+    });
+    expect(caret).toBe(md.indexOf(" after") + 1);
   });
 
   test("image preview: overlay source layer reserves the same image width", async ({ page }) => {
@@ -613,11 +1511,11 @@ test.describe("literal renderer overlay invariant", () => {
       .toBe("hidden");
   });
 
-  test("image preview: standalone image URL previews on the next line", async ({ page }) => {
+  test("image preview: standalone image markdown previews on the next line", async ({ page }) => {
     await page.goto("/literal/");
     await page.evaluate(() => {
       const ta = document.getElementById("source") as HTMLTextAreaElement;
-      ta.value = "/images/literal-preview-a.svg\nnext line\n";
+      ta.value = "![standalone](/images/literal-preview-a.svg)\nnext line\n";
       ta.dispatchEvent(new Event("input", { bubbles: true }));
     });
 
@@ -671,6 +1569,202 @@ test.describe("literal renderer overlay invariant", () => {
         }),
       )
       .toBe("hidden");
+  });
+
+  test("image preview: bare image URL line does not emit a block preview", async ({ page }) => {
+    await page.goto("/literal/");
+    await page.evaluate(() => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.value = "/images/literal-preview-a.svg\nnext line\n";
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    await page.locator("#image-preview-toggle").check();
+    await expect(page.locator("#rendered .md-image-preview-block")).toHaveCount(0);
+    await expect(page.locator("#source-view .md-image-preview-block")).toHaveCount(0);
+  });
+
+  test("image preview: standalone image markdown line-end caret stays on the source line", async ({ page }) => {
+    const line = "![standalone](/images/literal-preview-a.svg)";
+    await page.goto("/literal/");
+    await page.evaluate((source) => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.value = source;
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    }, `${line}\nnext line\n`);
+
+    await page.locator("#image-preview-toggle").check();
+    await page.locator("#rendered").click({ position: { x: 4, y: 4 } });
+    await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+
+    await page.evaluate((offset) => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.setSelectionRange(offset, offset);
+    }, line.length - 1);
+    await page.keyboard.press("ArrowRight");
+
+    const state = await page.evaluate((sourceLine) => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      const caret = document.getElementById("source-caret");
+      const source = document.getElementById("source-view");
+      const slot = document.querySelector("#source-view .md-image-preview-block");
+      if (!caret || !source || !slot) throw new Error("missing nodes");
+      const rectForVisibleOffset = (root: Element, sourceOffset: number) => {
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        let seen = 0;
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+          const text = node.textContent ?? "";
+          if (sourceOffset < seen + text.length) {
+            const range = document.createRange();
+            range.setStart(node, sourceOffset - seen);
+            range.setEnd(node, sourceOffset - seen + 1);
+            return range.getBoundingClientRect();
+          }
+          seen += text.length;
+        }
+        throw new Error(`missing source offset ${sourceOffset}`);
+      };
+      const closeParen = rectForVisibleOffset(source, sourceLine.length - 1);
+      return {
+        caret: caret.getBoundingClientRect(),
+        closeParen,
+        selectionStart: ta.selectionStart,
+        slot: slot.getBoundingClientRect(),
+      };
+    }, line);
+
+    expect(state.selectionStart).toBe(line.length);
+    expect(state.caret.top).toBeCloseTo(state.closeParen.top, 1);
+    expect(state.caret.left).toBeGreaterThanOrEqual(state.closeParen.right - 2);
+    expect(state.caret.top).toBeLessThan(state.slot.top - 4);
+  });
+
+  test("image preview: edit-mode source text can be drag-selected", async ({ page }) => {
+    const line = "![standalone](/images/literal-preview-a.svg)";
+    await page.goto("/literal/");
+    await page.evaluate((source) => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.value = source;
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    }, `${line}\nnext line\n`);
+
+    await page.locator("#image-preview-toggle").check();
+    await page.locator("#rendered").click({ position: { x: 4, y: 4 } });
+    await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+
+    const points = await page.evaluate((sourceLine) => {
+      const root = document.getElementById("source-view");
+      if (!root) throw new Error("missing source view");
+      const rectForVisibleOffset = (sourceOffset: number) => {
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        let seen = 0;
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+          const text = node.textContent ?? "";
+          if (sourceOffset < seen + text.length) {
+            const range = document.createRange();
+            range.setStart(node, sourceOffset - seen);
+            range.setEnd(node, sourceOffset - seen + 1);
+            const rect = range.getBoundingClientRect();
+            return { x: rect.left + 1, y: rect.top + rect.height / 2 };
+          }
+          seen += text.length;
+        }
+        throw new Error(`missing source offset ${sourceOffset}`);
+      };
+      return {
+        start: rectForVisibleOffset(0),
+        end: rectForVisibleOffset(sourceLine.indexOf("preview") + "preview".length),
+      };
+    }, line);
+
+    await page.mouse.move(points.start.x, points.start.y);
+    await page.mouse.down();
+    await page.mouse.move(points.end.x, points.end.y, { steps: 8 });
+    await page.mouse.up();
+
+    const selection = await page.evaluate(() => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      return ta.value.slice(
+        Math.min(ta.selectionStart, ta.selectionEnd),
+        Math.max(ta.selectionStart, ta.selectionEnd),
+      );
+    });
+    expect(selection).toContain("![standalone](/images/literal-preview");
+  });
+
+  test("image preview: edit-mode selection highlight follows the source-view layout", async ({ page }) => {
+    const md = [
+      "Inline image example: ![placeholder:w160](/images/literal-preview-a.svg)",
+      "and ![another:w96](/images/literal-preview-b.svg).",
+      "",
+    ].join("\n");
+    await page.goto("/literal/");
+    await page.evaluate((source) => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.value = source;
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    }, md);
+
+    await page.locator("#image-preview-toggle").check();
+    await page.locator("#rendered").click({ position: { x: 4, y: 4 } });
+    await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+
+    await page.evaluate(() => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      const start = ta.value.indexOf("![another");
+      const end = ta.value.indexOf(").", start) + 1;
+      ta.setSelectionRange(start, end);
+      document.dispatchEvent(new Event("selectionchange"));
+    });
+    await expect
+      .poll(() =>
+        page.evaluate(() => {
+          return document.querySelectorAll("#source-selection .source-selection-rect").length;
+        }),
+      )
+      .toBeGreaterThan(0);
+
+    const state = await page.evaluate(() => {
+      const root = document.getElementById("source-view");
+      const overlay = document.getElementById("source-selection");
+      if (!root || !overlay) throw new Error("missing selection nodes");
+      const rectForText = (needle: string) => {
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+          const text = node.textContent ?? "";
+          const offset = text.indexOf(needle);
+          if (offset >= 0) {
+            const range = document.createRange();
+            range.setStart(node, offset);
+            range.setEnd(node, offset + needle.length);
+            return range.getBoundingClientRect();
+          }
+        }
+        throw new Error(`missing ${needle}`);
+      };
+      const target = rectForText("another:w96");
+      const rects = Array.from(overlay.querySelectorAll<HTMLElement>(".source-selection-rect"))
+        .map((rect) => rect.getBoundingClientRect())
+        .filter((rect) => rect.width > 0 && rect.height > 0);
+      const matching = rects.find((rect) =>
+        Math.abs(rect.top - target.top) < 1 &&
+        Math.abs(rect.left - target.left) < 1 &&
+        Math.abs(rect.height - target.height) < 2
+      );
+      return {
+        matchingWidth: matching?.width ?? 0,
+        overlayDisplay: getComputedStyle(overlay).display,
+        rectCount: rects.length,
+        targetWidth: target.width,
+      };
+    });
+
+    expect(state.overlayDisplay).not.toBe("none");
+    expect(state.rectCount).toBeGreaterThan(0);
+    expect(state.matchingWidth).toBeCloseTo(state.targetWidth, 0);
   });
 
   test("partial update: shifted blocks keep DOM identity, only attrs change", async ({ page }) => {

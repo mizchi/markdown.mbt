@@ -159,9 +159,15 @@ fn BlockParser::parse_bullet_list(
 
     // Check for blank lines (affects tight/loose)
     if !self.scanner.is_eof() && self.scanner.is_blank_line() {
-      tight = false
+      let blank_start = self.scanner.pos
       while !self.scanner.is_eof() && self.scanner.is_blank_line() {
         self.scanner.skip_line()
+      }
+      if self.next_bullet_item_matches(marker) {
+        tight = false
+      } else {
+        self.scanner.restore(blank_start)
+        break
       }
     }
   }
@@ -219,9 +225,15 @@ fn BlockParser::parse_ordered_list(
 
     // Check for blank lines
     if !self.scanner.is_eof() && self.scanner.is_blank_line() {
-      tight = false
+      let blank_start = self.scanner.pos
       while !self.scanner.is_eof() && self.scanner.is_blank_line() {
         self.scanner.skip_line()
+      }
+      if self.next_ordered_item_matches(delimiter) {
+        tight = false
+      } else {
+        self.scanner.restore(blank_start)
+        break
       }
     }
   }
@@ -239,6 +251,36 @@ fn BlockParser::parse_ordered_list(
       trailing_trivia=Trivia::empty(),
     ),
   )
+}
+
+fn BlockParser::next_bullet_item_matches(
+  self : BlockParser,
+  marker : BulletMarker,
+) -> Bool {
+  let saved = self.scanner.pos
+  let _ = self.scanner.skip_spaces()
+  let matches = match self.scanner.peek() {
+    Some('-') => marker == BulletMarker::Dash
+    Some('*') => marker == BulletMarker::Asterisk
+    Some('+') => marker == BulletMarker::Plus
+    _ => false
+  }
+  self.scanner.restore(saved)
+  matches
+}
+
+fn BlockParser::next_ordered_item_matches(
+  self : BlockParser,
+  delimiter : OrderedDelimiter,
+) -> Bool {
+  let saved = self.scanner.pos
+  let _ = self.scanner.skip_spaces()
+  let matches = match self.detect_list_marker() {
+    Some((ListMarkerKind::Ordered(_, d), _)) => d == delimiter
+    _ => false
+  }
+  self.scanner.restore(saved)
+  matches
 }
 
 ///|

@@ -19,7 +19,7 @@
  * update path is doing its job.
  */
 
-import { toHtmlLiteral, toMarkdown } from "../../js/api.js";
+import { toHtmlLiteral } from "../../js/api.js";
 import { LiteralEditor } from "../../frontend/editor/literal-editor.js";
 import "../../frontend/editor/overlay.css";
 
@@ -41,7 +41,7 @@ const SAMPLE = [
   "Inline image example: ![placeholder:w96](/images/literal-preview-a.svg)",
   "and ![another:w96](/images/literal-preview-b.svg).",
   "",
-  "/images/literal-preview-a.svg",
+  "![standalone](/images/literal-preview-a.svg)",
   "",
   "> Block quotes also render with their leading `> ` marker visible.",
   "> Second line of the quote.",
@@ -57,6 +57,9 @@ const SAMPLE = [
 const sourceEl = document.getElementById("source") as HTMLTextAreaElement;
 const renderedEl = document.getElementById("rendered") as HTMLDivElement;
 const sourceViewEl = document.getElementById("source-view") as HTMLPreElement;
+const hostEl = document.getElementById("host") as HTMLDivElement;
+const sourceSelectionEl = document.getElementById("source-selection") as HTMLDivElement;
+const sourceCaretEl = document.getElementById("source-caret") as HTMLDivElement;
 const invariantEl = document.getElementById("invariant-state") as HTMLSpanElement;
 const overlayToggle = document.getElementById("overlay-toggle") as HTMLInputElement;
 const imagePreviewToggle = document.getElementById("image-preview-toggle") as HTMLInputElement;
@@ -66,28 +69,33 @@ const patchStatsEl = document.getElementById("patch-stats") as HTMLSpanElement |
 sourceEl.value = SAMPLE;
 
 let imagePreviewOn = false;
+let measureCanvas: HTMLCanvasElement | null = null;
+let sourceViewDragAnchor: number | null = null;
+let isComposing = false;
 
 const renderLiteral = (src: string): string =>
   toHtmlLiteral(src, { positions: true, imagePreview: imagePreviewOn });
 
 const editor = new LiteralEditor(renderedEl, renderLiteral, SAMPLE);
+const sourceViewEditor = new LiteralEditor(sourceViewEl, renderHighlightedSourceView, SAMPLE);
 
 function refreshInvariant(src: string): void {
   const visible = stripHtml(renderedEl.innerHTML);
-  const normalized = toMarkdown(src);
-  if (visible === normalized) {
-    invariantEl.textContent = "✓ overlay invariant holds";
+  const expected = stripHtml(renderLiteral(src));
+  if (visible === expected) {
+    invariantEl.textContent = "✓ literal DOM matches fresh render";
     invariantEl.style.color = "#3fb950";
   } else {
-    invariantEl.textContent = "✗ overlay drift — see console for diff";
+    invariantEl.textContent = "✗ literal DOM drift — see console for diff";
     invariantEl.style.color = "#f85149";
-    console.warn("overlay drift", { visible, normalized });
+    console.warn("literal DOM drift", { visible, expected });
   }
 }
 
 function update(src: string): void {
   const stats = editor.setSource(src);
   renderSourceView(src);
+  syncLiteralLayout();
   if (patchStatsEl) {
     patchStatsEl.textContent =
       `patch: reused ${stats.reused} · replaced ${stats.replaced}` +
@@ -98,7 +106,324 @@ function update(src: string): void {
 }
 
 function renderSourceView(src: string): void {
-  sourceViewEl.innerHTML = renderHighlightedSourceView(src);
+  sourceViewEditor.setSource(src);
+}
+
+function syncLiteralLayout(): void {
+  sourceViewEl.style.transform = "";
+  sourceEl.scrollLeft = 0;
+  sourceEl.scrollTop = 0;
+
+  sourceEl.style.height = "auto";
+
+  const minHeight = Math.ceil(
+    parseCssPx(getComputedStyle(hostEl).minHeight) || window.innerHeight * 0.5,
+  );
+  const contentHeight = Math.ceil(Math.max(
+    renderedEl.scrollHeight,
+    sourceViewEl.scrollHeight,
+    sourceEl.scrollHeight,
+  ));
+  const height = Math.max(minHeight, contentHeight);
+  hostEl.style.height = `${height}px`;
+  sourceEl.style.height = `${height}px`;
+  syncSourceSelection();
+  syncSourceCaret();
+  syncTextareaImeAnchor();
+}
+
+function queueLiteralLayoutSync(keepCaretVisible = false): void {
+  syncLiteralLayout();
+  if (keepCaretVisible) ensureSourceCaretVisible();
+  requestAnimationFrame(() => {
+    syncLiteralLayout();
+    if (keepCaretVisible) ensureSourceCaretVisible();
+    syncSourceSelection();
+    syncSourceCaret();
+  });
+}
+
+function syncSourceCaret(): void {
+  if (
+    !imagePreviewOn ||
+    isComposing ||
+    document.body.dataset.mode !== "edit" ||
+    document.activeElement !== sourceEl ||
+    sourceEl.selectionStart !== sourceEl.selectionEnd
+  ) {
+    sourceCaretEl.style.display = "none";
+    return;
+  }
+  const rect = sourceViewCaretRectForOffset(sourceEl.selectionStart);
+  if (rect == null) {
+    sourceCaretEl.style.display = "none";
+    return;
+  }
+  const hostRect = hostEl.getBoundingClientRect();
+  sourceCaretEl.style.display = "";
+  sourceCaretEl.style.left = `${rect.left - hostRect.left}px`;
+  sourceCaretEl.style.top = `${rect.top - hostRect.top}px`;
+  sourceCaretEl.style.height = `${Math.max(1, rect.height)}px`;
+}
+
+function syncSourceSelection(): void {
+  sourceSelectionEl.replaceChildren();
+  if (
+    !imagePreviewOn ||
+    isComposing ||
+    document.body.dataset.mode !== "edit" ||
+    document.activeElement !== sourceEl
+  ) {
+    sourceSelectionEl.style.display = "none";
+    return;
+  }
+  const start = Math.min(sourceEl.selectionStart, sourceEl.selectionEnd);
+  const end = Math.max(sourceEl.selectionStart, sourceEl.selectionEnd);
+  if (start === end) {
+    sourceSelectionEl.style.display = "none";
+    return;
+  }
+
+  const hostRect = hostEl.getBoundingClientRect();
+  let hasRect = false;
+  for (const rect of sourceViewTextRectsForRange(start, end)) {
+    const el = document.createElement("div");
+    el.className = "source-selection-rect";
+    el.style.left = `${rect.left - hostRect.left}px`;
+    el.style.top = `${rect.top - hostRect.top}px`;
+    el.style.width = `${rect.width}px`;
+    el.style.height = `${rect.height}px`;
+    sourceSelectionEl.appendChild(el);
+    hasRect = true;
+  }
+  sourceSelectionEl.style.display = hasRect ? "block" : "none";
+}
+
+function sourceViewTextRectsForRange(start: number, end: number): DOMRect[] {
+  const rects: DOMRect[] = [];
+  const walker = document.createTreeWalker(sourceViewEl, NodeFilter.SHOW_TEXT);
+  let seen = 0;
+  for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
+    const len = node.data.length;
+    const nodeStart = seen;
+    const nodeEnd = seen + len;
+    seen = nodeEnd;
+    if (end <= nodeStart || start >= nodeEnd) continue;
+    const localStart = Math.max(0, start - nodeStart);
+    const localEnd = Math.min(len, end - nodeStart);
+    if (localStart >= localEnd) continue;
+    const range = document.createRange();
+    range.setStart(node, localStart);
+    range.setEnd(node, localEnd);
+    rects.push(...Array.from(range.getClientRects()));
+  }
+  return rects;
+}
+
+function syncTextareaImeAnchor(): void {
+  if (
+    !imagePreviewOn ||
+    !isComposing ||
+    document.body.dataset.mode !== "edit" ||
+    document.activeElement !== sourceEl
+  ) {
+    sourceEl.style.transform = "";
+    return;
+  }
+  const sourceRect = sourceViewCaretRectForOffset(sourceEl.selectionStart);
+  const nativeRect = estimateTextareaCaretRectForOffset(sourceEl.selectionStart);
+  if (!sourceRect || !nativeRect) {
+    sourceEl.style.transform = "";
+    return;
+  }
+  const dx = sourceRect.left - nativeRect.left;
+  const dy = sourceRect.top - nativeRect.top;
+  if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5) {
+    sourceEl.style.transform = "";
+    return;
+  }
+  sourceEl.style.transform = `translate(${dx}px, ${dy}px)`;
+}
+
+function estimateTextareaCaretRectForOffset(offset: number): DOMRect | null {
+  const previousTransform = sourceEl.style.transform;
+  sourceEl.style.transform = "";
+  let mirror: HTMLDivElement | null = null;
+  try {
+    const sourceRect = sourceEl.getBoundingClientRect();
+    const style = getComputedStyle(sourceEl);
+    mirror = document.createElement("div");
+    const marker = document.createElement("span");
+    mirror.style.position = "fixed";
+    mirror.style.left = `${sourceRect.left}px`;
+    mirror.style.top = `${sourceRect.top}px`;
+    mirror.style.width = `${sourceEl.clientWidth}px`;
+    mirror.style.margin = "0";
+    mirror.style.padding = "0";
+    mirror.style.border = "0";
+    mirror.style.visibility = "hidden";
+    mirror.style.pointerEvents = "none";
+    mirror.style.whiteSpace = "pre-wrap";
+    mirror.style.overflowWrap = "break-word";
+    mirror.style.font = style.font;
+    mirror.style.letterSpacing = style.letterSpacing;
+    mirror.style.lineHeight = style.lineHeight;
+    mirror.textContent = sourceEl.value.slice(0, Math.max(0, Math.min(offset, sourceEl.value.length)));
+    marker.textContent = "\u200b";
+    mirror.appendChild(marker);
+    document.body.appendChild(mirror);
+    const markerRect = marker.getBoundingClientRect();
+    const lineHeight = parseCssPx(style.lineHeight) || parseCssPx(style.fontSize) * 1.6;
+    return new DOMRect(markerRect.left, markerRect.top, 1, lineHeight);
+  } finally {
+    mirror?.remove();
+    sourceEl.style.transform = previousTransform;
+  }
+}
+
+function sourceViewCaretRectForOffset(offset: number): DOMRect | null {
+  const sourceText = sourceViewEl.textContent ?? "";
+  const clamped = Math.max(0, Math.min(offset, sourceText.length));
+  const rect = sourceViewRawCaretRectForOffset(clamped);
+  if (rect == null) return null;
+  if (clamped > 0 && sourceText[clamped - 1] === "\n") {
+    return new DOMRect(sourceViewEl.getBoundingClientRect().left, rect.top, 1, rect.height);
+  }
+  return rect;
+}
+
+function sourceViewRawCaretRectForOffset(clamped: number): DOMRect | null {
+  const walker = document.createTreeWalker(sourceViewEl, NodeFilter.SHOW_TEXT);
+  let seen = 0;
+  let lastText: Text | null = null;
+  for (let node = walker.nextNode() as Text | null; node; node = walker.nextNode() as Text | null) {
+    const len = node.data.length;
+    if (
+      len > 0 &&
+      clamped === seen + len &&
+      hasBlockPreviewBeforeNextText(node)
+    ) {
+      return caretRectInTextNode(node, len);
+    }
+    if (clamped < seen + len || (clamped === 0 && len > 0)) {
+      return caretRectInTextNode(node, clamped - seen);
+    }
+    seen += len;
+    lastText = node;
+  }
+  if (lastText) return caretRectInTextNode(lastText, lastText.data.length);
+  return null;
+}
+
+function hasBlockPreviewBeforeNextText(from: Node): boolean {
+  for (let node = nextSourceViewNode(from); node; node = nextSourceViewNode(node)) {
+    if (node.nodeType === Node.TEXT_NODE) return false;
+    if (
+      node instanceof Element &&
+      node.classList.contains("md-image-preview-block")
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function nextSourceViewNode(from: Node): Node | null {
+  if (from.firstChild) return from.firstChild;
+  let node: Node | null = from;
+  while (node && node !== sourceViewEl) {
+    if (node.nextSibling) return node.nextSibling;
+    node = node.parentNode;
+  }
+  return null;
+}
+
+function caretRectInTextNode(node: Text, offset: number): DOMRect | null {
+  const local = Math.max(0, Math.min(offset, node.data.length));
+  const range = document.createRange();
+  range.setStart(node, local);
+  range.collapse(true);
+  const collapsed = range.getBoundingClientRect();
+  if (collapsed.width > 0 || collapsed.height > 0) return collapsed;
+
+  if (local > 0) {
+    range.setStart(node, local - 1);
+    range.setEnd(node, local);
+    const rect = range.getBoundingClientRect();
+    if (rect.width > 0 || rect.height > 0) {
+      return new DOMRect(rect.right, rect.top, 1, rect.height);
+    }
+  }
+  if (local < node.data.length) {
+    range.setStart(node, local);
+    range.setEnd(node, local + 1);
+    const rect = range.getBoundingClientRect();
+    if (rect.width > 0 || rect.height > 0) {
+      return new DOMRect(rect.left, rect.top, 1, rect.height);
+    }
+  }
+  return null;
+}
+
+function ensureSourceCaretVisible(): void {
+  if (document.body.dataset.mode !== "edit") return;
+  if (document.activeElement !== sourceEl) return;
+
+  const style = getComputedStyle(sourceEl);
+  const parsedLineHeight = parseCssPx(style.lineHeight);
+  const lineHeight = parsedLineHeight > 0 ? parsedLineHeight : parseCssPx(style.fontSize) * 1.6;
+  if (!Number.isFinite(lineHeight) || lineHeight <= 0) return;
+
+  const caretLine = estimateVisualLineAtOffset(
+    sourceEl.value,
+    sourceEl.selectionStart,
+    sourceEl,
+    style,
+  );
+  const hostRect = hostEl.getBoundingClientRect();
+  const caretTop = hostRect.top + caretLine * lineHeight;
+  const caretBottom = caretTop + lineHeight;
+  const margin = Math.max(48, lineHeight * 2);
+  const lower = window.innerHeight - margin;
+  if (caretBottom > lower) {
+    window.scrollBy({ top: caretBottom - lower, left: 0 });
+  } else if (caretTop < margin) {
+    window.scrollBy({ top: caretTop - margin, left: 0 });
+  }
+}
+
+function estimateVisualLineAtOffset(
+  value: string,
+  offset: number,
+  el: HTMLTextAreaElement,
+  style: CSSStyleDeclaration,
+): number {
+  const before = value.slice(0, Math.max(0, Math.min(offset, value.length)));
+  const charWidth = estimateMonospaceCharWidth(style);
+  const paddingLeft = parseCssPx(style.paddingLeft) ?? 0;
+  const paddingRight = parseCssPx(style.paddingRight) ?? 0;
+  const contentWidth = Math.max(1, el.clientWidth - paddingLeft - paddingRight);
+  const columns = Math.max(1, Math.floor(contentWidth / charWidth));
+  let visualLine = 0;
+  const lines = before.split("\n");
+  for (let i = 0; i < lines.length; i++) {
+    if (i > 0) visualLine += 1;
+    visualLine += Math.max(0, Math.ceil(lines[i]!.length / columns) - 1);
+  }
+  return visualLine;
+}
+
+function estimateMonospaceCharWidth(style: CSSStyleDeclaration): number {
+  measureCanvas ??= document.createElement("canvas");
+  const ctx = measureCanvas.getContext("2d");
+  if (!ctx) return parseCssPx(style.fontSize) * 0.6;
+  ctx.font = `${style.fontStyle} ${style.fontVariant} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+  return Math.max(1, ctx.measureText("M").width);
+}
+
+function parseCssPx(value: string): number {
+  const n = Number.parseFloat(value);
+  return Number.isFinite(n) ? n : 0;
 }
 
 function stripHtml(html: string): string {
@@ -126,11 +451,11 @@ function renderHighlightedSourceView(src: string): string {
     const newline = src.indexOf("\n", lineStart);
     const lineEnd = newline < 0 ? src.length : newline;
     const line = src.slice(lineStart, lineEnd);
-    const imageUrl = standaloneImageUrlFromLine(line);
-    if (imageUrl != null) {
-      html += highlightMarkdownSourceLine(line);
+    const image = standaloneImageSyntaxFromLine(line);
+    if (image != null) {
+      html += highlightMarkdownSourceLine(line, false);
       if (imagePreviewOn) {
-        html += renderSourceStandaloneImagePreviewSlot(imageUrl);
+        html += renderSourceStandaloneImagePreviewSlot(image);
       }
     } else {
       html += renderHighlightedSourceInlineLine(line);
@@ -148,9 +473,9 @@ interface LinePrefixHighlight {
   restClass: string | null;
 }
 
-function renderHighlightedSourceInlineLine(src: string): string {
+function renderHighlightedSourceInlineLine(src: string, includeImageSlots = true): string {
   const prefixed = splitMarkdownLinePrefix(src);
-  const restHtml = renderHighlightedInlineWithImageSlots(prefixed.rest);
+  const restHtml = renderHighlightedInlineWithImageSlots(prefixed.rest, includeImageSlots);
   if (prefixed.restClass == null) return prefixed.prefixHtml + restHtml;
   return `${prefixed.prefixHtml}<span class="${prefixed.restClass}">${restHtml}</span>`;
 }
@@ -212,11 +537,11 @@ function splitMarkdownLinePrefix(line: string): LinePrefixHighlight {
   return { prefixHtml: "", rest: line, restClass: null };
 }
 
-function highlightMarkdownSourceLine(line: string): string {
-  return renderHighlightedSourceInlineLine(line);
+function highlightMarkdownSourceLine(line: string, includeImageSlots = true): string {
+  return renderHighlightedSourceInlineLine(line, includeImageSlots);
 }
 
-function renderHighlightedInlineWithImageSlots(src: string): string {
+function renderHighlightedInlineWithImageSlots(src: string, includeImageSlots = true): string {
   let html = "";
   let pos = 0;
   while (pos < src.length) {
@@ -232,7 +557,7 @@ function renderHighlightedInlineWithImageSlots(src: string): string {
       continue;
     }
     html += highlightMarkdownSourceInline(src.slice(pos, image.end));
-    if (imagePreviewOn) {
+    if (includeImageSlots && imagePreviewOn) {
       html += renderSourceImagePreviewSlot(image);
     }
     pos = image.end;
@@ -493,10 +818,14 @@ function parseImageAltMeta(alt: string): ImageAltMeta {
   return { alt: match[1]!.replace(/[ \t]+$/, ""), width };
 }
 
-function standaloneImageUrlFromLine(line: string): string | null {
-  const trimmed = line.trim();
-  if (trimmed.length === 0 || /\s/.test(trimmed)) return null;
-  return isPreviewableImageUrl(trimmed) ? trimmed : null;
+function standaloneImageSyntaxFromLine(line: string): SourceImageSyntax | null {
+  const leading = line.match(/^[ \t]*/)?.[0].length ?? 0;
+  const trailing = line.match(/[ \t]*$/)?.[0].length ?? 0;
+  const end = line.length - trailing;
+  if (leading >= end) return null;
+  const image = parseSourceImageSyntax(line, leading);
+  if (!image || image.end !== end || image.url == null) return null;
+  return isPreviewableImageUrl(image.url) ? image : null;
 }
 
 function isPreviewableImageUrl(url: string): boolean {
@@ -507,9 +836,9 @@ function isPreviewableImageUrl(url: string): boolean {
   );
 }
 
-function renderSourceStandaloneImagePreviewSlot(url: string): string {
+function renderSourceStandaloneImagePreviewSlot(image: SourceImageSyntax): string {
   return renderSourceImagePreviewSlot(
-    { end: 0, alt: "", url, ref: null },
+    image,
     "md-image-preview-block",
   );
 }
@@ -599,6 +928,25 @@ function sourceOffsetFromPoint(x: number, y: number): number | null {
   return base + within;
 }
 
+function sourceOffsetFromSourceViewPoint(x: number, y: number): number | null {
+  if (pointHitsNonEditable(x, y)) return null;
+  const prevSourcePointerEvents = sourceEl.style.pointerEvents;
+  const prevSourceViewPointerEvents = sourceViewEl.style.pointerEvents;
+  sourceEl.style.pointerEvents = "none";
+  sourceViewEl.style.pointerEvents = "auto";
+  try {
+    const range =
+      (document as Document & {
+        caretRangeFromPoint?: (x: number, y: number) => Range | null;
+      }).caretRangeFromPoint?.(x, y) ?? null;
+    if (!range || !sourceViewEl.contains(range.startContainer)) return null;
+    return visibleOffsetWithin(sourceViewEl, range.startContainer, range.startOffset);
+  } finally {
+    sourceEl.style.pointerEvents = prevSourcePointerEvents;
+    sourceViewEl.style.pointerEvents = prevSourceViewPointerEvents;
+  }
+}
+
 function pointHitsNonEditable(x: number, y: number): boolean {
   for (const root of [renderedEl, sourceViewEl]) {
     const slots = root.querySelectorAll("[data-md-noneditable]");
@@ -620,8 +968,11 @@ function pointHitsNonEditable(x: number, y: number): boolean {
 function setMode(mode: "preview" | "edit"): void {
   document.body.dataset.mode = mode;
   if (mode === "preview") {
+    isComposing = false;
+    sourceEl.style.transform = "";
     update(sourceEl.value);
   }
+  queueLiteralLayoutSync();
 }
 
 function focusSourceAt(offset: number): void {
@@ -633,6 +984,7 @@ function focusSourceAt(offset: number): void {
     if (cursorIndicatorEl) {
       cursorIndicatorEl.textContent = `cursor → src offset ${clamped}`;
     }
+    queueLiteralLayoutSync(true);
   });
 }
 
@@ -657,13 +1009,75 @@ renderedEl.addEventListener("click", (event) => {
 });
 
 sourceEl.addEventListener("mousedown", (event) => {
-  if (!pointHitsNonEditable(event.clientX, event.clientY)) return;
+  if (pointHitsNonEditable(event.clientX, event.clientY)) {
+    event.preventDefault();
+    sourceViewDragAnchor = null;
+    return;
+  }
+  if (!imagePreviewOn) return;
+  const offset = sourceOffsetFromSourceViewPoint(event.clientX, event.clientY);
+  if (offset == null) return;
   event.preventDefault();
+  sourceEl.focus({ preventScroll: true });
+  sourceEl.setSelectionRange(offset, offset);
+  sourceViewDragAnchor = offset;
+  if (cursorIndicatorEl) {
+    cursorIndicatorEl.textContent = `cursor → src offset ${offset}`;
+  }
+  syncSourceSelection();
+  syncSourceCaret();
 });
 
 sourceEl.addEventListener("click", (event) => {
-  if (!pointHitsNonEditable(event.clientX, event.clientY)) return;
+  if (pointHitsNonEditable(event.clientX, event.clientY) || imagePreviewOn) {
+    event.preventDefault();
+  }
+});
+
+sourceEl.addEventListener("keyup", () => {
+  syncSourceSelection();
+  syncSourceCaret();
+  syncTextareaImeAnchor();
+});
+
+sourceEl.addEventListener("mouseup", () => {
+  syncSourceSelection();
+  syncSourceCaret();
+  syncTextareaImeAnchor();
+});
+
+document.addEventListener("mousemove", (event) => {
+  if (sourceViewDragAnchor == null) return;
+  if ((event.buttons & 1) === 0) {
+    sourceViewDragAnchor = null;
+    return;
+  }
+  const offset = sourceOffsetFromSourceViewPoint(event.clientX, event.clientY);
+  if (offset == null) return;
   event.preventDefault();
+  sourceEl.focus({ preventScroll: true });
+  sourceEl.setSelectionRange(
+    Math.min(sourceViewDragAnchor, offset),
+    Math.max(sourceViewDragAnchor, offset),
+    offset < sourceViewDragAnchor ? "backward" : "forward",
+  );
+  if (cursorIndicatorEl) {
+    cursorIndicatorEl.textContent = `selection → src offsets ${sourceEl.selectionStart}..${sourceEl.selectionEnd}`;
+  }
+  syncSourceSelection();
+  syncSourceCaret();
+  syncTextareaImeAnchor();
+});
+
+document.addEventListener("mouseup", () => {
+  sourceViewDragAnchor = null;
+  syncSourceSelection();
+  syncSourceCaret();
+  syncTextareaImeAnchor();
+});
+
+sourceEl.addEventListener("scroll", () => {
+  syncLiteralLayout();
 });
 
 sourceEl.addEventListener("keydown", (event) => {
@@ -673,7 +1087,26 @@ sourceEl.addEventListener("keydown", (event) => {
   }
 });
 
+sourceEl.addEventListener("compositionstart", () => {
+  isComposing = true;
+  syncSourceSelection();
+  syncSourceCaret();
+  syncTextareaImeAnchor();
+});
+
+sourceEl.addEventListener("compositionupdate", () => {
+  syncTextareaImeAnchor();
+});
+
+sourceEl.addEventListener("compositionend", () => {
+  isComposing = false;
+  sourceEl.style.transform = "";
+  queueLiteralLayoutSync(true);
+});
+
 sourceEl.addEventListener("blur", () => {
+  isComposing = false;
+  sourceEl.style.transform = "";
   setMode("preview");
 });
 
@@ -681,6 +1114,16 @@ sourceEl.addEventListener("blur", () => {
 // blocks' DOM nodes intact, so this stays cheap.
 sourceEl.addEventListener("input", () => {
   update(sourceEl.value);
+  queueLiteralLayoutSync(true);
+});
+
+document.addEventListener("selectionchange", () => {
+  if (document.activeElement !== sourceEl) return;
+  requestAnimationFrame(() => {
+    syncSourceSelection();
+    syncSourceCaret();
+    syncTextareaImeAnchor();
+  });
 });
 
 overlayToggle.addEventListener("change", () => {
@@ -690,10 +1133,16 @@ overlayToggle.addEventListener("change", () => {
 imagePreviewToggle.addEventListener("change", () => {
   imagePreviewOn = imagePreviewToggle.checked;
   document.body.classList.toggle("with-image-preview", imagePreviewOn);
-  renderSourceView(sourceEl.value);
+  sourceViewEditor.rerender();
   editor.rerender();
+  queueLiteralLayoutSync();
+  syncSourceCaret();
   refreshInvariant(sourceEl.value);
 });
+
+renderedEl.addEventListener("load", () => syncLiteralLayout(), true);
+sourceViewEl.addEventListener("load", () => syncLiteralLayout(), true);
+window.addEventListener("resize", () => queueLiteralLayoutSync());
 
 document.body.classList.toggle("overlay", overlayToggle.checked);
 update(SAMPLE);

@@ -6,9 +6,9 @@
 
 ///| concatenation of all character data once HTML tags are stripped and
 
-///| character references are decoded — equals the lossless serialization
+///| character references are decoded — equals the document's normalized
 
-///| of the document (`serialize(doc)`). Markdown markers (`#`, `**`, `_`,
+///| source, including preserved blank-line blocks. Markdown markers (`#`, `**`, `_`,
 
 ///| `` ` ``, list bullets, fence ticks, blockquote `>`, etc.) are wrapped
 
@@ -90,16 +90,7 @@ pub fn render_html_literal(
 ) -> String {
   let opts : LiteralOpts = { positions, image_preview }
   let buf = StringBuilder::new()
-  let mut first = true
   for block in doc.children {
-    match block {
-      Block::BlankLines(..) => continue
-      _ => ()
-    }
-    if !first {
-      buf.write_char('\n')
-    }
-    first = false
     render_block_literal(block, buf, opts)
   }
   buf.to_string()
@@ -131,6 +122,10 @@ priv struct LiteralOpts {
 /// used as document offsets.
 fn LiteralOpts::nested(self : LiteralOpts) -> LiteralOpts {
   { positions: false, image_preview: self.image_preview }
+}
+
+fn LiteralOpts::without_image_preview(self : LiteralOpts) -> LiteralOpts {
+  { positions: self.positions, image_preview: false }
 }
 
 // =============================================================================
@@ -262,13 +257,38 @@ fn write_image_preview_slot(
   buf.write_string("</span>")
 }
 
-fn write_image_preview_block_slot(buf : StringBuilder, url : String) -> Unit {
+fn write_image_preview_block_slot(
+  buf : StringBuilder,
+  url : String,
+  alt : String,
+  title : String,
+) -> Unit {
+  let meta = parse_image_preview_alt(alt)
   buf.write_string(
-    "<span class=\"md-image-preview-slot md-image-preview-block\" data-md-noneditable=\"true\" contenteditable=\"false\">",
+    "<span class=\"md-image-preview-slot md-image-preview-block\" data-md-noneditable=\"true\" contenteditable=\"false\"",
   )
+  match meta.width {
+    Some(width) => {
+      buf.write_string(" data-md-image-width=\"")
+      buf.write_string(width.to_string())
+      buf.write_string("\" style=\"--md-literal-image-width:")
+      buf.write_string(width.to_string())
+      buf.write_string("px\"")
+    }
+    None => ()
+  }
+  buf.write_char('>')
   buf.write_string("<img class=\"md-image-preview\" src=\"")
   escape_html_attr_into(buf, url)
-  buf.write_string("\" alt=\"\" loading=\"lazy\" />")
+  buf.write_string("\" alt=\"")
+  escape_html_attr_into(buf, meta.alt)
+  buf.write_char('"')
+  if !title.is_empty() {
+    buf.write_string(" title=\"")
+    escape_html_attr_into(buf, title)
+    buf.write_char('"')
+  }
+  buf.write_string(" loading=\"lazy\" />")
   buf.write_string("</span>")
 }
 
@@ -347,43 +367,6 @@ fn trim_trailing_ascii_space(s : String) -> String {
     trimmed.push(chars[i])
   }
   String::from_array(trimmed)
-}
-
-fn standalone_image_url_from_inline(inline : Inline) -> String? {
-  match inline {
-    Inline::Text(content~, ..) => standalone_image_url_from_text(content)
-    Inline::Autolink(url~, is_email~, ..) =>
-      if is_email {
-        None
-      } else if is_previewable_image_url(url) {
-        Some(url)
-      } else {
-        None
-      }
-    _ => None
-  }
-}
-
-fn standalone_image_url_from_text(content : String) -> String? {
-  let trimmed = content.trim(chars=" \t\n\r").to_owned()
-  if trimmed.is_empty() || contains_ascii_space(trimmed) {
-    return None
-  }
-  if is_previewable_image_url(trimmed) {
-    Some(trimmed)
-  } else {
-    None
-  }
-}
-
-fn contains_ascii_space(s : String) -> Bool {
-  for c in s {
-    match c {
-      ' ' | '\t' | '\n' | '\r' => return true
-      _ => ()
-    }
-  }
-  false
 }
 
 fn is_previewable_image_url(url : String) -> Bool {
@@ -641,7 +624,10 @@ fn render_block_literal(
     }
     Block::Table(header~, alignments~, rows~, span~, ..) =>
       render_table_literal(header, alignments, rows, span, buf, opts)
-    Block::BlankLines(..) => ()
+    Block::BlankLines(count~, ..) =>
+      for i = 0; i < count; i = i + 1 {
+        buf.write_char('\n')
+      }
     Block::FootnoteDefinition(label~, children~, span~, ..) => {
       buf.write_string("<div class=\"footnote\" id=\"fn-")
       buf.write_string(escape_html(label))
@@ -782,12 +768,12 @@ fn render_bullet_items_literal(
     buf.write_string("<li")
     write_pos_attrs(buf, item.span, opts.positions)
     buf.write_char('>')
-    // Marker: indent spaces + "* ", all ASCII so no escaping needed.
+    // Marker: indent spaces + "- ", all ASCII so no escaping needed.
     buf.write_string("<span class=\"md-marker\" aria-hidden=\"true\">")
     for k = 0; k < indent; k = k + 1 {
       buf.write_char(' ')
     }
-    buf.write_string("* </span>")
+    buf.write_string("- </span>")
     match item.checked {
       Some(true) => write_marker(buf, "[x] ")
       Some(false) => write_marker(buf, "[ ] ")

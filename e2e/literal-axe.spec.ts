@@ -80,7 +80,7 @@ test.describe("literal renderer accessibility (axe-core)", () => {
     // the rendering itself is broken and the axe run would be testing
     // the wrong DOM.
     await expect(page.locator("#invariant-state")).toHaveText(
-      /overlay invariant holds/,
+      /literal DOM matches fresh render/,
     );
 
     const results = await new AxeBuilder({ page })

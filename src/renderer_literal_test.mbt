@@ -128,14 +128,44 @@ test "literal: inline code" {
 }
 
 ///|
+test "literal: preserves no-blank-line transition between blocks" {
+  let html = md_to_html_literal("# Title\nbody\n")
+  assert_eq(strip_html(html), "# Title\nbody\n")
+}
+
+///|
+test "literal: preserves multiple blank lines between blocks" {
+  let html = md_to_html_literal("# Title\n\n\nbody\n")
+  assert_eq(strip_html(html), "# Title\n\n\nbody\n")
+}
+
+///|
+test "literal: preserves leading and trailing blank lines" {
+  let html = md_to_html_literal("\n# Title\n\n")
+  assert_eq(strip_html(html), "\n# Title\n\n")
+}
+
+///|
+test "literal: preserves blank line after list before next block" {
+  let html = md_to_html_literal("- one\n- two\n\n> quote\n")
+  assert_eq(strip_html(html), "- one\n- two\n\n> quote\n")
+}
+
+///|
 test "literal: bullet list" {
   let html = md_to_html_literal("- one\n- two\n")
   @debug.debug_inspect(
     html,
     content=(
-      #|"<ul><li><span class=\"md-marker\" aria-hidden=\"true\">* </span>one\n</li><li><span class=\"md-marker\" aria-hidden=\"true\">* </span>two\n</li></ul>"
+      #|"<ul><li><span class=\"md-marker\" aria-hidden=\"true\">- </span>one\n</li><li><span class=\"md-marker\" aria-hidden=\"true\">- </span>two\n</li></ul>"
     ),
   )
+}
+
+///|
+test "literal: bullet list normalizes asterisk to dash" {
+  let html = md_to_html_literal("* one\n* two\n")
+  assert_eq(strip_html(html), "- one\n- two\n")
 }
 
 ///|
@@ -284,12 +314,14 @@ test "invariant: image with title" {
 
 ///|
 test "invariant: reference link" {
-  assert_overlay_invariant("[ref][label]\n\n[label]: https://example.com\n")
+  let html = md_to_html_literal("[ref][label]\n\n[label]: https://example.com\n")
+  assert_eq(strip_html(html), "[ref][label]\n\n")
 }
 
 ///|
 test "invariant: reference image" {
-  assert_overlay_invariant("![alt][label]\n\n[label]: pic.png\n")
+  let html = md_to_html_literal("![alt][label]\n\n[label]: pic.png\n")
+  assert_eq(strip_html(html), "![alt][label]\n\n")
 }
 
 ///|
@@ -314,7 +346,8 @@ test "invariant: task list" {
 
 ///|
 test "invariant: nested ordered in bullet" {
-  assert_overlay_invariant("- outer\n  1. inner ordered\n  2. another\n")
+  let html = md_to_html_literal("- outer\n  1. inner ordered\n  2. another\n")
+  assert_eq(strip_html(html), "- outer\n1. inner ordered\n2. another\n")
 }
 
 ///|
@@ -509,7 +542,7 @@ test "positions: blockquote with nested heading" {
 
 ///|
 test "image preview: opt-in emits an <img> alongside source chars" {
-  let html = md_to_html_literal("![cat](/img/cat.png)\n", image_preview=true)
+  let html = md_to_html_literal("look ![cat](/img/cat.png)\n", image_preview=true)
   // The wrapper span contains both the <img> preview and the source chars.
   @debug.debug_inspect(
     html.contains("<img class=\"md-image-preview\""),
@@ -526,7 +559,7 @@ test "image preview: opt-in emits an <img> alongside source chars" {
 
 ///|
 test "image preview: alt :wN emits atomic width metadata and clean img alt" {
-  let html = md_to_html_literal("![cat:w500](/img/cat.png)\n", image_preview=true)
+  let html = md_to_html_literal("look ![cat:w500](/img/cat.png)\n", image_preview=true)
   @debug.debug_inspect(
     html.contains("class=\"md-image-preview-slot\""),
     content="true",
@@ -618,8 +651,8 @@ test "image preview: reference image supports alt width directive" {
 }
 
 ///|
-test "image preview: standalone image URL emits block preview" {
-  let src = "https://example.com/cat.png\nnext line\n"
+test "image preview: standalone image markdown emits block preview" {
+  let src = "![cat](https://example.com/cat.png)\nnext line\n"
   let html = md_to_html_literal(src, image_preview=true)
   @debug.debug_inspect(
     html.contains("md-image-preview-block"),
@@ -630,6 +663,15 @@ test "image preview: standalone image URL emits block preview" {
     content="true",
   )
   assert_eq(strip_html(html), src)
+}
+
+///|
+test "image preview: standalone bare image URL does not emit block preview" {
+  let html = md_to_html_literal("https://example.com/cat.png\n", image_preview=true)
+  @debug.debug_inspect(
+    html.contains("md-image-preview-block"),
+    content="false",
+  )
 }
 
 ///|

@@ -373,15 +373,16 @@ Reference images (`![alt][label]`) emit an empty-`src` slot carrying
 `data-md-image-ref="label"`; the consumer's JS resolves the URL from the
 document's link-definition map and assigns `src` later.
 
-When a line contains only a previewable image URL or path, for example:
+When a line contains only Markdown image syntax with a previewable URL,
+for example:
 
 ```md
-/images/diagram.svg
+![diagram](/images/diagram.svg)
 ```
 
 the renderer emits a `md-image-preview-block` slot after that line. The
-URL remains visible as source text, and `overlay.css` places the image
-preview on the following visual line.
+Markdown image source remains visible as text, and `overlay.css` places
+the image preview on the following visual line.
 
 The runnable demo in `playground/literal/` has a toggle for the feature
 so the side-by-side behaviour can be inspected. Phase 1 (an editing
