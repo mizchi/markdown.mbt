@@ -314,7 +314,9 @@ test "invariant: image with title" {
 
 ///|
 test "invariant: reference link" {
-  let html = md_to_html_literal("[ref][label]\n\n[label]: https://example.com\n")
+  let html = md_to_html_literal(
+    "[ref][label]\n\n[label]: https://example.com\n",
+  )
   assert_eq(strip_html(html), "[ref][label]\n\n")
 }
 
@@ -542,7 +544,10 @@ test "positions: blockquote with nested heading" {
 
 ///|
 test "image preview: opt-in emits an <img> alongside source chars" {
-  let html = md_to_html_literal("look ![cat](/img/cat.png)\n", image_preview=true)
+  let html = md_to_html_literal(
+    "look ![cat](/img/cat.png)\n",
+    image_preview=true,
+  )
   // The wrapper span contains both the <img> preview and the source chars.
   @debug.debug_inspect(
     html.contains("<img class=\"md-image-preview\""),
@@ -559,7 +564,10 @@ test "image preview: opt-in emits an <img> alongside source chars" {
 
 ///|
 test "image preview: alt :wN emits atomic width metadata and clean img alt" {
-  let html = md_to_html_literal("look ![cat:w500](/img/cat.png)\n", image_preview=true)
+  let html = md_to_html_literal(
+    "look ![cat:w500](/img/cat.png)\n",
+    image_preview=true,
+  )
   @debug.debug_inspect(
     html.contains("class=\"md-image-preview-slot\""),
     content="true",
@@ -585,7 +593,10 @@ test "image preview: alt :wN emits atomic width metadata and clean img alt" {
     content="true",
   )
   @debug.debug_inspect(html.contains("alt=\"cat\""), content="true")
-  @debug.debug_inspect(html.contains("![") && html.contains("cat:w500"), content="true")
+  @debug.debug_inspect(
+    html.contains("![") && html.contains("cat:w500"),
+    content="true",
+  )
 }
 
 ///|
@@ -654,10 +665,7 @@ test "image preview: reference image supports alt width directive" {
 test "image preview: standalone image markdown emits block preview" {
   let src = "![cat](https://example.com/cat.png)\nnext line\n"
   let html = md_to_html_literal(src, image_preview=true)
-  @debug.debug_inspect(
-    html.contains("md-image-preview-block"),
-    content="true",
-  )
+  @debug.debug_inspect(html.contains("md-image-preview-block"), content="true")
   @debug.debug_inspect(
     html.contains("src=\"https://example.com/cat.png\""),
     content="true",
@@ -667,20 +675,20 @@ test "image preview: standalone image markdown emits block preview" {
 
 ///|
 test "image preview: standalone bare image URL does not emit block preview" {
-  let html = md_to_html_literal("https://example.com/cat.png\n", image_preview=true)
-  @debug.debug_inspect(
-    html.contains("md-image-preview-block"),
-    content="false",
+  let html = md_to_html_literal(
+    "https://example.com/cat.png\n",
+    image_preview=true,
   )
+  @debug.debug_inspect(html.contains("md-image-preview-block"), content="false")
 }
 
 ///|
 test "image preview: standalone non-image URL does not emit block preview" {
-  let html = md_to_html_literal("https://example.com/page\n", image_preview=true)
-  @debug.debug_inspect(
-    html.contains("md-image-preview-block"),
-    content="false",
+  let html = md_to_html_literal(
+    "https://example.com/page\n",
+    image_preview=true,
   )
+  @debug.debug_inspect(html.contains("md-image-preview-block"), content="false")
 }
 
 ///|

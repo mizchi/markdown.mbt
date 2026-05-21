@@ -253,6 +253,7 @@ fn BlockParser::parse_ordered_list(
   )
 }
 
+///|
 fn BlockParser::next_bullet_item_matches(
   self : BlockParser,
   marker : BulletMarker,
@@ -269,6 +270,7 @@ fn BlockParser::next_bullet_item_matches(
   matches
 }
 
+///|
 fn BlockParser::next_ordered_item_matches(
   self : BlockParser,
   delimiter : OrderedDelimiter,

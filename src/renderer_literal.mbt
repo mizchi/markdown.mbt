@@ -124,6 +124,7 @@ fn LiteralOpts::nested(self : LiteralOpts) -> LiteralOpts {
   { positions: false, image_preview: self.image_preview }
 }
 
+///|
 fn LiteralOpts::without_image_preview(self : LiteralOpts) -> LiteralOpts {
   { positions: self.positions, image_preview: false }
 }
@@ -257,6 +258,7 @@ fn write_image_preview_slot(
   buf.write_string("</span>")
 }
 
+///|
 fn write_image_preview_block_slot(
   buf : StringBuilder,
   url : String,
@@ -292,7 +294,11 @@ fn write_image_preview_block_slot(
   buf.write_string("</span>")
 }
 
-fn write_image_preview_slot_open(buf : StringBuilder, meta : ImagePreviewAlt) -> Unit {
+///|
+fn write_image_preview_slot_open(
+  buf : StringBuilder,
+  meta : ImagePreviewAlt,
+) -> Unit {
   buf.write_string(
     "<span class=\"md-image-preview-slot\" data-md-noneditable=\"true\" contenteditable=\"false\"",
   )
@@ -309,6 +315,7 @@ fn write_image_preview_slot_open(buf : StringBuilder, meta : ImagePreviewAlt) ->
   buf.write_string(">")
 }
 
+///|
 priv struct ImagePreviewAlt {
   alt : String
   width : Int?
@@ -353,6 +360,7 @@ fn parse_image_preview_alt(alt : String) -> ImagePreviewAlt {
   }
 }
 
+///|
 fn trim_trailing_ascii_space(s : String) -> String {
   let chars = s.to_array()
   let mut end = chars.length()
@@ -369,6 +377,7 @@ fn trim_trailing_ascii_space(s : String) -> String {
   String::from_array(trimmed)
 }
 
+///|
 fn is_previewable_image_url(url : String) -> Bool {
   let lower = image_url_path_part(url).to_lower()
   lower.has_prefix("data:image/") ||
@@ -383,6 +392,7 @@ fn is_previewable_image_url(url : String) -> Bool {
   lower.has_suffix(".ico")
 }
 
+///|
 fn image_url_path_part(url : String) -> String {
   for i = 0; i < url.length(); i = i + 1 {
     match url.get_char(i) {

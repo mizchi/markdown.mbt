@@ -38,7 +38,7 @@ fn render_paragraph_inlines_literal(
         render_inline_literal(inline, buf, opts)
         at_line_start = true
       }
-      Inline::Image(alt~, url~, title~, ..) => {
+      Inline::Image(alt~, url~, title~, ..) =>
         if opts.image_preview &&
           at_line_start &&
           is_line_end_after(inlines, i) &&
@@ -50,7 +50,6 @@ fn render_paragraph_inlines_literal(
           render_inline_literal(inline, buf, opts)
           at_line_start = false
         }
-      }
       _ => {
         render_inline_literal(inline, buf, opts)
         at_line_start = false
@@ -59,6 +58,7 @@ fn render_paragraph_inlines_literal(
   }
 }
 
+///|
 fn is_line_end_after(inlines : Array[Inline], index : Int) -> Bool {
   if index + 1 >= inlines.length() {
     return true
