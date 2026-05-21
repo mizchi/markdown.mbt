@@ -11,7 +11,18 @@ moon test --target js src
 
 # Run benchmarks
 moon bench
+
+# Literal renderer core only
+pnpm run bench:literal:core
+
+# Literal browser/editor controller
+pnpm run bench:literal
 ```
+
+Browser benchmarks should reuse `e2e/helpers/browser-benchmark.ts` for CLI
+parsing, Vite startup, Playwright lifecycle, frame-settled timing, percentile
+summaries, and Markdown/JSON output. Keep each concrete benchmark file focused
+on page setup and scenario definitions.
 
 ## CommonMark Compatibility Tests
 

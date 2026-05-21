@@ -188,6 +188,180 @@
   display: inline;
 }
 
+/* ---- DOM controller helpers for `createLiteralMarkdownEditor`. The
+ *      controller adds these classes to the elements it receives; callers
+ *      can also provide them explicitly when not using the controller. */
+.md-literal-editor {
+  position: relative;
+}
+
+.md-literal-editor > .md-literal {
+  margin: 0;
+  padding: 0;
+}
+
+.md-literal-editor > .md-literal-rendered {
+  cursor: text;
+}
+
+.md-literal-editor > .md-literal-source-edit {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--md-literal-text, currentColor);
+  border: 0;
+  outline: none;
+  overflow: hidden;
+  resize: none;
+  font: inherit;
+  white-space: pre-wrap;
+  z-index: 2;
+}
+
+[data-mode="preview"] .md-literal-editor > .md-literal-source-edit {
+  display: none;
+}
+
+[data-mode="edit"] .md-literal-editor > .md-literal-rendered {
+  visibility: hidden;
+}
+
+[data-mode="edit"] .md-literal-editor > .md-literal-source-edit::selection {
+  background: var(--md-literal-selection, rgba(56, 139, 253, 0.32));
+}
+
+.with-image-preview[data-mode="edit"]
+  .md-literal-editor
+  > .md-literal-source-edit {
+  caret-color: transparent;
+}
+
+.with-image-preview[data-mode="edit"]
+  .md-literal-editor
+  > .md-literal-source-edit::selection {
+  background: transparent;
+}
+
+.md-literal-editor > .md-literal-source-view {
+  display: none;
+  margin: 0;
+  pointer-events: none;
+  white-space: pre-wrap;
+}
+
+[data-mode="edit"] .md-literal-editor > .md-literal-source-view,
+.overlay .md-literal-editor > .md-literal-source-view,
+.md-literal-editor.md-overlay > .md-literal-source-view {
+  display: block;
+  position: absolute;
+  inset: 0;
+}
+
+.overlay .md-literal-editor > .md-literal-source-view,
+.md-literal-editor.md-overlay > .md-literal-source-view {
+  opacity: var(--md-overlay-source-opacity, 0.45);
+  color: var(--md-literal-source-overlay, #79c0ff);
+}
+
+[data-mode="edit"] .md-literal-editor > .md-literal-source-view {
+  opacity: 1;
+  color: var(--md-literal-text, currentColor);
+  visibility: visible;
+}
+
+.overlay .md-literal-editor > .md-literal-rendered,
+.md-literal-editor.md-overlay > .md-literal-rendered {
+  position: absolute;
+  inset: 0;
+}
+
+.md-literal-source-caret,
+.source-caret {
+  position: absolute;
+  display: none;
+  width: 1px;
+  background: var(--md-literal-text, currentColor);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.with-image-preview[data-mode="edit"] .md-literal-source-caret,
+.with-image-preview[data-mode="edit"] .source-caret {
+  display: block;
+}
+
+.md-literal-source-selection,
+.source-selection {
+  position: absolute;
+  inset: 0;
+  display: none;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.source-selection-rect {
+  position: absolute;
+  background: var(--md-literal-selection, rgba(56, 139, 253, 0.32));
+}
+
+.with-image-preview[data-mode="edit"]
+  .md-literal-source-view.md-literal
+  .md-image-preview-spacer
+  .md-image-preview {
+  visibility: visible;
+  box-shadow: 0 0 0 1px
+    var(--md-literal-image-border, rgba(110, 118, 129, 0.4));
+}
+
+.md-literal-source-view .md-src-marker,
+.md-literal-source-view .md-src-link-bracket,
+.md-literal-source-view .md-src-link-url,
+.md-literal-source-view .md-src-code-marker,
+.md-literal-source-view .md-src-quote-marker,
+.md-literal-source-view .md-src-list-marker,
+.md-literal-source-view .md-src-hr,
+.md-literal-source-view .md-src-html,
+.md-literal-source-view .md-src-escape {
+  color: var(--md-literal-source-marker, #8b949e);
+}
+
+.md-literal-source-view .md-src-heading,
+.md-literal-source-view .md-src-heading-marker,
+.md-literal-source-view .md-src-strong {
+  color: var(--md-literal-source-heading, #f0f6fc);
+}
+
+.md-literal-source-view .md-src-em {
+  color: var(--md-literal-source-em, #d2a8ff);
+}
+
+.md-literal-source-view .md-src-del {
+  color: var(--md-literal-source-del, #8b949e);
+}
+
+.md-literal-source-view .md-src-code {
+  color: var(--md-literal-source-code, #f0883e);
+}
+
+.md-literal-source-view .md-src-link-text,
+.md-literal-source-view .md-src-image-alt {
+  color: var(--md-literal-source-text, var(--md-literal-text, currentColor));
+}
+
+.md-literal-source-view .md-src-url {
+  color: var(--md-literal-source-url, #58a6ff);
+}
+
+.overlay:not([data-mode="edit"]) .md-literal-source-view [class^="md-src-"],
+.md-literal-editor.md-overlay:not([data-mode="edit"])
+  .md-literal-source-view
+  [class^="md-src-"] {
+  color: inherit;
+}
+
 /* ---- Overlay helpers. Apply `.md-overlay` to the wrapper that stacks
  *      a source view and a rendered view; the wrapper enforces
  *      `position: relative` so both layers can absolute-position to the

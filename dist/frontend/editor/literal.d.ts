@@ -1,5 +1,3 @@
-export { SyntaxHighlightEditor, type SyntaxHighlightEditorHandle, type SyntaxHighlightEditorProps, } from "./SyntaxHighlightEditor.js";
 export { LiteralEditor, type LiteralRenderer, type PatchStats, patchTopLevelChildren, } from "./literal-editor.js";
 export { createLiteralMarkdownEditor, type LiteralMarkdownCursorState, type LiteralMarkdownEditorElements, type LiteralMarkdownEditorHandle, type LiteralMarkdownEditorOptions, type LiteralMarkdownInvariantState, type LiteralMarkdownMode, type LiteralMarkdownRenderer, type LiteralMarkdownRenderOptions, } from "./literal-markdown-editor.js";
-export { type CodeHighlighter, getLoadedHighlighter, highlight, highlightIfLoaded, type HighlightLanguage, loadHighlighter, normalizeHighlightLanguage, preloadHighlighter, } from "../highlight/index.js";
-//# sourceMappingURL=index.d.ts.map
+//# sourceMappingURL=literal.d.ts.map

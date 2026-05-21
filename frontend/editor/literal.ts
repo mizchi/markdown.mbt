@@ -1,10 +1,4 @@
 export {
-  SyntaxHighlightEditor,
-  type SyntaxHighlightEditorHandle,
-  type SyntaxHighlightEditorProps,
-} from "./SyntaxHighlightEditor.js";
-
-export {
   LiteralEditor,
   type LiteralRenderer,
   type PatchStats,
@@ -22,14 +16,3 @@ export {
   type LiteralMarkdownRenderer,
   type LiteralMarkdownRenderOptions,
 } from "./literal-markdown-editor.js";
-
-export {
-  type CodeHighlighter,
-  getLoadedHighlighter,
-  highlight,
-  highlightIfLoaded,
-  type HighlightLanguage,
-  loadHighlighter,
-  normalizeHighlightLanguage,
-  preloadHighlighter,
-} from "../highlight/index.js";

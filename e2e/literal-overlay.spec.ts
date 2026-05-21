@@ -30,7 +30,10 @@ const SAMPLES = [
     md: "*italic* and **bold** and ~~strike~~ and `code`\n",
   },
   { name: "bullet-list", md: "- one\n- two\n- three\n" },
+  { name: "bullet-list-asterisk", md: "* one\n* two\n" },
+  { name: "bullet-list-plus", md: "+ one\n+ two\n" },
   { name: "ordered-list", md: "1. one\n2. two\n3. three\n" },
+  { name: "ordered-list-paren", md: "1) one\n2) two\n" },
   { name: "blockquote", md: "> first\n> second\n" },
   {
     name: "autolink",
@@ -38,7 +41,7 @@ const SAMPLES = [
   },
   {
     name: "fenced-code",
-    md: "```rust\nfn main() {\n    println!(\"hi\");\n}\n```\n",
+    md: '```rust\nfn main() {\n    println!("hi");\n}\n```\n',
   },
   {
     name: "mixed",
@@ -90,7 +93,11 @@ test.describe("literal renderer overlay invariant", () => {
       };
     });
 
-    for (const [name, style] of Object.entries(styles).filter(([name]) => name !== "source")) {
+    for (
+      const [name, style] of Object.entries(styles).filter(([name]) =>
+        name !== "source"
+      )
+    ) {
       expect(style, name).toMatchObject({
         display: "inline",
         margin: "0px",
@@ -108,7 +115,9 @@ test.describe("literal renderer overlay invariant", () => {
     test(`${sample.name} renders the same glyph grid as source`, async ({ page }) => {
       await page.goto("/literal/");
       // Wait until the demo's first paint settled.
-      await page.waitForSelector("#rendered .md-marker, #rendered p, #rendered h1, #rendered h2");
+      await page.waitForSelector(
+        "#rendered .md-marker, #rendered p, #rendered h1, #rendered h2",
+      );
 
       // Replace the source with the test sample and fire `input` so the
       // demo recomputes both panes.
@@ -120,9 +129,75 @@ test.describe("literal renderer overlay invariant", () => {
 
       // The demo writes a green `✓` into #invariant-state if the patched
       // DOM still matches a fresh literal render.
-      await expect(page.locator("#invariant-state")).toHaveText(/literal DOM matches fresh render/);
+      await expect(page.locator("#invariant-state")).toHaveText(
+        /literal DOM matches fresh render/,
+      );
     });
   }
+
+  test("source view follows literal serializer marker normalization", async ({ page }) => {
+    const md = [
+      "* asterisk bullet",
+      "+ plus bullet",
+      "",
+      "1) paren ordered",
+      "2) next ordered",
+      "",
+    ].join("\n");
+    const expected = [
+      "- asterisk bullet",
+      "- plus bullet",
+      "",
+      "1. paren ordered",
+      "2. next ordered",
+      "",
+    ].join("\n");
+    await page.goto("/literal/");
+    await page.evaluate((source) => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.value = source;
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    }, md);
+
+    const state = await page.evaluate(() => {
+      const rendered = document.getElementById("rendered");
+      const source = document.getElementById("source-view");
+      if (!rendered || !source) throw new Error("missing literal layers");
+      const rectForText = (root: Element, needle: string) => {
+        const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+        for (let node = walker.nextNode(); node; node = walker.nextNode()) {
+          const text = node.textContent ?? "";
+          const offset = text.indexOf(needle);
+          if (offset >= 0) {
+            const range = document.createRange();
+            range.setStart(node, offset);
+            range.setEnd(node, offset + 1);
+            const rect = range.getBoundingClientRect();
+            return { left: rect.left, top: rect.top };
+          }
+        }
+        throw new Error(`missing ${needle}`);
+      };
+      return {
+        renderedText: rendered.textContent,
+        sourceText: source.textContent,
+        points: ["asterisk", "plus", "paren", "next"].map((needle) => ({
+          needle,
+          rendered: rectForText(rendered, needle),
+          source: rectForText(source, needle),
+        })),
+      };
+    });
+
+    expect(state.renderedText).toBe(expected);
+    expect(state.sourceText).toBe(expected);
+    for (const point of state.points) {
+      expect(Math.abs(point.rendered.left - point.source.left), point.needle)
+        .toBeLessThan(1);
+      expect(Math.abs(point.rendered.top - point.source.top), point.needle)
+        .toBeLessThan(1);
+    }
+  });
 
   test("overlay screenshot: source view vs rendered view align", async ({ page }) => {
     await page.goto("/literal/");
@@ -147,28 +222,32 @@ test.describe("literal renderer overlay invariant", () => {
   test("overlay VRT: edit roundtrip rendered layer matches source layer pixels", async ({ page }) => {
     await page.setViewportSize({ width: 968, height: 572 });
     await page.goto("/literal/");
-    await page.evaluate((md) => {
-      const ta = document.getElementById("source") as HTMLTextAreaElement;
-      ta.value = md;
-      ta.dispatchEvent(new Event("input", { bubbles: true }));
-    }, [
-      "# Compression Dictionary Transport 用の Toolkit",
-      "",
-      "## Intro",
-      "",
-      "CDT は あらかじめ辞書を作って クライアントに取得させておき、それを用いて 転送を圧縮することができる。",
-      "",
-      "- コマンドラインツール `cdt-toolkit` を定義した",
-      "  - Rust で実装し crates.io で公開中",
-      "- 詳細は <https://github.com/example/cdt-toolkit> を参照",
-      "",
-    ].join("\n"));
+    await page.evaluate(
+      (md) => {
+        const ta = document.getElementById("source") as HTMLTextAreaElement;
+        ta.value = md;
+        ta.dispatchEvent(new Event("input", { bubbles: true }));
+      },
+      [
+        "# Compression Dictionary Transport 用の Toolkit",
+        "",
+        "## Intro",
+        "",
+        "CDT は あらかじめ辞書を作って クライアントに取得させておき、それを用いて 転送を圧縮することができる。",
+        "",
+        "- コマンドラインツール `cdt-toolkit` を定義した",
+        "  - Rust で実装し crates.io で公開中",
+        "- 詳細は <https://github.com/example/cdt-toolkit> を参照",
+        "",
+      ].join("\n"),
+    );
     await page.locator("#overlay-toggle").check();
     await page.evaluate(() => document.fonts.ready);
 
     await page.locator("#rendered h1").click();
     await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
-    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id))
+      .toBe("source");
     await page.keyboard.press("Escape");
     await expect(page.locator("body")).toHaveAttribute("data-mode", "preview");
     await page.waitForTimeout(50);
@@ -237,9 +316,15 @@ test.describe("literal renderer overlay invariant", () => {
         let mismatched = 0;
         for (let i = 0; i < renderedImage.data.length; i += 4) {
           const dr = Math.abs(renderedImage.data[i]! - sourceImage.data[i]!);
-          const dg = Math.abs(renderedImage.data[i + 1]! - sourceImage.data[i + 1]!);
-          const db = Math.abs(renderedImage.data[i + 2]! - sourceImage.data[i + 2]!);
-          const da = Math.abs(renderedImage.data[i + 3]! - sourceImage.data[i + 3]!);
+          const dg = Math.abs(
+            renderedImage.data[i + 1]! - sourceImage.data[i + 1]!,
+          );
+          const db = Math.abs(
+            renderedImage.data[i + 2]! - sourceImage.data[i + 2]!,
+          );
+          const da = Math.abs(
+            renderedImage.data[i + 3]! - sourceImage.data[i + 3]!,
+          );
           if (dr + dg + db + da > 8) mismatched++;
         }
         const total = renderedImage.width * renderedImage.height;
@@ -275,9 +360,12 @@ test.describe("literal renderer overlay invariant", () => {
     await page.mouse.click(box.x + 2, box.y + box.height / 2);
     // The demo flips into edit mode and focuses the textarea (via rAF)
     // with the cursor at offset 0.
-    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id))
+      .toBe("source");
     const caret = await page.evaluate(
-      () => (document.getElementById("source") as HTMLTextAreaElement).selectionStart,
+      () =>
+        (document.getElementById("source") as HTMLTextAreaElement)
+          .selectionStart,
     );
     expect(caret).toBe(0);
   });
@@ -294,9 +382,12 @@ test.describe("literal renderer overlay invariant", () => {
     const box = await p.boundingBox();
     if (!box) throw new Error("p has no bounding box");
     await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id))
+      .toBe("source");
     const caret = await page.evaluate(
-      () => (document.getElementById("source") as HTMLTextAreaElement).selectionStart,
+      () =>
+        (document.getElementById("source") as HTMLTextAreaElement)
+          .selectionStart,
     );
     // "# Title\n\n" is 9 chars; "body paragraph\n" is 15. The paragraph
     // sits at source offsets 9..23. A click in the middle of the paragraph
@@ -305,12 +396,43 @@ test.describe("literal renderer overlay invariant", () => {
     expect(caret).toBeLessThanOrEqual(23);
   });
 
+  test("click-to-cursor: normalized list marker maps to the raw marker offset", async ({ page }) => {
+    await page.goto("/literal/");
+    await page.evaluate(() => {
+      const ta = document.getElementById("source") as HTMLTextAreaElement;
+      ta.value = "* one\n+ two\n1) three\n";
+      ta.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+
+    const markerPoint = await page.evaluate(() => {
+      const root = document.getElementById("rendered");
+      if (!root) throw new Error("missing rendered layer");
+      const marker = root.querySelector(".md-src-list-marker, .md-marker") ??
+        root.firstElementChild;
+      if (!marker) throw new Error("missing list marker");
+      const rect = marker.getBoundingClientRect();
+      return { x: rect.left + 2, y: rect.top + rect.height / 2 };
+    });
+
+    await page.mouse.click(markerPoint.x, markerPoint.y);
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id))
+      .toBe("source");
+    const caret = await page.evaluate(
+      () =>
+        (document.getElementById("source") as HTMLTextAreaElement)
+          .selectionStart,
+    );
+    expect(caret).toBe(0);
+  });
+
   test("preview-mode → edit-mode flip on click", async ({ page }) => {
     await page.goto("/literal/");
     await expect(page.locator("body")).toHaveAttribute("data-mode", "preview");
     const h1 = page.locator("#rendered h1").first();
     await h1.click();
     await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id))
+      .toBe("source");
     // Pressing Escape returns to preview mode.
     await page.keyboard.press("Escape");
     await expect(page.locator("body")).toHaveAttribute("data-mode", "preview");
@@ -342,7 +464,10 @@ test.describe("literal renderer overlay invariant", () => {
               range.setStart(node, offset);
               range.setEnd(node, offset + 1);
               const rect = range.getBoundingClientRect();
-              return { left: rect.left - hostRect.left, top: rect.top - hostRect.top };
+              return {
+                left: rect.left - hostRect.left,
+                top: rect.top - hostRect.top,
+              };
             }
           }
           throw new Error(`missing ${needle}`);
@@ -354,10 +479,16 @@ test.describe("literal renderer overlay invariant", () => {
     await page.locator("#rendered h1").click();
 
     await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
-    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
-    await expect(page.locator("#source-view .md-src-heading-marker")).toHaveCount(1);
-    await expect(page.locator("#source-view .md-src-heading")).toHaveText("Title");
-    await expect(page.locator("#source-view .md-src-strong")).toHaveText("**bold**");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id))
+      .toBe("source");
+    await expect(page.locator("#source-view .md-src-heading-marker"))
+      .toHaveCount(1);
+    await expect(page.locator("#source-view .md-src-heading")).toHaveText(
+      "Title",
+    );
+    await expect(page.locator("#source-view .md-src-strong")).toHaveText(
+      "**bold**",
+    );
     await expect(page.locator("#source-view .md-src-code")).toHaveText("code");
     const syntaxStyles = await page.evaluate(() => {
       const strong = document.querySelector("#source-view .md-src-strong");
@@ -368,7 +499,8 @@ test.describe("literal renderer overlay invariant", () => {
         strongWeight: getComputedStyle(strong).fontWeight,
         emStyle: em ? getComputedStyle(em).fontStyle : "normal",
         codeColor: getComputedStyle(code).color,
-        sourceColor: getComputedStyle(document.getElementById("source-view")!).color,
+        sourceColor:
+          getComputedStyle(document.getElementById("source-view")!).color,
       };
     });
     expect(syntaxStyles.strongWeight).not.toBe("700");
@@ -379,14 +511,21 @@ test.describe("literal renderer overlay invariant", () => {
     expect(Math.abs(after.left - before.left)).toBeLessThan(1);
     expect(Math.abs(after.top - before.top)).toBeLessThan(1);
 
-    const sourceLayerText = await page.locator("#source-view").evaluate((el) => el.textContent);
+    const sourceLayerText = await page.locator("#source-view").evaluate((el) =>
+      el.textContent
+    );
     expect(sourceLayerText).toBe(md);
-    const textareaColor = await page.locator("#source").evaluate((el) => getComputedStyle(el).color);
+    const textareaColor = await page.locator("#source").evaluate((el) =>
+      getComputedStyle(el).color
+    );
     expect(textareaColor).toBe("rgba(0, 0, 0, 0)");
   });
 
   test("edit-mode textarea grows to content instead of scrolling the source layer", async ({ page }) => {
-    const md = Array.from({ length: 80 }, (_, i) => `line ${String(i + 1).padStart(2, "0")}`)
+    const md = Array.from(
+      { length: 80 },
+      (_, i) => `line ${String(i + 1).padStart(2, "0")}`,
+    )
       .join("\n") + "\n";
     await page.goto("/literal/");
     await page.evaluate((source) => {
@@ -401,7 +540,9 @@ test.describe("literal renderer overlay invariant", () => {
     const beforeScroll = await page.evaluate(() => {
       const host = document.getElementById("host");
       const source = document.getElementById("source-view");
-      const textarea = document.getElementById("source") as HTMLTextAreaElement | null;
+      const textarea = document.getElementById("source") as
+        | HTMLTextAreaElement
+        | null;
       if (!host || !source || !textarea) throw new Error("missing nodes");
       const hostRect = host.getBoundingClientRect();
       const sourceRect = source.getBoundingClientRect();
@@ -419,7 +560,9 @@ test.describe("literal renderer overlay invariant", () => {
     });
 
     const afterScrollAttempt = await page.evaluate(() => {
-      const textarea = document.getElementById("source") as HTMLTextAreaElement | null;
+      const textarea = document.getElementById("source") as
+        | HTMLTextAreaElement
+        | null;
       const source = document.getElementById("source-view");
       const host = document.getElementById("host");
       if (!textarea || !source || !host) throw new Error("missing nodes");
@@ -456,12 +599,21 @@ test.describe("literal renderer overlay invariant", () => {
     expect(afterScrollAttempt.textareaScrollLeft).toBe(0);
     expect(afterScrollAttempt.textareaScrollTop).toBe(0);
     expect(afterScrollAttempt.sourceTransform).toBe("none");
-    expect(afterScrollAttempt.sourceLeft).toBeCloseTo(afterScrollAttempt.hostLeft, 1);
-    expect(afterScrollAttempt.sourceTop).toBeCloseTo(afterScrollAttempt.hostTop, 1);
+    expect(afterScrollAttempt.sourceLeft).toBeCloseTo(
+      afterScrollAttempt.hostLeft,
+      1,
+    );
+    expect(afterScrollAttempt.sourceTop).toBeCloseTo(
+      afterScrollAttempt.hostTop,
+      1,
+    );
   });
 
   test("edit-mode trailing Enter keeps caret at the document end while growing", async ({ page }) => {
-    const md = Array.from({ length: 42 }, (_, i) => `line ${String(i + 1).padStart(2, "0")}`)
+    const md = Array.from(
+      { length: 42 },
+      (_, i) => `line ${String(i + 1).padStart(2, "0")}`,
+    )
       .join("\n");
     await page.goto("/literal/");
     await page.evaluate((source) => {
@@ -472,7 +624,8 @@ test.describe("literal renderer overlay invariant", () => {
 
     await page.locator("#rendered").click({ position: { x: 4, y: 4 } });
     await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
-    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id))
+      .toBe("source");
     await page.evaluate(() => {
       const ta = document.getElementById("source") as HTMLTextAreaElement;
       ta.setSelectionRange(ta.value.length, ta.value.length);
@@ -480,7 +633,9 @@ test.describe("literal renderer overlay invariant", () => {
 
     const before = await page.evaluate(() => {
       const host = document.getElementById("host");
-      const ta = document.getElementById("source") as HTMLTextAreaElement | null;
+      const ta = document.getElementById("source") as
+        | HTMLTextAreaElement
+        | null;
       if (!host || !ta) throw new Error("missing nodes");
       return {
         hostHeight: host.getBoundingClientRect().height,
@@ -496,7 +651,9 @@ test.describe("literal renderer overlay invariant", () => {
 
     const after = await page.evaluate(() => {
       const host = document.getElementById("host");
-      const ta = document.getElementById("source") as HTMLTextAreaElement | null;
+      const ta = document.getElementById("source") as
+        | HTMLTextAreaElement
+        | null;
       if (!host || !ta) throw new Error("missing nodes");
       return {
         clientHeight: ta.clientHeight,
@@ -520,7 +677,10 @@ test.describe("literal renderer overlay invariant", () => {
   });
 
   test("edit-mode trailing Enter preserves page scroll near the caret", async ({ page }) => {
-    const md = Array.from({ length: 120 }, (_, i) => `line ${String(i + 1).padStart(3, "0")}`)
+    const md = Array.from(
+      { length: 120 },
+      (_, i) => `line ${String(i + 1).padStart(3, "0")}`,
+    )
       .join("\n");
     await page.setViewportSize({ width: 900, height: 520 });
     await page.goto("/literal/");
@@ -532,7 +692,8 @@ test.describe("literal renderer overlay invariant", () => {
 
     await page.locator("#rendered").click({ position: { x: 4, y: 4 } });
     await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
-    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id))
+      .toBe("source");
     await page.evaluate(() => {
       const ta = document.getElementById("source") as HTMLTextAreaElement;
       ta.setSelectionRange(ta.value.length, ta.value.length);
@@ -564,7 +725,10 @@ test.describe("literal renderer overlay invariant", () => {
   });
 
   test("edit-mode keeps a bottom scroll reserve for the trailing caret", async ({ page }) => {
-    const md = Array.from({ length: 64 }, (_, i) => `line ${String(i + 1).padStart(2, "0")}`)
+    const md = Array.from(
+      { length: 64 },
+      (_, i) => `line ${String(i + 1).padStart(2, "0")}`,
+    )
       .join("\n");
     await page.setViewportSize({ width: 900, height: 420 });
     await page.goto("/literal/");
@@ -576,7 +740,8 @@ test.describe("literal renderer overlay invariant", () => {
 
     await page.locator("#rendered").click({ position: { x: 4, y: 4 } });
     await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
-    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id))
+      .toBe("source");
     await page.evaluate(() => {
       const ta = document.getElementById("source") as HTMLTextAreaElement;
       ta.setSelectionRange(ta.value.length, ta.value.length);
@@ -590,7 +755,9 @@ test.describe("literal renderer overlay invariant", () => {
 
     const state = await page.evaluate(() => {
       const stage = document.querySelector(".stage");
-      const ta = document.getElementById("source") as HTMLTextAreaElement | null;
+      const ta = document.getElementById("source") as
+        | HTMLTextAreaElement
+        | null;
       if (!stage || !ta) throw new Error("missing nodes");
       const stageBottom = stage.getBoundingClientRect().bottom + window.scrollY;
       return {
@@ -604,7 +771,8 @@ test.describe("literal renderer overlay invariant", () => {
       function estimateTextareaCaretBottom(el: HTMLTextAreaElement): number {
         const style = getComputedStyle(el);
         const fontSize = Number.parseFloat(style.fontSize);
-        const lineHeight = Number.parseFloat(style.lineHeight) || fontSize * 1.6;
+        const lineHeight = Number.parseFloat(style.lineHeight) ||
+          fontSize * 1.6;
         const charWidth = measureCharWidth(style);
         const contentWidth = Math.max(1, el.clientWidth);
         const columns = Math.max(1, Math.floor(contentWidth / charWidth));
@@ -615,14 +783,16 @@ test.describe("literal renderer overlay invariant", () => {
           if (i > 0) visualLine += 1;
           visualLine += Math.max(0, Math.ceil(lines[i]!.length / columns) - 1);
         }
-        return el.getBoundingClientRect().top + visualLine * lineHeight + lineHeight;
+        return el.getBoundingClientRect().top + visualLine * lineHeight +
+          lineHeight;
       }
 
       function measureCharWidth(style: CSSStyleDeclaration): number {
         const canvas = document.createElement("canvas");
         const ctx = canvas.getContext("2d");
         if (!ctx) return 8;
-        ctx.font = `${style.fontStyle} ${style.fontVariant} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
+        ctx.font =
+          `${style.fontStyle} ${style.fontVariant} ${style.fontWeight} ${style.fontSize} ${style.fontFamily}`;
         return Math.max(1, ctx.measureText("M").width);
       }
     });
@@ -644,7 +814,8 @@ test.describe("literal renderer overlay invariant", () => {
 
     await page.locator("#rendered h1").click();
     await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
-    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id))
+      .toBe("source");
     await page.evaluate(() => {
       const ta = document.getElementById("source") as HTMLTextAreaElement;
       ta.setSelectionRange(ta.value.length, ta.value.length);
@@ -657,7 +828,9 @@ test.describe("literal renderer overlay invariant", () => {
 
     const state = await page.evaluate(() => {
       const host = document.getElementById("host");
-      const ta = document.getElementById("source") as HTMLTextAreaElement | null;
+      const ta = document.getElementById("source") as
+        | HTMLTextAreaElement
+        | null;
       if (!host || !ta) throw new Error("missing nodes");
       return {
         clientHeight: ta.clientHeight,
@@ -696,17 +869,22 @@ test.describe("literal renderer overlay invariant", () => {
       .poll(() =>
         page.evaluate(() => {
           const images = Array.from(
-            document.querySelectorAll("#rendered img.md-image-preview, #source-view img.md-image-preview"),
+            document.querySelectorAll(
+              "#rendered img.md-image-preview, #source-view img.md-image-preview",
+            ),
           ) as HTMLImageElement[];
           return images.length === 2 &&
-            images.every((img) => img.complete && img.naturalWidth > 0 && img.naturalHeight > 0);
-        }),
+            images.every((img) =>
+              img.complete && img.naturalWidth > 0 && img.naturalHeight > 0
+            );
+        })
       )
       .toBe(true);
 
     await page.locator("#rendered").click({ position: { x: 4, y: 4 } });
     await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
-    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id))
+      .toBe("source");
     await page.evaluate(() => {
       const ta = document.getElementById("source") as HTMLTextAreaElement;
       ta.setSelectionRange(ta.value.length, ta.value.length);
@@ -720,7 +898,9 @@ test.describe("literal renderer overlay invariant", () => {
     const state = await page.evaluate(() => {
       const host = document.getElementById("host");
       const source = document.getElementById("source-view");
-      const ta = document.getElementById("source") as HTMLTextAreaElement | null;
+      const ta = document.getElementById("source") as
+        | HTMLTextAreaElement
+        | null;
       if (!host || !source || !ta) throw new Error("missing nodes");
       return {
         clientHeight: ta.clientHeight,
@@ -754,7 +934,8 @@ test.describe("literal renderer overlay invariant", () => {
 
     await page.locator("#rendered h1").click();
     await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
-    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id))
+      .toBe("source");
     await page.keyboard.press("Escape");
     await expect(page.locator("body")).toHaveAttribute("data-mode", "preview");
 
@@ -792,8 +973,10 @@ test.describe("literal renderer overlay invariant", () => {
 
     expect(state.codeColor).toBe(state.sourceColor);
     for (const point of state.points) {
-      expect(Math.abs(point.rendered.left - point.source.left), point.needle).toBeLessThan(1);
-      expect(Math.abs(point.rendered.top - point.source.top), point.needle).toBeLessThan(1);
+      expect(Math.abs(point.rendered.left - point.source.left), point.needle)
+        .toBeLessThan(1);
+      expect(Math.abs(point.rendered.top - point.source.top), point.needle)
+        .toBeLessThan(1);
     }
   });
 
@@ -815,7 +998,9 @@ test.describe("literal renderer overlay invariant", () => {
       ta.value = source;
       ta.dispatchEvent(new Event("input", { bubbles: true }));
     }, md);
-    await expect(page.locator("#invariant-state")).toHaveText(/literal DOM matches fresh render/);
+    await expect(page.locator("#invariant-state")).toHaveText(
+      /literal DOM matches fresh render/,
+    );
 
     const state = await page.evaluate(() => {
       const rectForText = (selector: string, needle: string) => {
@@ -849,8 +1034,10 @@ test.describe("literal renderer overlay invariant", () => {
       "# Title\nbody without blank before it\n\n\n- one\n- two\n\n> quote after list\n",
     );
     for (const point of state.points) {
-      expect(Math.abs(point.rendered.left - point.source.left), point.needle).toBeLessThan(1);
-      expect(Math.abs(point.rendered.top - point.source.top), point.needle).toBeLessThan(1);
+      expect(Math.abs(point.rendered.left - point.source.left), point.needle)
+        .toBeLessThan(1);
+      expect(Math.abs(point.rendered.top - point.source.top), point.needle)
+        .toBeLessThan(1);
     }
   });
 
@@ -873,7 +1060,8 @@ test.describe("literal renderer overlay invariant", () => {
     // first paragraph nodes must be the same JS objects after the patch.
     await page.evaluate(() => {
       const ta = document.getElementById("source") as HTMLTextAreaElement;
-      ta.value = "# Stable heading\n\nfirst paragraph\n\nsecond paragraph plus extra\n";
+      ta.value =
+        "# Stable heading\n\nfirst paragraph\n\nsecond paragraph plus extra\n";
       ta.dispatchEvent(new Event("input", { bubbles: true }));
     });
     const identity = await page.evaluate(() => {
@@ -902,16 +1090,21 @@ test.describe("literal renderer overlay invariant", () => {
       ta.dispatchEvent(new Event("input", { bubbles: true }));
     });
     // Off by default: no <img> in the output.
-    expect(await page.locator("#rendered img.md-image-preview").count()).toBe(0);
+    expect(await page.locator("#rendered img.md-image-preview").count()).toBe(
+      0,
+    );
     // Toggle on.
     await page.locator("#image-preview-toggle").check();
-    const imgCount = await page.locator("#rendered img.md-image-preview").count();
+    const imgCount = await page.locator("#rendered img.md-image-preview")
+      .count();
     expect(imgCount).toBe(1);
     // The body still hosts the source characters.
     const text = await page.locator("#rendered").innerText();
     expect(text).toContain("![cat](/images/literal-preview-a.svg)");
     // The overlay invariant indicator stays green — img has empty textContent.
-    await expect(page.locator("#invariant-state")).toHaveText(/literal DOM matches fresh render/);
+    await expect(page.locator("#invariant-state")).toHaveText(
+      /literal DOM matches fresh render/,
+    );
   });
 
   test("image preview: demo sample uses debuggable local images", async ({ page }) => {
@@ -925,9 +1118,10 @@ test.describe("literal renderer overlay invariant", () => {
         images.evaluateAll((imgs) =>
           imgs.every((img) => {
             const image = img as HTMLImageElement;
-            return image.complete && image.naturalWidth > 0 && image.naturalHeight > 0;
-          }),
-        ),
+            return image.complete && image.naturalWidth > 0 &&
+              image.naturalHeight > 0;
+          })
+        )
       )
       .toBe(true);
 
@@ -935,12 +1129,13 @@ test.describe("literal renderer overlay invariant", () => {
       imgs.map((img) => {
         const image = img as HTMLImageElement;
         return {
-          pathname: new URL(image.currentSrc || image.src, window.location.href).pathname,
+          pathname: new URL(image.currentSrc || image.src, window.location.href)
+            .pathname,
           complete: image.complete,
           naturalWidth: image.naturalWidth,
           naturalHeight: image.naturalHeight,
         };
-      }),
+      })
     );
 
     expect(states).toEqual([
@@ -989,7 +1184,9 @@ test.describe("literal renderer overlay invariant", () => {
     await page.locator("#image-preview-toggle").check();
 
     const layout = await page.evaluate(() => {
-      const image = document.querySelector("#rendered .md-image-preview") as HTMLImageElement | null;
+      const image = document.querySelector("#rendered .md-image-preview") as
+        | HTMLImageElement
+        | null;
       const markers = Array.from(
         document.querySelectorAll("#rendered .md-image .md-marker"),
       ) as HTMLElement[];
@@ -997,7 +1194,9 @@ test.describe("literal renderer overlay invariant", () => {
         throw new Error("missing image preview or markers");
       }
       const imageRect = image.getBoundingClientRect();
-      const markerRects = markers.map((marker) => marker.getBoundingClientRect());
+      const markerRects = markers.map((marker) =>
+        marker.getBoundingClientRect()
+      );
       return {
         imageLeft: imageRect.left,
         firstMarkerLeft: markerRects[0]!.left,
@@ -1021,7 +1220,10 @@ test.describe("literal renderer overlay invariant", () => {
       page.evaluate(() => {
         const rendered = document.getElementById("rendered");
         if (!rendered) throw new Error("missing rendered");
-        const walker = document.createTreeWalker(rendered, NodeFilter.SHOW_TEXT);
+        const walker = document.createTreeWalker(
+          rendered,
+          NodeFilter.SHOW_TEXT,
+        );
         for (let node = walker.nextNode(); node; node = walker.nextNode()) {
           const offset = node.textContent?.indexOf(" after") ?? -1;
           if (offset >= 0) {
@@ -1040,10 +1242,13 @@ test.describe("literal renderer overlay invariant", () => {
     await page.locator("#image-preview-toggle").check();
     await expect
       .poll(() =>
-        page.locator("#rendered img.md-image-preview").first().evaluate((img) => {
-          const image = img as HTMLImageElement;
-          return image.complete && image.naturalWidth > 0 && image.naturalHeight > 0;
-        }),
+        page.locator("#rendered img.md-image-preview").first().evaluate(
+          (img) => {
+            const image = img as HTMLImageElement;
+            return image.complete && image.naturalWidth > 0 &&
+              image.naturalHeight > 0;
+          },
+        )
       )
       .toBe(true);
 
@@ -1057,11 +1262,16 @@ test.describe("literal renderer overlay invariant", () => {
 
     expect(afterLeftWithPreview - afterLeftWithoutPreview).toBeGreaterThan(116);
 
-    await page.mouse.click(slotBox.x + slotBox.width / 2, slotBox.y + slotBox.height / 2);
+    await page.mouse.click(
+      slotBox.x + slotBox.width / 2,
+      slotBox.y + slotBox.height / 2,
+    );
     await expect(page.locator("body")).toHaveAttribute("data-mode", "preview");
-    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).not.toBe("source");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).not
+      .toBe("source");
 
-    await expect(page.locator("#rendered img.md-image-preview").first()).toHaveAttribute("alt", "cat");
+    await expect(page.locator("#rendered img.md-image-preview").first())
+      .toHaveAttribute("alt", "cat");
   });
 
   test("image preview: edit-mode textarea does not place caret inside reserved image slots", async ({ page }) => {
@@ -1077,32 +1287,44 @@ test.describe("literal renderer overlay invariant", () => {
       .poll(() =>
         page.evaluate(() => {
           const images = Array.from(
-            document.querySelectorAll("#rendered img.md-image-preview, #source-view img.md-image-preview"),
+            document.querySelectorAll(
+              "#rendered img.md-image-preview, #source-view img.md-image-preview",
+            ),
           ) as HTMLImageElement[];
           return images.length === 2 &&
-            images.every((img) => img.complete && img.naturalWidth > 0 && img.naturalHeight > 0);
-        }),
+            images.every((img) =>
+              img.complete && img.naturalWidth > 0 && img.naturalHeight > 0
+            );
+        })
       )
       .toBe(true);
     const textBox = await page.locator("#rendered p").boundingBox();
     if (!textBox) throw new Error("missing paragraph box");
     await page.mouse.click(textBox.x + 2, textBox.y + textBox.height / 2);
     await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
-    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id))
+      .toBe("source");
 
     await page.evaluate(() => {
       const ta = document.getElementById("source") as HTMLTextAreaElement;
       ta.setSelectionRange(0, 0);
     });
-    const slotBox = await page.locator("#source-view .md-image-preview-slot").first().boundingBox();
+    const slotBox = await page.locator("#source-view .md-image-preview-slot")
+      .first().boundingBox();
     if (!slotBox) throw new Error("missing source image preview slot box");
-    await page.mouse.click(slotBox.x + slotBox.width / 2, slotBox.y + slotBox.height / 2);
+    await page.mouse.click(
+      slotBox.x + slotBox.width / 2,
+      slotBox.y + slotBox.height / 2,
+    );
 
     const caret = await page.evaluate(
-      () => (document.getElementById("source") as HTMLTextAreaElement).selectionStart,
+      () =>
+        (document.getElementById("source") as HTMLTextAreaElement)
+          .selectionStart,
     );
     expect(caret).toBe(0);
-    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id))
+      .toBe("source");
   });
 
   test("image preview: edit-mode source layer shows the reserved image overlay", async ({ page }) => {
@@ -1118,11 +1340,15 @@ test.describe("literal renderer overlay invariant", () => {
       .poll(() =>
         page.evaluate(() => {
           const images = Array.from(
-            document.querySelectorAll("#rendered img.md-image-preview, #source-view img.md-image-preview"),
+            document.querySelectorAll(
+              "#rendered img.md-image-preview, #source-view img.md-image-preview",
+            ),
           ) as HTMLImageElement[];
           return images.length === 2 &&
-            images.every((img) => img.complete && img.naturalWidth > 0 && img.naturalHeight > 0);
-        }),
+            images.every((img) =>
+              img.complete && img.naturalWidth > 0 && img.naturalHeight > 0
+            );
+        })
       )
       .toBe(true);
 
@@ -1130,11 +1356,16 @@ test.describe("literal renderer overlay invariant", () => {
     if (!textBox) throw new Error("missing paragraph box");
     await page.mouse.click(textBox.x + 2, textBox.y + textBox.height / 2);
     await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
-    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id))
+      .toBe("source");
 
     const state = await page.evaluate(() => {
-      const slot = document.querySelector("#source-view .md-image-preview-slot") as HTMLElement | null;
-      const image = document.querySelector("#source-view img.md-image-preview") as HTMLImageElement | null;
+      const slot = document.querySelector(
+        "#source-view .md-image-preview-slot",
+      ) as HTMLElement | null;
+      const image = document.querySelector(
+        "#source-view img.md-image-preview",
+      ) as HTMLImageElement | null;
       if (!slot || !image) throw new Error("missing source image slot");
       const slotRect = slot.getBoundingClientRect();
       const imageRect = image.getBoundingClientRect();
@@ -1164,9 +1395,12 @@ test.describe("literal renderer overlay invariant", () => {
     await expect
       .poll(() =>
         page.evaluate(() => {
-          const img = document.querySelector("#source-view img.md-image-preview") as HTMLImageElement | null;
-          return img?.complete === true && img.naturalWidth > 0 && img.naturalHeight > 0;
-        }),
+          const img = document.querySelector(
+            "#source-view img.md-image-preview",
+          ) as HTMLImageElement | null;
+          return img?.complete === true && img.naturalWidth > 0 &&
+            img.naturalHeight > 0;
+        })
       )
       .toBe(true);
 
@@ -1177,18 +1411,22 @@ test.describe("literal renderer overlay invariant", () => {
 
     await page.evaluate(() => {
       const win = window as unknown as { __sourceImage: HTMLImageElement };
-      win.__sourceImage = document.querySelector("#source-view img.md-image-preview") as HTMLImageElement;
+      win.__sourceImage = document.querySelector(
+        "#source-view img.md-image-preview",
+      ) as HTMLImageElement;
     });
 
     await page.evaluate(() => {
       const ta = document.getElementById("source") as HTMLTextAreaElement;
-      ta.value = "before edited ![cat:w120](/images/literal-preview-a.svg) after\n";
+      ta.value =
+        "before edited ![cat:w120](/images/literal-preview-a.svg) after\n";
       ta.dispatchEvent(new Event("input", { bubbles: true }));
     });
 
     const sameNode = await page.evaluate(() => {
       const win = window as unknown as { __sourceImage: HTMLImageElement };
-      return document.querySelector("#source-view img.md-image-preview") === win.__sourceImage;
+      return document.querySelector("#source-view img.md-image-preview") ===
+        win.__sourceImage;
     });
     expect(sameNode).toBe(true);
   });
@@ -1207,17 +1445,22 @@ test.describe("literal renderer overlay invariant", () => {
       .poll(() =>
         page.evaluate(() => {
           const images = Array.from(
-            document.querySelectorAll("#rendered img.md-image-preview, #source-view img.md-image-preview"),
+            document.querySelectorAll(
+              "#rendered img.md-image-preview, #source-view img.md-image-preview",
+            ),
           ) as HTMLImageElement[];
           return images.length === 2 &&
-            images.every((img) => img.complete && img.naturalWidth > 0 && img.naturalHeight > 0);
-        }),
+            images.every((img) =>
+              img.complete && img.naturalWidth > 0 && img.naturalHeight > 0
+            );
+        })
       )
       .toBe(true);
 
     await page.locator("#rendered").click({ position: { x: 4, y: 4 } });
     await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
-    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id))
+      .toBe("source");
     await page.evaluate(() => {
       const ta = document.getElementById("source") as HTMLTextAreaElement;
       const offset = ta.value.indexOf(" after");
@@ -1231,7 +1474,10 @@ test.describe("literal renderer overlay invariant", () => {
           const caret = document.getElementById("source-caret");
           const source = document.getElementById("source-view");
           if (!caret || !source) return Number.POSITIVE_INFINITY;
-          const walker = document.createTreeWalker(source, NodeFilter.SHOW_TEXT);
+          const walker = document.createTreeWalker(
+            source,
+            NodeFilter.SHOW_TEXT,
+          );
           for (let node = walker.nextNode(); node; node = walker.nextNode()) {
             const text = node.textContent ?? "";
             const offset = text.indexOf(" after");
@@ -1245,7 +1491,7 @@ test.describe("literal renderer overlay invariant", () => {
             }
           }
           return Number.POSITIVE_INFINITY;
-        }),
+        })
       )
       .toBeLessThan(1);
 
@@ -1292,16 +1538,22 @@ test.describe("literal renderer overlay invariant", () => {
     await page.locator("#image-preview-toggle").check();
     await page.locator("#rendered").click({ position: { x: 4, y: 4 } });
     await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
-    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id))
+      .toBe("source");
 
     const state = await page.evaluate(() => {
       const ta = document.getElementById("source") as HTMLTextAreaElement;
       const offset = ta.value.indexOf(" after");
       ta.setSelectionRange(offset, offset);
-      ta.dispatchEvent(new CompositionEvent("compositionstart", { bubbles: true, data: "あ" }));
+      ta.dispatchEvent(
+        new CompositionEvent("compositionstart", { bubbles: true, data: "あ" }),
+      );
       const transform = getComputedStyle(ta).transform;
       if (transform === "none") return { tx: 0, transform };
-      const values = transform.match(/matrix\(([^)]+)\)/)?.[1]?.split(",").map((v) => Number(v.trim())) ?? [];
+      const values =
+        transform.match(/matrix\(([^)]+)\)/)?.[1]?.split(",").map((v) =>
+          Number(v.trim())
+        ) ?? [];
       return { tx: values[4] ?? 0, transform };
     });
 
@@ -1310,7 +1562,8 @@ test.describe("literal renderer overlay invariant", () => {
   });
 
   test("image preview: edit-mode caret on trailing blank line stays at line start", async ({ page }) => {
-    const md = "```rust\nfn main() {\n    println!(\"hello\");\n}\n```\n\nAaa\n\n";
+    const md =
+      '```rust\nfn main() {\n    println!("hello");\n}\n```\n\nAaa\n\n';
     await page.goto("/literal/");
     await page.evaluate((source) => {
       const ta = document.getElementById("source") as HTMLTextAreaElement;
@@ -1321,7 +1574,8 @@ test.describe("literal renderer overlay invariant", () => {
     await page.locator("#image-preview-toggle").check();
     await page.locator("#rendered").click({ position: { x: 4, y: 4 } });
     await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
-    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id))
+      .toBe("source");
     await page.evaluate(() => {
       const ta = document.getElementById("source") as HTMLTextAreaElement;
       ta.setSelectionRange(ta.value.length, ta.value.length);
@@ -1367,7 +1621,8 @@ test.describe("literal renderer overlay invariant", () => {
     await page.locator("#image-preview-toggle").check();
     await page.locator("#rendered").click({ position: { x: 4, y: 4 } });
     await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
-    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id))
+      .toBe("source");
     await page.evaluate(() => {
       const ta = document.getElementById("source") as HTMLTextAreaElement;
       ta.setSelectionRange(ta.value.length, ta.value.length);
@@ -1415,17 +1670,22 @@ test.describe("literal renderer overlay invariant", () => {
       .poll(() =>
         page.evaluate(() => {
           const images = Array.from(
-            document.querySelectorAll("#rendered img.md-image-preview, #source-view img.md-image-preview"),
+            document.querySelectorAll(
+              "#rendered img.md-image-preview, #source-view img.md-image-preview",
+            ),
           ) as HTMLImageElement[];
           return images.length === 2 &&
-            images.every((img) => img.complete && img.naturalWidth > 0 && img.naturalHeight > 0);
-        }),
+            images.every((img) =>
+              img.complete && img.naturalWidth > 0 && img.naturalHeight > 0
+            );
+        })
       )
       .toBe(true);
 
     await page.locator("#rendered").click({ position: { x: 4, y: 4 } });
     await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
-    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id))
+      .toBe("source");
 
     const target = await page.evaluate(() => {
       const source = document.getElementById("source-view");
@@ -1457,7 +1717,8 @@ test.describe("literal renderer overlay invariant", () => {
     await page.goto("/literal/");
     await page.evaluate(() => {
       const ta = document.getElementById("source") as HTMLTextAreaElement;
-      ta.value = "before ![cat:w120](/images/literal-preview-a.svg) after\nnext line\n";
+      ta.value =
+        "before ![cat:w120](/images/literal-preview-a.svg) after\nnext line\n";
       ta.dispatchEvent(new Event("input", { bubbles: true }));
     });
 
@@ -1467,11 +1728,15 @@ test.describe("literal renderer overlay invariant", () => {
       .poll(() =>
         page.evaluate(() => {
           const images = Array.from(
-            document.querySelectorAll("#rendered img.md-image-preview, #source-view img.md-image-preview"),
+            document.querySelectorAll(
+              "#rendered img.md-image-preview, #source-view img.md-image-preview",
+            ),
           ) as HTMLImageElement[];
           return images.length === 2 &&
-            images.every((img) => img.complete && img.naturalWidth > 0 && img.naturalHeight > 0);
-        }),
+            images.every((img) =>
+              img.complete && img.naturalWidth > 0 && img.naturalHeight > 0
+            );
+        })
       )
       .toBe(true);
 
@@ -1504,9 +1769,11 @@ test.describe("literal renderer overlay invariant", () => {
 
     await expect
       .poll(() =>
-        page.locator("#source-view img.md-image-preview").first().evaluate((img) => {
-          return getComputedStyle(img).visibility;
-        }),
+        page.locator("#source-view img.md-image-preview").first().evaluate(
+          (img) => {
+            return getComputedStyle(img).visibility;
+          },
+        )
       )
       .toBe("hidden");
   });
@@ -1528,7 +1795,9 @@ test.describe("literal renderer overlay invariant", () => {
       const rendered = document.getElementById("rendered");
       const source = document.getElementById("source-view");
       const slot = document.querySelector("#rendered .md-image-preview-block");
-      if (!rendered || !source || !slot) throw new Error("missing preview nodes");
+      if (!rendered || !source || !slot) {
+        throw new Error("missing preview nodes");
+      }
       const rectForText = (root: Element, needle: string) => {
         const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
         for (let node = walker.nextNode(); node; node = walker.nextNode()) {
@@ -1561,12 +1830,14 @@ test.describe("literal renderer overlay invariant", () => {
     expect(layout.slotTop).toBeGreaterThan(layout.urlTop + 10);
     expect(Math.abs(layout.slotLeft - layout.renderedLeft)).toBeLessThan(1);
     expect(layout.renderedNextTop).toBeGreaterThan(layout.slotTop + 20);
-    expect(Math.abs(layout.renderedNextTop - layout.sourceNextTop)).toBeLessThan(1);
+    expect(Math.abs(layout.renderedNextTop - layout.sourceNextTop))
+      .toBeLessThan(1);
     await expect
       .poll(() =>
-        page.locator("#source-view .md-image-preview-block img").first().evaluate((img) => {
-          return getComputedStyle(img).visibility;
-        }),
+        page.locator("#source-view .md-image-preview-block img").first()
+          .evaluate((img) => {
+            return getComputedStyle(img).visibility;
+          })
       )
       .toBe("hidden");
   });
@@ -1580,8 +1851,11 @@ test.describe("literal renderer overlay invariant", () => {
     });
 
     await page.locator("#image-preview-toggle").check();
-    await expect(page.locator("#rendered .md-image-preview-block")).toHaveCount(0);
-    await expect(page.locator("#source-view .md-image-preview-block")).toHaveCount(0);
+    await expect(page.locator("#rendered .md-image-preview-block")).toHaveCount(
+      0,
+    );
+    await expect(page.locator("#source-view .md-image-preview-block"))
+      .toHaveCount(0);
   });
 
   test("image preview: standalone image markdown line-end caret stays on the source line", async ({ page }) => {
@@ -1596,7 +1870,8 @@ test.describe("literal renderer overlay invariant", () => {
     await page.locator("#image-preview-toggle").check();
     await page.locator("#rendered").click({ position: { x: 4, y: 4 } });
     await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
-    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id))
+      .toBe("source");
 
     await page.evaluate((offset) => {
       const ta = document.getElementById("source") as HTMLTextAreaElement;
@@ -1608,7 +1883,9 @@ test.describe("literal renderer overlay invariant", () => {
       const ta = document.getElementById("source") as HTMLTextAreaElement;
       const caret = document.getElementById("source-caret");
       const source = document.getElementById("source-view");
-      const slot = document.querySelector("#source-view .md-image-preview-block");
+      const slot = document.querySelector(
+        "#source-view .md-image-preview-block",
+      );
       if (!caret || !source || !slot) throw new Error("missing nodes");
       const rectForVisibleOffset = (root: Element, sourceOffset: number) => {
         const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
@@ -1652,7 +1929,8 @@ test.describe("literal renderer overlay invariant", () => {
     await page.locator("#image-preview-toggle").check();
     await page.locator("#rendered").click({ position: { x: 4, y: 4 } });
     await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
-    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id))
+      .toBe("source");
 
     const points = await page.evaluate((sourceLine) => {
       const root = document.getElementById("source-view");
@@ -1675,7 +1953,9 @@ test.describe("literal renderer overlay invariant", () => {
       };
       return {
         start: rectForVisibleOffset(0),
-        end: rectForVisibleOffset(sourceLine.indexOf("preview") + "preview".length),
+        end: rectForVisibleOffset(
+          sourceLine.indexOf("preview") + "preview".length,
+        ),
       };
     }, line);
 
@@ -1710,7 +1990,8 @@ test.describe("literal renderer overlay invariant", () => {
     await page.locator("#image-preview-toggle").check();
     await page.locator("#rendered").click({ position: { x: 4, y: 4 } });
     await expect(page.locator("body")).toHaveAttribute("data-mode", "edit");
-    await expect.poll(() => page.evaluate(() => document.activeElement?.id)).toBe("source");
+    await expect.poll(() => page.evaluate(() => document.activeElement?.id))
+      .toBe("source");
 
     await page.evaluate(() => {
       const ta = document.getElementById("source") as HTMLTextAreaElement;
@@ -1722,8 +2003,10 @@ test.describe("literal renderer overlay invariant", () => {
     await expect
       .poll(() =>
         page.evaluate(() => {
-          return document.querySelectorAll("#source-selection .source-selection-rect").length;
-        }),
+          return document.querySelectorAll(
+            "#source-selection .source-selection-rect",
+          ).length;
+        })
       )
       .toBeGreaterThan(0);
 
@@ -1746,7 +2029,9 @@ test.describe("literal renderer overlay invariant", () => {
         throw new Error(`missing ${needle}`);
       };
       const target = rectForText("another:w96");
-      const rects = Array.from(overlay.querySelectorAll<HTMLElement>(".source-selection-rect"))
+      const rects = Array.from(
+        overlay.querySelectorAll<HTMLElement>(".source-selection-rect"),
+      )
         .map((rect) => rect.getBoundingClientRect())
         .filter((rect) => rect.width > 0 && rect.height > 0);
       const matching = rects.find((rect) =>
@@ -1776,7 +2061,8 @@ test.describe("literal renderer overlay invariant", () => {
     });
     await page.evaluate(() => {
       const win = window as unknown as { __p: Element };
-      win.__p = (document.getElementById("rendered") as HTMLElement).querySelector("p")!;
+      win.__p = (document.getElementById("rendered") as HTMLElement)
+        .querySelector("p")!;
     });
     // Edit the heading: trailing paragraph's `data-src-start` shifts but
     // its body is identical, so the patcher should update the attribute
@@ -1788,7 +2074,8 @@ test.describe("literal renderer overlay invariant", () => {
     });
     const sameNode = await page.evaluate(() => {
       const win = window as unknown as { __p: Element };
-      const p = (document.getElementById("rendered") as HTMLElement).querySelector("p");
+      const p = (document.getElementById("rendered") as HTMLElement)
+        .querySelector("p");
       return p === win.__p;
     });
     expect(sameNode).toBe(true);

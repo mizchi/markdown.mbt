@@ -6,6 +6,8 @@
   "scripts": {
     "build:moon": "moon build --target js --release",
     "build:editor": "pnpm run build:moon && tsc -p tsconfig.editor.json && node scripts/prepare-editor-package.mjs",
+    "bench:literal": "node --experimental-strip-types e2e/literal-benchmark.ts",
+    "bench:literal:core": "moon bench --target js -p mizchi/markdown -f bench_renderer_literal.mbt",
     "prepublishOnly": "pnpm run build:editor",
     "test": "vitest run"
   },
@@ -26,6 +28,10 @@
     "./editor": {
       "import": "./dist/frontend/editor/index.js",
       "types": "./dist/frontend/editor/index.d.ts"
+    },
+    "./editor/literal": {
+      "import": "./dist/frontend/editor/literal.js",
+      "types": "./dist/frontend/editor/literal.d.ts"
     },
     "./editor/style.css": "./dist/frontend/editor/style.css",
     "./editor/overlay.css": "./dist/frontend/editor/overlay.css",

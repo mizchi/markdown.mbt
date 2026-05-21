@@ -126,26 +126,240 @@
 /* ---- Image preview slot. Off by default so the `![alt](url)` source
  *      characters are the only visible content. Opt in by adding
  *      `.with-image-preview` on a container above `.md-literal`. The
- *      `<img>` contributes no `textContent`, so the overlay invariant
- *      (`stripHtml(literal) === toMarkdown(source)`) is preserved
- *      regardless of whether the slot is rendered. */
-.md-literal .md-image-preview { display: none; }
+ *      slot contributes no `textContent`, so the overlay invariant
+ *      (`stripHtml(literal) === toMarkdown(source)`) is preserved. */
+.md-literal .md-image-preview-slot,
+.md-literal .md-image-preview {
+  display: none;
+}
+
+.with-image-preview .md-literal .md-image-preview-slot,
+.md-literal.with-image-preview .md-image-preview-slot {
+  display: inline-block;
+  width: var(--md-literal-image-width, auto);
+  max-width: 100%;
+  margin: 0 var(--md-literal-image-gap, 0.25em);
+  vertical-align: text-bottom;
+  cursor: default;
+  user-select: none;
+}
 
 .with-image-preview .md-literal .md-image-preview,
 .md-literal.with-image-preview .md-image-preview {
-  display: inline-block;
-  vertical-align: text-bottom;
+  display: block;
+  width: auto;
   max-width: 100%;
+  height: auto;
   max-height: var(--md-literal-image-max-height, 1.5em);
-  margin: 0 var(--md-literal-image-gap, 0.25em);
   border-radius: 2px;
+  background: var(--md-literal-bg, transparent);
   box-shadow: 0 0 0 1px var(--md-literal-image-border, rgba(110, 118, 129, 0.4));
+}
+
+.with-image-preview .md-literal .md-image-preview-slot[data-md-image-width] .md-image-preview,
+.md-literal.with-image-preview .md-image-preview-slot[data-md-image-width] .md-image-preview {
+  width: 100%;
+  max-height: none;
+}
+
+.with-image-preview .md-literal .md-image-preview-block,
+.md-literal.with-image-preview .md-image-preview-block {
+  display: block;
+  width: fit-content;
+  max-width: 100%;
+  margin: 0;
+}
+
+.with-image-preview .md-literal .md-image-preview-block .md-image-preview,
+.md-literal.with-image-preview .md-image-preview-block .md-image-preview {
+  max-width: min(100%, var(--md-literal-image-block-max-width, 320px));
+  max-height: var(--md-literal-image-block-max-height, 320px);
+}
+
+.with-image-preview .md-literal .md-image-preview-spacer .md-image-preview,
+.md-literal.with-image-preview .md-image-preview-spacer .md-image-preview {
+  visibility: hidden;
+  box-shadow: none;
 }
 
 .md-literal .md-table-separator .md-marker {
   /* The separator row carries only markers; keep them visible but make
    * the row itself collapse into the visible flow without extra height. */
   display: inline;
+}
+
+/* ---- DOM controller helpers for `createLiteralMarkdownEditor`. The
+ *      controller adds these classes to the elements it receives; callers
+ *      can also provide them explicitly when not using the controller. */
+.md-literal-editor {
+  position: relative;
+}
+
+.md-literal-editor > .md-literal {
+  margin: 0;
+  padding: 0;
+}
+
+.md-literal-editor > .md-literal-rendered {
+  cursor: text;
+}
+
+.md-literal-editor > .md-literal-source-edit {
+  position: absolute;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  background: transparent;
+  color: transparent;
+  caret-color: var(--md-literal-text, currentColor);
+  border: 0;
+  outline: none;
+  overflow: hidden;
+  resize: none;
+  font: inherit;
+  white-space: pre-wrap;
+  z-index: 2;
+}
+
+[data-mode="preview"] .md-literal-editor > .md-literal-source-edit {
+  display: none;
+}
+
+[data-mode="edit"] .md-literal-editor > .md-literal-rendered {
+  visibility: hidden;
+}
+
+[data-mode="edit"] .md-literal-editor > .md-literal-source-edit::selection {
+  background: var(--md-literal-selection, rgba(56, 139, 253, 0.32));
+}
+
+.with-image-preview[data-mode="edit"]
+  .md-literal-editor
+  > .md-literal-source-edit {
+  caret-color: transparent;
+}
+
+.with-image-preview[data-mode="edit"]
+  .md-literal-editor
+  > .md-literal-source-edit::selection {
+  background: transparent;
+}
+
+.md-literal-editor > .md-literal-source-view {
+  display: none;
+  margin: 0;
+  pointer-events: none;
+  white-space: pre-wrap;
+}
+
+[data-mode="edit"] .md-literal-editor > .md-literal-source-view,
+.overlay .md-literal-editor > .md-literal-source-view,
+.md-literal-editor.md-overlay > .md-literal-source-view {
+  display: block;
+  position: absolute;
+  inset: 0;
+}
+
+.overlay .md-literal-editor > .md-literal-source-view,
+.md-literal-editor.md-overlay > .md-literal-source-view {
+  opacity: var(--md-overlay-source-opacity, 0.45);
+  color: var(--md-literal-source-overlay, #79c0ff);
+}
+
+[data-mode="edit"] .md-literal-editor > .md-literal-source-view {
+  opacity: 1;
+  color: var(--md-literal-text, currentColor);
+  visibility: visible;
+}
+
+.overlay .md-literal-editor > .md-literal-rendered,
+.md-literal-editor.md-overlay > .md-literal-rendered {
+  position: absolute;
+  inset: 0;
+}
+
+.md-literal-source-caret,
+.source-caret {
+  position: absolute;
+  display: none;
+  width: 1px;
+  background: var(--md-literal-text, currentColor);
+  pointer-events: none;
+  z-index: 3;
+}
+
+.with-image-preview[data-mode="edit"] .md-literal-source-caret,
+.with-image-preview[data-mode="edit"] .source-caret {
+  display: block;
+}
+
+.md-literal-source-selection,
+.source-selection {
+  position: absolute;
+  inset: 0;
+  display: none;
+  pointer-events: none;
+  z-index: 1;
+}
+
+.source-selection-rect {
+  position: absolute;
+  background: var(--md-literal-selection, rgba(56, 139, 253, 0.32));
+}
+
+.with-image-preview[data-mode="edit"]
+  .md-literal-source-view.md-literal
+  .md-image-preview-spacer
+  .md-image-preview {
+  visibility: visible;
+  box-shadow: 0 0 0 1px
+    var(--md-literal-image-border, rgba(110, 118, 129, 0.4));
+}
+
+.md-literal-source-view .md-src-marker,
+.md-literal-source-view .md-src-link-bracket,
+.md-literal-source-view .md-src-link-url,
+.md-literal-source-view .md-src-code-marker,
+.md-literal-source-view .md-src-quote-marker,
+.md-literal-source-view .md-src-list-marker,
+.md-literal-source-view .md-src-hr,
+.md-literal-source-view .md-src-html,
+.md-literal-source-view .md-src-escape {
+  color: var(--md-literal-source-marker, #8b949e);
+}
+
+.md-literal-source-view .md-src-heading,
+.md-literal-source-view .md-src-heading-marker,
+.md-literal-source-view .md-src-strong {
+  color: var(--md-literal-source-heading, #f0f6fc);
+}
+
+.md-literal-source-view .md-src-em {
+  color: var(--md-literal-source-em, #d2a8ff);
+}
+
+.md-literal-source-view .md-src-del {
+  color: var(--md-literal-source-del, #8b949e);
+}
+
+.md-literal-source-view .md-src-code {
+  color: var(--md-literal-source-code, #f0883e);
+}
+
+.md-literal-source-view .md-src-link-text,
+.md-literal-source-view .md-src-image-alt {
+  color: var(--md-literal-source-text, var(--md-literal-text, currentColor));
+}
+
+.md-literal-source-view .md-src-url {
+  color: var(--md-literal-source-url, #58a6ff);
+}
+
+.overlay:not([data-mode="edit"]) .md-literal-source-view [class^="md-src-"],
+.md-literal-editor.md-overlay:not([data-mode="edit"])
+  .md-literal-source-view
+  [class^="md-src-"] {
+  color: inherit;
 }
 
 /* ---- Overlay helpers. Apply `.md-overlay` to the wrapper that stacks

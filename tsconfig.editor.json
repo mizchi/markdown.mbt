@@ -2,6 +2,7 @@
   "extends": "./tsconfig.json",
   "compilerOptions": {
     "noEmit": false,
+    "allowImportingTsExtensions": false,
     "emitDeclarationOnly": false,
     "outDir": "dist/frontend",
     "rootDir": "frontend",

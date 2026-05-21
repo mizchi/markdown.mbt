@@ -11,8 +11,9 @@ pnpm add @mizchi/markdown @luna_ui/luna
 ```
 
 `@luna_ui/luna` is an **optional peer dependency** of `@mizchi/markdown`. The
-core parser does not require it; only the `/editor` entry does, so consumers
-that don't render the editor can omit it.
+core parser and `/editor/literal` entry do not require it; only the Luna-based
+`/editor` component entry does, so consumers that don't render
+`SyntaxHighlightEditor` can omit it.
 
 ## Usage
 
@@ -284,12 +285,12 @@ keystroke and assigning it to `innerHTML` works but drops DOM identity —
 selections, focus and per-node state are lost, and the browser has to
 reflow the entire preview.
 
-The `LiteralEditor` helper in `@mizchi/markdown/editor` keeps a container
-in sync with a source string through a partial-update strategy:
+The `LiteralEditor` helper in `@mizchi/markdown/editor/literal` keeps a
+container in sync with a source string through a partial-update strategy:
 
 ```ts
 import { toHtmlLiteral } from "@mizchi/markdown";
-import { LiteralEditor } from "@mizchi/markdown/editor";
+import { LiteralEditor } from "@mizchi/markdown/editor/literal";
 import "@mizchi/markdown/editor/overlay.css";
 
 const editor = new LiteralEditor(
@@ -323,6 +324,47 @@ container element and makes no assumptions about UI libraries.
 
 `patchTopLevelChildren(container, newHtml)` is exposed separately for
 callers that manage their own state.
+
+### Literal editor controller
+
+For browser editors that want the same click-to-edit behaviour as the
+playground, `createLiteralMarkdownEditor` wires the literal preview,
+syntax-highlighted source layer, textarea, image-preview spacers, custom
+selection overlays and IME anchor correction into one framework-agnostic
+controller:
+
+```ts
+import { toHtmlLiteral } from "@mizchi/markdown";
+import { createLiteralMarkdownEditor } from "@mizchi/markdown/editor/literal";
+import "@mizchi/markdown/editor/overlay.css";
+
+const editor = createLiteralMarkdownEditor({
+  elements: {
+    host: document.querySelector(".md-literal-editor") as HTMLDivElement,
+    rendered: document.querySelector(".md-literal-rendered")!,
+    source: document.querySelector(".md-literal-source-edit") as HTMLTextAreaElement,
+    sourceView: document.querySelector(".md-literal-source-view")!,
+    sourceCaret: document.querySelector(".md-literal-source-caret") as HTMLDivElement,
+    sourceSelection: document.querySelector(".md-literal-source-selection") as HTMLDivElement,
+    modeRoot: document.body,
+  },
+  initialSource,
+  renderLiteral: (source, options) => toHtmlLiteral(source, options),
+});
+
+editor.setImagePreview(true);
+editor.setMode("edit");
+```
+
+The returned handle exposes `setSource`, `setMode`, `setImagePreview`,
+`syncLayout`, `refreshInvariant` and `destroy`. The controller adds stable
+`md-literal-*` classes to the supplied elements; `overlay.css` contains the
+matching baseline styles, while apps remain free to replace the shell layout
+or status UI.
+
+Use `@mizchi/markdown/editor/literal` when embedding only the literal
+controller. That subpath exports only framework-agnostic DOM helpers and does
+not import the Luna-based `SyntaxHighlightEditor` component.
 
 ### Inline image preview (Phase 0)
 
@@ -395,7 +437,8 @@ is forward-compatible with that work.
 | Subpath | Contents |
 |---|---|
 | `@mizchi/markdown` | `parse`, `toHtml`, `toMarkdown`, `toHtmlLiteral`, `createDocument` |
-| `@mizchi/markdown/editor` | `SyntaxHighlightEditor`, `SyntaxHighlightEditorHandle`, `SyntaxHighlightEditorProps`, plus the `highlight` re-exports below |
+| `@mizchi/markdown/editor` | `SyntaxHighlightEditor`, `LiteralEditor`, `createLiteralMarkdownEditor`, editor handle/types, plus the `highlight` re-exports below |
+| `@mizchi/markdown/editor/literal` | Luna-free `LiteralEditor`, `createLiteralMarkdownEditor`, `patchTopLevelChildren`, and literal editor handle/types |
 | `@mizchi/markdown/editor/style.css` | Editor stylesheet |
 | `@mizchi/markdown/editor/overlay.css` | CSS reset + typography for the literal renderer |
 | `@mizchi/markdown/highlight` | `loadHighlighter`, `highlight`, `highlightIfLoaded`, `preloadHighlighter`, `getLoadedHighlighter`, `normalizeHighlightLanguage` |
