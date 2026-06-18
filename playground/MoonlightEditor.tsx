@@ -22,7 +22,7 @@ interface MoonlightEditorModule {
   createEditor(container: HTMLDivElement, options: EditorOptions): EditorHandle | null | undefined;
 }
 
-const MOONLIGHT_EDITOR_URL = "/moonlight-editor.editor.js";
+const MOONLIGHT_EDITOR_URL = `${import.meta.env.BASE_URL}moonlight-editor.editor.js`;
 let moonlightModulePromise: Promise<MoonlightEditorModule> | null = null;
 
 declare global {
