@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="ja">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Markdown literal renderer demo</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #0d1117;
+        --fg: #c9d1d9;
+        --border: #30363d;
+        --md-literal-text: #c9d1d9;
+        --md-literal-bg: transparent;
+        --md-literal-heading: #f0f6fc;
+        --md-literal-link: #58a6ff;
+        --md-literal-code: #f0883e;
+        --md-literal-marker: #6e7681;
+        --literal-bottom-scroll-reserve: max(96px, 24vh);
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 24px 24px var(--literal-bottom-scroll-reserve);
+        background: var(--bg);
+        color: var(--fg);
+        font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+        font-size: 14px;
+        line-height: 1.6;
+      }
+      body > h1 {
+        margin: 0 0 12px;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        font-size: 20px;
+        font-weight: 600;
+      }
+      p.lede {
+        margin: 0 0 16px;
+        max-width: 68em;
+        color: #8b949e;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+      }
+      .toolbar {
+        display: flex;
+        gap: 16px;
+        align-items: center;
+        margin-bottom: 16px;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        font-size: 13px;
+        flex-wrap: wrap;
+      }
+      .toolbar label { cursor: pointer; user-select: none; }
+      .stage {
+        position: relative;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 16px;
+        min-height: 60vh;
+        background: #161b22;
+      }
+      .stage > h2 {
+        margin: 0 0 12px;
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        font-size: 12px;
+        font-weight: 600;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        color: #8b949e;
+      }
+      /* The preview pane lives in `.preview-host`; the textarea overlays
+       * it identically when in edit mode. */
+      .preview-host {
+        position: relative;
+        min-height: 50vh;
+      }
+      .preview-host .md-literal {
+        margin: 0;
+        padding: 0;
+        /* Cursor hint: preview is clickable. */
+        cursor: text;
+      }
+      .preview-host textarea.source-edit {
+        position: absolute;
+        inset: 0;
+        margin: 0;
+        padding: 0;
+        background: transparent;
+        color: transparent;
+        caret-color: var(--fg);
+        border: 0;
+        outline: none;
+        overflow: hidden;
+        resize: none;
+        font: inherit;
+        white-space: pre-wrap;
+        z-index: 2;
+      }
+      body.with-image-preview[data-mode="edit"] textarea.source-edit {
+        caret-color: transparent;
+      }
+      body.with-image-preview[data-mode="edit"] textarea.source-edit::selection {
+        background: transparent;
+      }
+      .source-caret {
+        position: absolute;
+        display: none;
+        width: 1px;
+        background: var(--fg);
+        pointer-events: none;
+        z-index: 3;
+      }
+      body.with-image-preview[data-mode="edit"] .source-caret {
+        display: block;
+      }
+      .source-selection {
+        position: absolute;
+        inset: 0;
+        display: none;
+        pointer-events: none;
+        z-index: 1;
+      }
+      .source-selection-rect {
+        position: absolute;
+        background: rgba(56, 139, 253, 0.32);
+      }
+      /* Show only the preview in preview mode, only the textarea in edit
+       * mode. The textarea is visually identical to the preview because
+       * both use the monospace + pre-wrap baseline from overlay.css. */
+      body[data-mode="preview"] textarea.source-edit { display: none; }
+      body[data-mode="edit"]    #rendered            { visibility: hidden; }
+      body[data-mode="edit"] textarea.source-edit::selection {
+        background: rgba(56, 139, 253, 0.32);
+      }
+      body:not(.overlay):not([data-mode="edit"]) #source-view { display: none; }
+      /* Overlay mode (independent of edit / preview): stack the rendered
+       * output on top of a faded source view to verify the alignment. */
+      body.overlay #source-view,
+      body[data-mode="edit"] #source-view {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        white-space: pre-wrap;
+        margin: 0;
+      }
+      body.overlay #source-view {
+        opacity: 0.45;
+        color: #79c0ff;
+      }
+      body[data-mode="edit"] #source-view {
+        opacity: 1;
+        color: var(--fg);
+        visibility: visible;
+      }
+      body.with-image-preview[data-mode="edit"] #source-view.md-literal
+        .md-image-preview-spacer .md-image-preview {
+        visibility: visible;
+        box-shadow: 0 0 0 1px var(--md-literal-image-border, rgba(110, 118, 129, 0.4));
+      }
+      body.overlay #rendered {
+        position: absolute;
+        inset: 0;
+      }
+      #source-view .md-src-marker,
+      #source-view .md-src-link-bracket,
+      #source-view .md-src-link-url,
+      #source-view .md-src-code-marker,
+      #source-view .md-src-quote-marker,
+      #source-view .md-src-list-marker,
+      #source-view .md-src-hr,
+      #source-view .md-src-html,
+      #source-view .md-src-escape {
+        color: #8b949e;
+      }
+      #source-view .md-src-heading,
+      #source-view .md-src-heading-marker,
+      #source-view .md-src-strong {
+        color: #f0f6fc;
+      }
+      #source-view .md-src-em {
+        color: #d2a8ff;
+      }
+      #source-view .md-src-del {
+        color: #8b949e;
+      }
+      #source-view .md-src-code {
+        color: #f0883e;
+      }
+      #source-view .md-src-link-text,
+      #source-view .md-src-image-alt {
+        color: #c9d1d9;
+      }
+      #source-view .md-src-url {
+        color: #58a6ff;
+      }
+      body.overlay:not([data-mode="edit"]) #source-view [class^="md-src-"] {
+        color: inherit;
+      }
+      .badge {
+        font-family: ui-sans-serif, system-ui, sans-serif;
+        font-size: 12px;
+        color: #8b949e;
+        font-weight: 500;
+      }
+      .badge strong { color: var(--fg); }
+    </style>
+    <script type="module" crossorigin src="/markdown.mbt/assets/literal-BsDFbsyD.js"></script>
+    <link rel="modulepreload" crossorigin href="/markdown.mbt/assets/index-D9dWYaOa.js">
+    <link rel="stylesheet" crossorigin href="/markdown.mbt/assets/literal-C3sPwkga.css">
+  </head>
+  <body class="overlay" data-mode="preview">
+    <h1>Markdown literal renderer — click-to-edit demo</h1>
+    <p class="lede">
+      The preview below is the output of
+      <code>toHtmlLiteral(source, { positions: true })</code>. Every visible
+      glyph corresponds to a character in the source. Click anywhere in the
+      preview to switch into edit mode with the cursor placed at the exact
+      source offset under the click; press <kbd>Escape</kbd> (or unfocus)
+      to return to preview.
+    </p>
+    <div class="toolbar">
+      <span class="badge"><strong>mode:</strong> <span id="cursor-indicator">click to edit</span></span>
+      <label>
+        <input type="checkbox" id="overlay-toggle" checked />
+        Overlay source + rendered (VRT alignment check)
+      </label>
+      <label>
+        <input type="checkbox" id="image-preview-toggle" />
+        Inline image preview
+      </label>
+      <span id="invariant-state"></span>
+      <span class="badge" id="patch-stats"></span>
+    </div>
+    <section class="stage">
+      <h2>Preview / source</h2>
+      <div class="preview-host" id="host">
+        <pre class="md-literal" id="source-view"></pre>
+        <div class="md-literal" id="rendered"></div>
+        <textarea class="source-edit md-literal" id="source"></textarea>
+        <div class="source-selection" id="source-selection" aria-hidden="true"></div>
+        <div class="source-caret" id="source-caret" aria-hidden="true"></div>
+      </div>
+    </section>
+  </body>
+</html>

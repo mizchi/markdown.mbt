@@ -1,0 +1,24 @@
+(function(){(e=>{class t extends HTMLElement{static get observedAttributes(){return[`width`,`height`,`theme`,`readonly`,`trigger`]}constructor(){super(),this._handle=null,this._hydrated=!1,this._editorUrl=e,this._preloadPromise=null}connectedCallback(){requestAnimationFrame(()=>{this.shadowRoot||this._createPreviewShadow(),this._setupEditButton(),this._setupHoverTrigger()})}_createPreviewShadow(){let e=this.attachShadow({mode:`open`}),t=this.getAttribute(`width`)||`400`,n=this.getAttribute(`height`)||`300`,r=(this.getAttribute(`theme`)||`light`)===`dark`?`#1a1a2e`:`#ffffff`,i=this.querySelector(`template:not([shadowrootmode])`)?.content.querySelector(`svg`),a=this.querySelector(`:scope > svg`),o=i||a;e.innerHTML=`
+         <style>
+           :host { display: block; position: relative; }
+           .preview-container { position: relative; border: 1px solid #e0e0e0; border-radius: 4px; overflow: hidden; box-sizing: border-box; }
+           .preview-container svg { display: block; width: 100%; height: auto; box-sizing: border-box; }
+           .edit-btn { position: absolute; top: 8px; right: 8px; padding: 8px 16px; background: #2196f3; color: white; border: none; border-radius: 4px; cursor: pointer; font: 14px system-ui, sans-serif; box-shadow: 0 2px 4px rgba(0,0,0,0.2); display: flex; align-items: center; gap: 6px; }
+           .edit-btn:hover { background: #1976d2; }
+           .edit-btn.loading { opacity: 0.8; cursor: wait; }
+           .spinner { width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.3); border-top-color: white; border-radius: 50%; animation: spin 0.8s linear infinite; display: none; }
+           .edit-btn.loading .spinner { display: block; }
+           .edit-btn.loading .btn-text { display: none; }
+           @keyframes spin { to { transform: rotate(360deg); } }
+           .editor-container { position: relative; border: 1px solid #e0e0e0; border-radius: 4px; overflow: hidden; box-sizing: border-box; }
+           .editor-container *, .editor-container *::before, .editor-container *::after { margin: 0; padding: 0; box-sizing: border-box; }
+           .editor-container svg { display: block; }
+         </style>
+         <div class="preview-container">
+           ${o?o.outerHTML:`<svg viewBox="0 0 ${t} ${n}" style="background:${r}"></svg>`}
+           <button class="edit-btn" data-action="edit">
+             <span class="btn-text">Edit</span>
+             <span class="spinner"></span>
+           </button>
+         </div>
+       `}_setupEditButton(){(this.shadowRoot?.querySelector(`[data-action="edit"]`))?.addEventListener(`click`,()=>{this._preloadPromise?this._hydrate():this._startLoading()})}_setupHoverTrigger(){if(this.getAttribute(`trigger`)!==`hover`)return;let e=this.shadowRoot?.querySelector(`.preview-container`);e&&e.addEventListener(`pointerenter`,()=>this._startLoading(),{once:!0})}_startLoading(){this._preloadPromise||this._hydrated||((this.shadowRoot?.querySelector(`.edit-btn`))?.classList.add(`loading`),this._preloadPromise=import(this._editorUrl),this._preloadPromise.then(()=>this._hydrate()))}async _hydrate(){if(!this._hydrated)try{let e=await(this._preloadPromise||import(this._editorUrl)),t=this.querySelector(`:scope > svg`),n=this.querySelector(`template:not([shadowrootmode])`)?.content.querySelector(`svg`),r=t||n,i=r?.outerHTML||``,a=r?.getAttribute(`viewBox`)?.split(/\s+/).map(Number)||[0,0,400,300],o=a[2]||400,s=a[3]||300,c=this.shadowRoot,l=c.querySelector(`.preview-container`)?.getBoundingClientRect(),u=Math.round(l?.width||o),d=Math.round(l?.height||s),f=Math.min(u/o,d/s);c.innerHTML=`<div class="editor-container"></div>`;let p=c.querySelector(`.editor-container`),m={width:u,height:d,docWidth:o,docHeight:s,zoom:f,theme:this.getAttribute(`theme`)||`light`,readonly:this.hasAttribute(`readonly`),initialSvg:i};console.log(`[moonlight] options.initialSvg defined:`,m.initialSvg!==void 0),this._handle=e.createEditor(p,m),this._hydrated=!0,this._pendingOnChange&&=(this._pendingOnChange.forEach(e=>this._handle.onChange(e)),null)}catch(e){console.error(`Failed to load editor:`,e),btn&&(btn.textContent=`Error - Retry`,btn.classList.remove(`loading`))}}exportSvg(){return this._handle?this._handle.exportSvg():this.querySelector(`template:not([shadowrootmode])`)?.content.querySelector(`svg`)?.outerHTML||`<svg></svg>`}importSvg(e){this._handle?.importSvg?.(e)}clear(){this._handle?.clear?.()}hasFocus(){return this._handle?.hasFocus?.()||!1}onChange(e){return this._handle?this._handle.onChange(e):(this._pendingOnChange=this._pendingOnChange||[],this._pendingOnChange.push(e),()=>{this._pendingOnChange=this._pendingOnChange?.filter(t=>t!==e)})}startEditing(){return this._hydrate()}}customElements.define(`moonlight-editor`,t)})((()=>{let e=document.currentScript;return e?.src?e.src.replace(`.component.js`,`.editor.js`):`./moonlight-editor.editor.js`})())})();
