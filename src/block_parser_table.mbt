@@ -50,6 +50,7 @@ fn BlockParser::try_parse_table(self : BlockParser, start : Int) -> Block? {
     alignments.length(),
     self.strict,
     self.wikilinks,
+    known_bmp=self.scanner.is_bmp(),
   )
 
   // Parse data rows
@@ -68,6 +69,7 @@ fn BlockParser::try_parse_table(self : BlockParser, start : Int) -> Block? {
         alignments.length(),
         self.strict,
         self.wikilinks,
+        known_bmp=self.scanner.is_bmp(),
       ),
     )
     if char_is(self.scanner.peek(), '\n') {
@@ -134,6 +136,7 @@ fn parse_table_row(
   expected_cols : Int,
   strict : Bool,
   wikilinks : Bool,
+  known_bmp~ : Bool,
 ) -> Array[TableCell] {
   let cells : Array[TableCell] = []
   let raw_cells = split_table_cells(line)
@@ -142,7 +145,11 @@ fn parse_table_row(
       break
     }
     let content = cell.trim(chars=" \t\n\r").to_owned()
-    let children = parse_inlines(content, strict~, wikilinks~)
+    let children = if known_bmp {
+      parse_inlines_known_bmp(content, strict~, wikilinks~)
+    } else {
+      parse_inlines(content, strict~, wikilinks~)
+    }
     cells.push({ children, span: Span::new(0, content.length()) }, // Simplified span
     )
   }

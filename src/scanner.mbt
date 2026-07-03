@@ -1,11 +1,12 @@
 ///| Scanner utilities for markdown parsing
 
 ///|
-/// Scanner state - uses Array[Char] for O(1) character access
-/// Handles Unicode correctly by tracking UTF-16 offsets for non-BMP characters
+/// Scanner state - uses UTF-16 indexing directly for BMP input and Array[Char]
+/// for non-BMP input. Handles Unicode correctly by tracking UTF-16 offsets for
+/// non-BMP characters.
 pub(all) struct Scanner {
   source : String
-  chars : Array[Char] // Pre-converted for fast access (code points)
+  chars : Array[Char] // Empty for BMP input, pre-converted code points for non-BMP
   mut pos : Int // Position in code points
   len : Int // Length in code points
   utf16_offsets : Array[Int]? // Maps code point index -> UTF-16 index (None if all BMP)
@@ -18,35 +19,52 @@ fn is_non_bmp(c : Char) -> Bool {
 }
 
 ///|
+fn has_surrogate_pair(source : String) -> Bool {
+  let len = source.length()
+  let mut idx = 0
+  while idx + 1 < len {
+    let c = source.unsafe_get(idx)
+    if c.is_leading_surrogate() &&
+      source.unsafe_get(idx + 1).is_trailing_surrogate() {
+      return true
+    }
+    idx += 1
+  }
+  false
+}
+
+///|
 /// Create a new scanner
 pub fn Scanner::new(source : String) -> Scanner {
+  if !has_surrogate_pair(source) {
+    return Scanner::new_bmp(source)
+  }
   let chars = source.to_array()
   let len = chars.length()
 
-  // Fast check: if UTF-16 length == code point count, all chars are BMP
-  // String.length() returns UTF-16 code units
-  // chars.length() returns code points
-  // Difference means non-BMP characters exist (surrogate pairs)
-  let has_non_bmp = source.length() != len
-
-  // Only build UTF-16 offset array if needed (has non-BMP characters)
-  let utf16_offsets : Array[Int]? = if has_non_bmp {
-    let offsets : Array[Int] = Array::make(len + 1, 0)
-    let mut utf16_pos = 0
-    for i = 0; i < len; i = i + 1 {
-      offsets[i] = utf16_pos
-      if is_non_bmp(chars[i]) {
-        utf16_pos += 2 // Surrogate pair
-      } else {
-        utf16_pos += 1
-      }
+  let offsets : Array[Int] = Array::make(len + 1, 0)
+  let mut utf16_pos = 0
+  for i = 0; i < len; i = i + 1 {
+    offsets[i] = utf16_pos
+    if is_non_bmp(chars[i]) {
+      utf16_pos += 2 // Surrogate pair
+    } else {
+      utf16_pos += 1
     }
-    offsets[len] = utf16_pos
-    Some(offsets)
-  } else {
-    None // All BMP: code point index == UTF-16 index
   }
-  { source, chars, pos: 0, len, utf16_offsets }
+  offsets[len] = utf16_pos
+  { source, chars, pos: 0, len, utf16_offsets: Some(offsets) }
+}
+
+///|
+fn Scanner::new_bmp(source : String) -> Scanner {
+  let chars : Array[Char] = []
+  { source, chars, pos: 0, len: source.length(), utf16_offsets: None }
+}
+
+///|
+fn Scanner::is_bmp(self : Scanner) -> Bool {
+  self.utf16_offsets is None
 }
 
 ///|
@@ -56,6 +74,134 @@ fn Scanner::to_utf16_index(self : Scanner, cp_index : Int) -> Int {
     Some(offsets) => offsets[cp_index]
     None => cp_index // All BMP: same index
   }
+}
+
+///|
+fn Scanner::unsafe_char_at(self : Scanner, index : Int) -> Char {
+  match self.utf16_offsets {
+    Some(_) => self.chars[index]
+    None => self.source.unsafe_get(index).unsafe_to_char()
+  }
+}
+
+///|
+fn Scanner::move_to_line_end(self : Scanner) -> (Int, Int) {
+  let start = self.pos
+  match self.utf16_offsets {
+    Some(_) =>
+      while self.pos < self.len {
+        if self.chars[self.pos] == '\n' {
+          break
+        }
+        self.pos += 1
+      }
+    None =>
+      while self.pos < self.len {
+        if self.source.unsafe_get(self.pos) == 0x0A {
+          break
+        }
+        self.pos += 1
+      }
+  }
+  (start, self.pos)
+}
+
+///|
+fn Scanner::write_range_to(
+  self : Scanner,
+  buf : StringBuilder,
+  start : Int,
+  end : Int,
+) -> Unit {
+  if end <= start {
+    return
+  }
+  let utf16_start = self.to_utf16_index(start)
+  let utf16_end = self.to_utf16_index(end)
+  buf.write_view(self.source[utf16_start:utf16_end])
+}
+
+///|
+fn Scanner::append_line_to(self : Scanner, buf : StringBuilder) -> Unit {
+  let (start, end) = self.move_to_line_end()
+  self.write_range_to(buf, start, end)
+}
+
+///|
+fn Scanner::append_line_stripped_indent_to(
+  self : Scanner,
+  buf : StringBuilder,
+  indent : Int,
+) -> Unit {
+  let (start, end) = self.move_to_line_end()
+  let mut stripped = 0
+  let mut idx = start
+  while idx < end && stripped < indent {
+    match self.unsafe_char_at(idx) {
+      ' ' => {
+        stripped += 1
+        idx += 1
+      }
+      '\t' => {
+        stripped += 4
+        idx += 1
+      }
+      _ => break
+    }
+  }
+  self.write_range_to(buf, idx, end)
+}
+
+///|
+fn Scanner::line_contains(self : Scanner, needle : String) -> Bool {
+  let needle_len = needle.length()
+  if needle_len == 0 {
+    return true
+  }
+  match self.utf16_offsets {
+    Some(_) => {
+      let mut idx = self.pos
+      while idx + needle_len <= self.len && self.chars[idx] != '\n' {
+        let mut matched = true
+        for j = 0; j < needle_len; j = j + 1 {
+          if idx + j >= self.len || self.chars[idx + j] == '\n' {
+            matched = false
+            break
+          }
+          let code = self.chars[idx + j].to_int()
+          if code > 0xFFFF || code.to_uint16() != needle.unsafe_get(j) {
+            matched = false
+            break
+          }
+        }
+        if matched {
+          return true
+        }
+        idx += 1
+      }
+    }
+    None => {
+      let mut idx = self.pos
+      while idx + needle_len <= self.len && self.source.unsafe_get(idx) != 0x0A {
+        let mut matched = true
+        for j = 0; j < needle_len; j = j + 1 {
+          if idx + j >= self.len || self.source.unsafe_get(idx + j) == 0x0A {
+            matched = false
+            break
+          }
+          if self.source.unsafe_get(idx + j) != needle.unsafe_get(j) {
+            matched = false
+            break
+          }
+        }
+        if matched {
+          return true
+        }
+        idx += 1
+      }
+    }
+  }
+  false
 }
 
 ///|
@@ -70,7 +216,10 @@ pub fn Scanner::peek(self : Scanner) -> Char? {
   if self.pos >= self.len {
     None
   } else {
-    Some(self.chars[self.pos])
+    match self.utf16_offsets {
+      Some(_) => Some(self.chars[self.pos])
+      None => Some(self.source.unsafe_get(self.pos).unsafe_to_char())
+    }
   }
 }
 
@@ -81,7 +230,10 @@ pub fn Scanner::peek_at(self : Scanner, offset : Int) -> Char? {
   if idx >= self.len || idx < 0 {
     None
   } else {
-    Some(self.chars[idx])
+    match self.utf16_offsets {
+      Some(_) => Some(self.chars[idx])
+      None => Some(self.source.unsafe_get(idx).unsafe_to_char())
+    }
   }
 }
 
@@ -100,7 +252,10 @@ pub fn Scanner::consume(self : Scanner) -> Char? {
   if self.pos >= self.len {
     None
   } else {
-    let c = self.chars[self.pos]
+    let c = match self.utf16_offsets {
+      Some(_) => self.chars[self.pos]
+      None => self.source.unsafe_get(self.pos).unsafe_to_char()
+    }
     self.pos += 1
     Some(c)
   }
@@ -151,13 +306,25 @@ pub fn Scanner::substring(self : Scanner, start : Int, end : Int) -> String {
 /// Skip whitespace (space and tab only) - O(1) per char
 pub fn Scanner::skip_spaces(self : Scanner) -> Int {
   let start = self.pos
-  while self.pos < self.len {
-    let c = self.chars[self.pos]
-    if c == ' ' || c == '\t' {
-      self.pos += 1
-    } else {
-      break
-    }
+  match self.utf16_offsets {
+    Some(_) =>
+      while self.pos < self.len {
+        let c = self.chars[self.pos]
+        if c == ' ' || c == '\t' {
+          self.pos += 1
+        } else {
+          break
+        }
+      }
+    None =>
+      while self.pos < self.len {
+        let c = self.source.unsafe_get(self.pos)
+        if c == 0x20 || c == 0x09 {
+          self.pos += 1
+        } else {
+          break
+        }
+      }
   }
   self.pos - start
 }
@@ -167,18 +334,35 @@ pub fn Scanner::skip_spaces(self : Scanner) -> Int {
 pub fn Scanner::count_leading_spaces(self : Scanner) -> Int {
   let mut count = 0
   let mut idx = self.pos
-  while idx < self.len {
-    let c = self.chars[idx]
-    if c == ' ' {
-      count += 1
-      idx += 1
-    } else if c == '\t' {
-      // Tab counts as up to 4 spaces to next multiple of 4
-      count = (count / 4 + 1) * 4
-      idx += 1
-    } else {
-      break
-    }
+  match self.utf16_offsets {
+    Some(_) =>
+      while idx < self.len {
+        let c = self.chars[idx]
+        if c == ' ' {
+          count += 1
+          idx += 1
+        } else if c == '\t' {
+          // Tab counts as up to 4 spaces to next multiple of 4
+          count = (count / 4 + 1) * 4
+          idx += 1
+        } else {
+          break
+        }
+      }
+    None =>
+      while idx < self.len {
+        let c = self.source.unsafe_get(idx)
+        if c == 0x20 {
+          count += 1
+          idx += 1
+        } else if c == 0x09 {
+          // Tab counts as up to 4 spaces to next multiple of 4
+          count = (count / 4 + 1) * 4
+          idx += 1
+        } else {
+          break
+        }
+      }
   }
   count
 }
@@ -187,11 +371,21 @@ pub fn Scanner::count_leading_spaces(self : Scanner) -> Int {
 /// Read until end of line (not consuming newline) - O(1) per char
 pub fn Scanner::read_line(self : Scanner) -> String {
   let start = self.pos
-  while self.pos < self.len {
-    if self.chars[self.pos] == '\n' {
-      break
-    }
-    self.pos += 1
+  match self.utf16_offsets {
+    Some(_) =>
+      while self.pos < self.len {
+        if self.chars[self.pos] == '\n' {
+          break
+        }
+        self.pos += 1
+      }
+    None =>
+      while self.pos < self.len {
+        if self.source.unsafe_get(self.pos) == 0x0A {
+          break
+        }
+        self.pos += 1
+      }
   }
   // Convert code point positions to UTF-16 positions
   let utf16_start = self.to_utf16_index(start)
@@ -202,12 +396,23 @@ pub fn Scanner::read_line(self : Scanner) -> String {
 ///|
 /// Skip to next line (consuming newline if present) - O(1) per char
 pub fn Scanner::skip_line(self : Scanner) -> Unit {
-  while self.pos < self.len {
-    let c = self.chars[self.pos]
-    self.pos += 1
-    if c == '\n' {
-      break
-    }
+  match self.utf16_offsets {
+    Some(_) =>
+      while self.pos < self.len {
+        let c = self.chars[self.pos]
+        self.pos += 1
+        if c == '\n' {
+          break
+        }
+      }
+    None =>
+      while self.pos < self.len {
+        let c = self.source.unsafe_get(self.pos)
+        self.pos += 1
+        if c == 0x0A {
+          break
+        }
+      }
   }
 }
 
@@ -215,15 +420,29 @@ pub fn Scanner::skip_line(self : Scanner) -> Unit {
 /// Check if current line is blank (only whitespace) - O(1) per char
 pub fn Scanner::is_blank_line(self : Scanner) -> Bool {
   let mut idx = self.pos
-  while idx < self.len {
-    let c = self.chars[idx]
-    if c == '\n' {
-      return true
-    }
-    if c != ' ' && c != '\t' {
-      return false
-    }
-    idx += 1
+  match self.utf16_offsets {
+    Some(_) =>
+      while idx < self.len {
+        let c = self.chars[idx]
+        if c == '\n' {
+          return true
+        }
+        if c != ' ' && c != '\t' {
+          return false
+        }
+        idx += 1
+      }
+    None =>
+      while idx < self.len {
+        let c = self.source.unsafe_get(idx)
+        if c == 0x0A {
+          return true
+        }
+        if c != 0x20 && c != 0x09 {
+          return false
+        }
+        idx += 1
+      }
   }
   true
 }
@@ -238,7 +457,7 @@ pub fn Scanner::matches(self : Scanner, s : String) -> Bool {
   // Note: s.get_char still O(n), but s is usually short (e.g. "---", "```")
   for i = 0; i < s_len; i = i + 1 {
     match s.get_char(i) {
-      Some(b) if self.chars[self.pos + i] == b => continue
+      Some(b) if self.unsafe_char_at(self.pos + i) == b => continue
       _ => return false
     }
   }
@@ -261,12 +480,29 @@ pub fn Scanner::consume_str(self : Scanner, s : String) -> Bool {
 pub fn Scanner::count_char(self : Scanner, c : Char) -> Int {
   let mut count = 0
   let mut idx = self.pos
-  while idx < self.len {
-    if self.chars[idx] == c {
-      count += 1
-      idx += 1
-    } else {
-      break
+  match self.utf16_offsets {
+    Some(_) =>
+      while idx < self.len {
+        if self.chars[idx] == c {
+          count += 1
+          idx += 1
+        } else {
+          break
+        }
+      }
+    None => {
+      if c.to_int() > 0xFFFF {
+        return 0
+      }
+      let code = c.to_int().to_uint16()
+      while idx < self.len {
+        if self.source.unsafe_get(idx) == code {
+          count += 1
+          idx += 1
+        } else {
+          break
+        }
+      }
     }
   }
   count

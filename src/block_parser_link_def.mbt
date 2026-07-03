@@ -65,8 +65,7 @@ fn BlockParser::try_parse_footnote_definition(
 
   // Read content (first line + continuation lines with indentation)
   let content_buf = StringBuilder::new()
-  let first_line = self.scanner.read_line()
-  content_buf.write_string(first_line)
+  self.scanner.append_line_to(content_buf)
   if char_is(self.scanner.peek(), '\n') {
     self.scanner.advance(1)
   }
@@ -86,8 +85,7 @@ fn BlockParser::try_parse_footnote_definition(
     if indent >= 2 {
       // Continuation line
       content_buf.write_char('\n')
-      let line = self.scanner.read_line()
-      content_buf.write_string(line)
+      self.scanner.append_line_to(content_buf)
       if char_is(self.scanner.peek(), '\n') {
         self.scanner.advance(1)
       }
@@ -100,7 +98,11 @@ fn BlockParser::try_parse_footnote_definition(
 
   // Parse content as blocks
   let content = content_buf.to_string()
-  let inner_scanner = Scanner::new(content)
+  let inner_scanner = if self.scanner.is_bmp() {
+    Scanner::new_bmp(content)
+  } else {
+    Scanner::new(content)
+  }
   let inner_parser = BlockParser::new(
     inner_scanner,
     self.strict,

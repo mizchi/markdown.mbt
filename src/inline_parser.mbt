@@ -72,6 +72,14 @@ fn is_inline_marker(c : Char) -> Bool {
   }
 }
 
+///|
+fn is_inline_marker_code_unit(c : UInt16) -> Bool {
+  match c {
+    0x5C | 0x60 | 0x2A | 0x5F | 0x7E | 0x5B | 0x21 | 0x3C | 0x0A => true
+    _ => false
+  }
+}
+
 ///| Parse inline content from text
 
 ///| When strict=true, uses delimiter stack algorithm for full CommonMark compliance
@@ -100,6 +108,21 @@ fn parse_inlines_fast(
   let scanner = Scanner::new(text)
   let parser = InlineParser::new(scanner, wikilinks~)
   parser.parse()
+}
+
+///|
+fn parse_inlines_known_bmp(
+  text : String,
+  strict? : Bool = false,
+  wikilinks? : Bool = false,
+) -> Array[Inline] {
+  if strict {
+    parse_inlines_with_delimiter_stack(text, wikilinks~, known_bmp=true)
+  } else {
+    let scanner = Scanner::new_bmp(text)
+    let parser = InlineParser::new(scanner, wikilinks~)
+    parser.parse()
+  }
 }
 
 ///|
@@ -146,29 +169,50 @@ fn InlineParser::parse(self : InlineParser) -> Array[Inline] {
 }
 
 ///|
-fn InlineParser::read_text_run(
-  self : InlineParser,
-  start : Int,
-) -> String {
+fn InlineParser::read_text_run(self : InlineParser, start : Int) -> String {
   let mut idx = start
-  while idx < self.scanner.len {
-    let c = self.scanner.chars[idx]
-    if c == ' ' {
-      let space_start = idx
-      while idx < self.scanner.len && self.scanner.chars[idx] == ' ' {
-        idx += 1
+  match self.scanner.utf16_offsets {
+    Some(_) =>
+      while idx < self.scanner.len {
+        let c = self.scanner.chars[idx]
+        if c == ' ' {
+          let space_start = idx
+          while idx < self.scanner.len && self.scanner.chars[idx] == ' ' {
+            idx += 1
+          }
+          if idx - space_start >= 2 &&
+            idx < self.scanner.len &&
+            self.scanner.chars[idx] == '\n' {
+            idx = space_start
+            break
+          }
+        } else if is_inline_marker(c) {
+          break
+        } else {
+          idx += 1
+        }
       }
-      if idx - space_start >= 2 &&
-        idx < self.scanner.len &&
-        self.scanner.chars[idx] == '\n' {
-        idx = space_start
-        break
+    None =>
+      while idx < self.scanner.len {
+        let c = self.scanner.source.unsafe_get(idx)
+        if c == 0x20 {
+          let space_start = idx
+          while idx < self.scanner.len &&
+                self.scanner.source.unsafe_get(idx) == 0x20 {
+            idx += 1
+          }
+          if idx - space_start >= 2 &&
+            idx < self.scanner.len &&
+            self.scanner.source.unsafe_get(idx) == 0x0A {
+            idx = space_start
+            break
+          }
+        } else if is_inline_marker_code_unit(c) {
+          break
+        } else {
+          idx += 1
+        }
       }
-    } else if is_inline_marker(c) {
-      break
-    } else {
-      idx += 1
-    }
   }
   self.scanner.pos = idx
 

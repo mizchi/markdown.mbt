@@ -37,11 +37,7 @@ fn BlockParser::try_parse_atx_heading(
   let trailing = Trivia::empty()
 
   // Parse inline content
-  let children = parse_inlines(
-    content,
-    strict=self.strict,
-    wikilinks=self.wikilinks,
-  )
+  let children = self.parse_inline_content(content)
   Some(
     Block::Heading(
       level~,
@@ -134,11 +130,7 @@ fn BlockParser::try_parse_setext_heading(
     self.scanner.advance(1)
   }
   let content_str = content.trim(chars=" \t\n\r").to_owned()
-  let children = parse_inlines(
-    content_str,
-    strict=self.strict,
-    wikilinks=self.wikilinks,
-  )
+  let children = self.parse_inline_content(content_str)
   Some(
     Block::Heading(
       level~,

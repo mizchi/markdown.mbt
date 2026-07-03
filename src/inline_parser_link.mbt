@@ -285,7 +285,11 @@ fn InlineParser::try_parse_link(self : InlineParser, start : Int) -> Inline? {
       self.scanner.advance(1)
 
       // Parse link text as inlines
-      let children = parse_inlines(link_text, wikilinks=self.wikilinks)
+      let children = if self.scanner.is_bmp() {
+        parse_inlines_known_bmp(link_text, wikilinks=self.wikilinks)
+      } else {
+        parse_inlines(link_text, wikilinks=self.wikilinks)
+      }
 
       // CommonMark: Links cannot contain other links
       // If link text contains a link, the outer link is invalid
@@ -322,7 +326,11 @@ fn InlineParser::try_parse_link(self : InlineParser, start : Int) -> Inline? {
       }
     }
     let label = label_buf.to_string()
-    let children = parse_inlines(link_text, wikilinks=self.wikilinks)
+    let children = if self.scanner.is_bmp() {
+      parse_inlines_known_bmp(link_text, wikilinks=self.wikilinks)
+    } else {
+      parse_inlines(link_text, wikilinks=self.wikilinks)
+    }
 
     // CommonMark: Links cannot contain other links
     if contains_link(children) {

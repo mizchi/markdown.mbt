@@ -15,32 +15,53 @@ priv struct Delimiter {
 }
 
 ///|
-/// Parse inlines using delimiter stack algorithm (CommonMark spec)
-fn parse_inlines_with_delimiter_stack(
-  text : String,
-  wikilinks? : Bool = false,
-) -> Array[Inline] {
-  let chars : Array[Char] = text.to_array()
-  let len = chars.length()
+fn build_utf16_offsets(chars : Array[Char]) -> Array[Int] {
+  let offsets : Array[Int] = Array::make(chars.length() + 1, 0)
+  let mut utf16_pos = 0
+  for i = 0; i < chars.length(); i = i + 1 {
+    offsets[i] = utf16_pos
+    if chars[i].to_int() > 0xFFFF {
+      utf16_pos += 2
+    } else {
+      utf16_pos += 1
+    }
+  }
+  offsets[chars.length()] = utf16_pos
+  offsets
+}
 
-  // Phase 1: Collect all delimiters
+///|
+fn substring_by_codepoint(
+  text : String,
+  utf16_offsets : Array[Int],
+  start : Int,
+  end : Int,
+) -> String {
+  if utf16_offsets.is_empty() {
+    return text.unsafe_substring(start~, end~)
+  }
+  text.unsafe_substring(start=utf16_offsets[start], end=utf16_offsets[end])
+}
+
+///|
+fn collect_delimiters(len : Int, char_at : (Int) -> Char) -> Array[Delimiter] {
   let delimiters : Array[Delimiter] = []
   let mut i = 0
   while i < len {
-    let c = chars[i]
+    let c = char_at(i)
     if c == '*' || c == '_' {
       // Count consecutive markers
       let start = i
       let marker = c
       let mut count = 0
-      while i < len && chars[i] == marker {
+      while i < len && char_at(i) == marker {
         count += 1
         i += 1
       }
 
       // Determine flanking status (CommonMark rules)
-      let before = if start > 0 { Some(chars[start - 1]) } else { None }
-      let after = if i < len { Some(chars[i]) } else { None }
+      let before = if start > 0 { Some(char_at(start - 1)) } else { None }
+      let after = if i < len { Some(char_at(i)) } else { None }
       let before_is_whitespace = match before {
         None => true
         Some(ch) => is_unicode_whitespace(ch)
@@ -95,6 +116,32 @@ fn parse_inlines_with_delimiter_stack(
     } else {
       i += 1
     }
+  }
+  delimiters
+}
+
+///|
+/// Parse inlines using delimiter stack algorithm (CommonMark spec)
+fn parse_inlines_with_delimiter_stack(
+  text : String,
+  wikilinks? : Bool = false,
+  known_bmp? : Bool = false,
+) -> Array[Inline] {
+  let (len, utf16_offsets, delimiters) = if known_bmp {
+    (
+      text.length(),
+      ([] : Array[Int]),
+      collect_delimiters(text.length(), fn(i) {
+        text.unsafe_get(i).unsafe_to_char()
+      }),
+    )
+  } else {
+    let chars : Array[Char] = text.to_array()
+    (
+      chars.length(),
+      build_utf16_offsets(chars),
+      collect_delimiters(chars.length(), fn(i) { chars[i] }),
+    )
   }
 
   // Phase 2: Process delimiters to find matching pairs
@@ -175,12 +222,20 @@ fn parse_inlines_with_delimiter_stack(
   let result : Array[Inline] = []
   if matches.is_empty() {
     // No emphasis matches, but still need to process other inlines correctly
-    let segment_inlines = parse_segment_simple(text, 0, wikilinks~)
+    let segment_inlines = parse_segment_simple(text, 0, wikilinks~, known_bmp~)
     for inline in segment_inlines {
       result.push(inline)
     }
   } else {
-    build_inlines_from_matches(text, chars, matches, result, wikilinks~)
+    build_inlines_from_matches(
+      text,
+      utf16_offsets,
+      len,
+      known_bmp,
+      matches,
+      result,
+      wikilinks~,
+    )
   }
   result
 }
@@ -189,7 +244,9 @@ fn parse_inlines_with_delimiter_stack(
 /// Build inline elements from delimiter matches
 fn build_inlines_from_matches(
   text : String,
-  chars : Array[Char],
+  utf16_offsets : Array[Int],
+  len : Int,
+  known_bmp : Bool,
   matches : Array[(Int, Int, Char, Bool)],
   result : Array[Inline],
   wikilinks? : Bool = false,
@@ -199,10 +256,10 @@ fn build_inlines_from_matches(
   sorted.sort_by(fn(a, b) { a.0.compare(b.0) })
 
   // Build nested structure
-  let len = chars.length()
   build_inlines_recursive(
     text,
-    chars,
+    utf16_offsets,
+    known_bmp,
     0,
     len,
     sorted,
@@ -217,7 +274,8 @@ fn build_inlines_from_matches(
 /// Recursively build inline elements
 fn build_inlines_recursive(
   text : String,
-  chars : Array[Char],
+  utf16_offsets : Array[Int],
+  known_bmp : Bool,
   start : Int,
   end : Int,
   matches : Array[(Int, Int, Char, Bool)],
@@ -238,9 +296,14 @@ fn build_inlines_recursive(
 
     // Add text before this emphasis
     if opener_pos > pos {
-      let segment = text.unsafe_substring(start=pos, end=opener_pos)
+      let segment = substring_by_codepoint(text, utf16_offsets, pos, opener_pos)
       // Parse segment for other inline elements (code, links, etc.)
-      let segment_inlines = parse_segment_simple(segment, pos, wikilinks~)
+      let segment_inlines = parse_segment_simple(
+        segment,
+        pos,
+        wikilinks~,
+        known_bmp~,
+      )
       for inline in segment_inlines {
         result.push(inline)
       }
@@ -266,7 +329,8 @@ fn build_inlines_recursive(
       // Has nested emphasis
       build_inlines_recursive(
         text,
-        chars,
+        utf16_offsets,
+        known_bmp,
         content_start,
         content_end,
         matches,
@@ -278,11 +342,14 @@ fn build_inlines_recursive(
       // Note: nested matches will be skipped naturally by position check
     } else {
       // No nested emphasis, parse content simply
-      let content = text.unsafe_substring(start=content_start, end=content_end)
+      let content = substring_by_codepoint(
+        text, utf16_offsets, content_start, content_end,
+      )
       let content_inlines = parse_segment_simple(
         content,
         content_start,
         wikilinks~,
+        known_bmp~,
       )
       for inline in content_inlines {
         children.push(inline)
@@ -306,8 +373,13 @@ fn build_inlines_recursive(
 
   // Add remaining text
   if pos < end {
-    let segment = text.unsafe_substring(start=pos, end~)
-    let segment_inlines = parse_segment_simple(segment, pos, wikilinks~)
+    let segment = substring_by_codepoint(text, utf16_offsets, pos, end)
+    let segment_inlines = parse_segment_simple(
+      segment,
+      pos,
+      wikilinks~,
+      known_bmp~,
+    )
     for inline in segment_inlines {
       result.push(inline)
     }
@@ -320,10 +392,15 @@ fn parse_segment_simple(
   text : String,
   offset : Int,
   wikilinks? : Bool = false,
+  known_bmp? : Bool = false,
 ) -> Array[Inline] {
   // For now, just return as text. Full implementation would parse
   // code spans, links, etc. here.
-  let scanner = Scanner::new(text)
+  let scanner = if known_bmp {
+    Scanner::new_bmp(text)
+  } else {
+    Scanner::new(text)
+  }
   let result : Array[Inline] = []
   let text_buf = StringBuilder::new()
   let mut text_start = 0

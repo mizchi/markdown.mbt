@@ -8,8 +8,7 @@
 let inline_simple : String = "Hello World"
 
 ///|
-let inline_plain_long : String =
-  "This is a long plain paragraph with no inline markers. It should be parsed as one text run without repeated string concatenation. Markdown documents often contain many sentences like this, so this path matters for full document parsing."
+let inline_plain_long : String = "This is a long plain paragraph with no inline markers. It should be parsed as one text run without repeated string concatenation. Markdown documents often contain many sentences like this, so this path matters for full document parsing."
 
 ///|
 let inline_emphasis : String = "Hello *world* and **bold** and `code` here"

@@ -44,9 +44,10 @@ fn BlockParser::try_parse_fenced_code(
     if line_indent <= 3 {
       let saved = self.scanner.pos
       let _ = self.scanner.skip_spaces()
-      if self.scanner.count_char(fence_char) >= fence_length {
+      let closing_count = self.scanner.count_char(fence_char)
+      if closing_count >= fence_length {
         // Found closing fence
-        self.scanner.advance(self.scanner.count_char(fence_char))
+        self.scanner.advance(closing_count)
         let _ = self.scanner.skip_spaces()
         if char_is(self.scanner.peek(), '\n') || self.scanner.is_eof() {
           if char_is(self.scanner.peek(), '\n') {
@@ -59,9 +60,7 @@ fn BlockParser::try_parse_fenced_code(
     }
 
     // Read code line (remove up to `indent` leading spaces)
-    let line = self.scanner.read_line()
-    let stripped = strip_indent(line, indent)
-    code_buf.write_string(stripped)
+    self.scanner.append_line_stripped_indent_to(code_buf, indent)
     if char_is(self.scanner.peek(), '\n') {
       code_buf.write_char('\n')
       self.scanner.advance(1)
@@ -80,27 +79,6 @@ fn BlockParser::try_parse_fenced_code(
       trailing_trivia=trailing,
     ),
   )
-}
-
-///|
-/// Strip up to n leading spaces from a line
-fn strip_indent(line : String, n : Int) -> String {
-  let mut stripped = 0
-  let mut idx = 0
-  while idx < line.length() && stripped < n {
-    match line.get_char(idx) {
-      Some(' ') => {
-        stripped += 1
-        idx += 1
-      }
-      Some('\t') => {
-        stripped += 4
-        idx += 1
-      }
-      _ => break
-    }
-  }
-  line.unsafe_substring(start=idx, end=line.length())
 }
 
 ///|
@@ -126,8 +104,7 @@ fn BlockParser::try_parse_indented_code(
     } else {
       // Skip 4 spaces
       self.scanner.advance(4)
-      let line = self.scanner.read_line()
-      code_buf.write_string(line)
+      self.scanner.append_line_to(code_buf)
       if char_is(self.scanner.peek(), '\n') {
         code_buf.write_char('\n')
         self.scanner.advance(1)

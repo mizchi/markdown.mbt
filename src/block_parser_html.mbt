@@ -20,9 +20,8 @@ fn is_html_block_tag(tag : String) -> Bool {
   if is_custom_element_tag(tag) {
     return true
   }
-  let lower = tag.to_lower()
   for t in html_block_tags {
-    if lower == t {
+    if tag[:].equal_ignore_ascii_case(t[:]) {
       return true
     }
   }
@@ -37,14 +36,13 @@ fn is_custom_element_tag(tag : String) -> Bool {
     return false
   }
   // Must start with a letter
-  let chars = tag.to_array()
-  let first = chars[0]
-  if !((first >= 'a' && first <= 'z') || (first >= 'A' && first <= 'Z')) {
+  let first = tag.unsafe_get(0)
+  if !((first >= 0x61 && first <= 0x7A) || (first >= 0x41 && first <= 0x5A)) {
     return false
   }
   // Must contain a hyphen
-  for c in chars {
-    if c == '-' {
+  for i in 0..<tag.length() {
+    if tag.unsafe_get(i) == 0x2D {
       return true
     }
   }
@@ -74,9 +72,8 @@ fn BlockParser::try_parse_html_block(self : BlockParser, start : Int) -> Block? 
     self.scanner.restore(peek_pos)
     let content_buf = StringBuilder::new()
     while !self.scanner.is_eof() {
-      let line = self.scanner.read_line()
-      content_buf.write_string(line)
-      let is_closed = line.contains("-->")
+      let is_closed = self.scanner.line_contains("-->")
+      self.scanner.append_line_to(content_buf)
       if char_is(self.scanner.peek(), '\n') {
         content_buf.write_char('\n')
         self.scanner.advance(1)
@@ -141,9 +138,17 @@ fn BlockParser::try_parse_html_block(self : BlockParser, start : Int) -> Block? 
   }
 
   // Read lines until closing tag (for custom elements) or blank line
+  let mut first_content_line = true
   while !self.scanner.is_eof() {
-    let line = self.scanner.read_line()
-    content_buf.write_string(line)
+    let contains_closing_tag = match closing_tag {
+      Some(close) => self.scanner.line_contains(close)
+      None => false
+    }
+    let is_self_closing_first_line = match closing_tag {
+      Some(_) => first_content_line && self.scanner.line_contains("/>")
+      None => false
+    }
+    self.scanner.append_line_to(content_buf)
     if char_is(self.scanner.peek(), '\n') {
       content_buf.write_char('\n')
       self.scanner.advance(1)
@@ -151,16 +156,13 @@ fn BlockParser::try_parse_html_block(self : BlockParser, start : Int) -> Block? 
 
     // For custom elements, check if line contains closing tag
     match closing_tag {
-      Some(close) => {
-        if line.contains(close) {
+      Some(_) => {
+        if contains_closing_tag {
           break
         }
         // Also check for self-closing tag on first line
-        if content_buf.to_string().char_length() == line.char_length() + 1 {
-          // First line - check for self-closing />
-          if line.contains("/>") {
-            break
-          }
+        if is_self_closing_first_line {
+          break
         }
       }
       None =>
@@ -169,6 +171,7 @@ fn BlockParser::try_parse_html_block(self : BlockParser, start : Int) -> Block? 
           break
         }
     }
+    first_content_line = false
   }
   let html = content_buf.to_string()
   Some(

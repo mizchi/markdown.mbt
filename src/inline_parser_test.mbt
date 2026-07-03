@@ -64,6 +64,38 @@ test "parse strong with underscore" {
 }
 
 ///|
+test "strict parse emphasis after non-BMP character" {
+  let inlines = parse_inlines("😀*world*", strict=true)
+  @debug.debug_inspect(inlines.length(), content="2")
+  match inlines[0] {
+    Inline::Text(content~, ..) =>
+      @debug.debug_inspect(
+        content,
+        content=(
+          #|"😀"
+        ),
+      )
+    _ => fail("Expected leading text")
+  }
+  match inlines[1] {
+    Inline::Emphasis(children~, ..) => {
+      @debug.debug_inspect(children.length(), content="1")
+      match children[0] {
+        Inline::Text(content~, ..) =>
+          @debug.debug_inspect(
+            content,
+            content=(
+              #|"world"
+            ),
+          )
+        _ => fail("Expected emphasis text")
+      }
+    }
+    _ => fail("Expected Emphasis")
+  }
+}
+
+///|
 test "parse inline code" {
   let inlines = parse_inlines("Hello `code` world")
   @debug.debug_inspect(inlines.length(), content="3")

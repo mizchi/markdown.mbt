@@ -295,8 +295,7 @@ fn BlockParser::parse_list_item(
 ) -> ListItem {
   // Parse first line content
   let content_buf = StringBuilder::new()
-  let line = self.scanner.read_line()
-  content_buf.write_string(line)
+  self.scanner.append_line_to(content_buf)
   if char_is(self.scanner.peek(), '\n') {
     self.scanner.advance(1)
   }
@@ -308,11 +307,7 @@ fn BlockParser::parse_list_item(
   // Check for task list checkbox: [ ], [x], or [X]
   let (checked, actual_content) = parse_task_checkbox(content)
   if !actual_content.is_empty() {
-    let inline_content = parse_inlines(
-      actual_content,
-      strict=self.strict,
-      wikilinks=self.wikilinks,
-    )
+    let inline_content = self.parse_inline_content(actual_content)
     children.push(
       Block::Paragraph(
         children=inline_content,
@@ -427,8 +422,7 @@ fn BlockParser::parse_nested_list_item(
   content_offset : Int,
 ) -> ListItem {
   let content_buf = StringBuilder::new()
-  let line = self.scanner.read_line()
-  content_buf.write_string(line)
+  self.scanner.append_line_to(content_buf)
   if char_is(self.scanner.peek(), '\n') {
     self.scanner.advance(1)
   }
@@ -436,11 +430,7 @@ fn BlockParser::parse_nested_list_item(
   let children : Array[Block] = []
   let (checked, actual_content) = parse_task_checkbox(content)
   if !actual_content.is_empty() {
-    let inline_content = parse_inlines(
-      actual_content,
-      strict=self.strict,
-      wikilinks=self.wikilinks,
-    )
+    let inline_content = self.parse_inline_content(actual_content)
     children.push(
       Block::Paragraph(
         children=inline_content,

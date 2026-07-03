@@ -44,6 +44,22 @@ fn BlockParser::new(
 }
 
 ///|
+fn BlockParser::parse_inline_content(
+  self : BlockParser,
+  content : String,
+) -> Array[Inline] {
+  if self.scanner.is_bmp() {
+    parse_inlines_known_bmp(
+      content,
+      strict=self.strict,
+      wikilinks=self.wikilinks,
+    )
+  } else {
+    parse_inlines(content, strict=self.strict, wikilinks=self.wikilinks)
+  }
+}
+
+///|
 /// Parse entire document
 fn BlockParser::parse_document(self : BlockParser) -> ParseResult {
   let start = self.scanner.pos
@@ -234,11 +250,10 @@ fn BlockParser::try_parse_blockquote(self : BlockParser, start : Int) -> Block? 
       if char_is(self.scanner.peek(), ' ') {
         self.scanner.advance(1)
       }
-      let line = self.scanner.read_line()
       if !first {
         content_buf.write_char('\n')
       }
-      content_buf.write_string(line)
+      self.scanner.append_line_to(content_buf)
       first = false
       if char_is(self.scanner.peek(), '\n') {
         self.scanner.advance(1)
@@ -253,7 +268,11 @@ fn BlockParser::try_parse_blockquote(self : BlockParser, start : Int) -> Block? 
 
   // Parse blockquote content recursively
   let content = content_buf.to_string()
-  let inner_scanner = Scanner::new(content)
+  let inner_scanner = if self.scanner.is_bmp() {
+    Scanner::new_bmp(content)
+  } else {
+    Scanner::new(content)
+  }
   let inner_parser = BlockParser::new(
     inner_scanner,
     self.strict,
@@ -334,8 +353,7 @@ fn BlockParser::parse_paragraph(self : BlockParser, start : Int) -> Block? {
     if !first {
       content_buf.write_char('\n')
     }
-    let line = self.scanner.read_line()
-    content_buf.write_string(line)
+    self.scanner.append_line_to(content_buf)
     first = false
     if char_is(self.scanner.peek(), '\n') {
       self.scanner.advance(1)
@@ -345,11 +363,7 @@ fn BlockParser::parse_paragraph(self : BlockParser, start : Int) -> Block? {
   if content.trim(chars=" \t\n\r").is_empty() {
     return None
   }
-  let children = parse_inlines(
-    content,
-    strict=self.strict,
-    wikilinks=self.wikilinks,
-  )
+  let children = self.parse_inline_content(content)
   Some(
     Block::Paragraph(
       children~,

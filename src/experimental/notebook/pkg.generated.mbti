@@ -184,8 +184,8 @@ pub impl Show for OutputFormat
 
 // Traits
 pub trait Evaluator {
-  eval(Self, String, EvalContext) -> CellOutput
-  language(Self) -> String
-  can_handle(Self, String) -> Bool
+  fn eval(Self, String, EvalContext) -> CellOutput
+  fn language(Self) -> String
+  fn can_handle(Self, String) -> Bool
 }
 
