@@ -36,6 +36,8 @@ jobs:
       - name: Test all
         run: |
           moon test src --target js,native,wasm-gc
+      - name: Check Folddown include graph
+        run: pnpm folddown:check
       - name: Moon test
         run: |
           moon test src/cmark_tests --target js
@@ -47,7 +49,7 @@ jobs:
           moon test src/html_tests --target js
       - name: Moon test
         run: |
-          moon test src/experimental/tui --target all
+          moon test src/x/tui --target all
       - name: Test Bench
         run: moon bench
       - name: Component build (wasm)

@@ -1,12 +1,13 @@
 name = "mizchi/markdown"
 
-version = "0.6.5"
+version = "0.7.0"
 
 import {
-  "moonbitlang/parser@0.2.5",
-  "moonbitlang/x@0.4.41",
-  "moonbitlang/yacc@0.7.12",
+  "moonbitlang/parser@0.3.11",
+  "moonbitlang/x@0.4.47",
+  "moonbitlang/yacc@0.7.17",
   "mizchi/syntree@0.2.3",
+  "mizchi/moomaid@0.4.0",
 }
 
 readme = "README.md"

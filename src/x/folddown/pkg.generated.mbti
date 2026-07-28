@@ -1,0 +1,74 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/markdown/x/folddown"
+
+import {
+  "mizchi/markdown/x/mdx",
+}
+
+// Values
+pub fn fold_schema() -> @mdx.MdxSchema
+
+pub fn normalize_markdown(String) -> String
+
+pub fn parse_include_source(String) -> FolddownIncludeParseResult
+
+pub fn parse_include_source_to_json(String) -> String
+
+pub fn parse_source(String) -> FoldParseResult
+
+pub fn parse_source_to_json(String) -> String
+
+pub fn validate_source(String) -> @mdx.MdxTypeCheckResult
+
+// Errors
+
+// Types and methods
+pub(all) struct FoldNode {
+  id : String
+  kind : String
+  level : String
+  locale : String?
+  requires : Array[String]
+  roles : Array[String]
+  goals : Array[String]
+  evidence : Array[String]
+  familiar_to : Array[String]
+  body : String
+}
+
+pub(all) struct FoldParseResult {
+  nodes : Array[FoldNode]
+  reader_profiles : Array[FolddownReaderProfile]
+  content_filters : Array[FolddownContentFilter]
+  diagnostics : Array[@mdx.MdxDiagnostic]
+}
+
+pub(all) struct FolddownContentFilter {
+  id : String
+  label_ja : String
+  label_en : String
+  mode : String
+}
+
+pub(all) struct FolddownInclude {
+  src : String
+  sync : String?
+  raw : String
+}
+
+pub(all) struct FolddownIncludeParseResult {
+  includes : Array[FolddownInclude]
+  diagnostics : Array[@mdx.MdxDiagnostic]
+}
+
+pub(all) struct FolddownReaderProfile {
+  id : String
+  label_ja : String
+  label_en : String
+  collapse_levels : Array[String]
+}
+
+// Type aliases
+
+// Traits
+

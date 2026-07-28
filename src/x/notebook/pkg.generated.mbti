@@ -1,0 +1,191 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/markdown/x/notebook"
+
+import {
+  "mizchi/markdown",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn analyze_cell_variables(String, String) -> (Array[String], Array[String])
+
+pub fn analyze_cell_variables_full(String, String) -> (Array[String], Array[String], Array[String])
+
+pub fn build_dependency_graph(Array[Cell]) -> DependencyGraph
+
+pub fn build_dependency_graph_with_cell_deps(Array[Cell], Map[String, Array[String]]) -> DependencyGraph
+
+pub fn build_notebook(String, Array[(String, String)], Map[String, String]) -> Notebook
+
+pub fn check_duplicate_definitions(Array[Cell]) -> Array[(String, Array[String])]
+
+pub fn create_js_evaluator() -> (String, EvalContext) -> CellOutput
+
+pub fn create_moonbit_evaluator() -> (String, EvalContext) -> CellOutput
+
+pub fn create_notebook_engine() -> EvalEngine
+
+pub fn create_session(String, String) -> NotebookSession
+
+pub fn detect_cycles(DependencyGraph) -> Array[Array[String]]
+
+pub fn extract_cells_from_code_blocks(Array[(String, String)]) -> Array[Cell]
+
+pub fn extract_code_blocks_from_document(@markdown.Document) -> Array[(String, String)]
+
+pub fn extract_frontmatter(@markdown.Document) -> Map[String, String]
+
+pub fn extract_inlines_from_document(@markdown.Document) -> Array[InlineDirective]
+
+pub fn get_stale_cells(DependencyGraph, String) -> Array[String]
+
+pub fn notebook_from_document(String, @markdown.Document) -> Notebook
+
+pub fn notebook_from_markdown(String, String) -> Notebook
+
+pub fn parse_code_block_attrs(String) -> (@markdown.CodeBlockInfo, CodeBlockAttrs)
+
+pub fn parse_inline_directive(String) -> InlineDirective?
+
+pub fn render_output_to_html(CellOutput) -> String
+
+// Errors
+
+// Types and methods
+pub(all) struct Cell {
+  id : String
+  source : String
+  language : String
+  defines : Array[String]
+  exports : Array[String]
+  references : Array[String]
+  output : CellOutput?
+  state : CellState
+}
+pub fn Cell::new(String, String, String) -> Self
+
+pub(all) enum CellOutput {
+  Text(String)
+  Html(String)
+  Json(String)
+  Error(String)
+  Multi(Array[CellOutput])
+}
+
+pub(all) enum CellState {
+  Idle
+  Running
+  Success
+  Failed
+  Stale
+}
+
+pub(all) struct CodeBlockAttrs {
+  cell : String?
+  deps : Array[String]
+  hidden : Bool
+  output_format : OutputFormat
+  executable : Bool
+}
+pub fn CodeBlockAttrs::new() -> Self
+
+pub(all) struct DependencyEdge {
+  from : String
+  to : String
+  variable : String
+}
+
+pub(all) struct DependencyGraph {
+  cells : Map[String, Cell]
+  edges : Array[DependencyEdge]
+  mut execution_order : Array[String]
+}
+pub fn DependencyGraph::new() -> Self
+
+pub(all) struct EvalContext {
+  variables : Map[String, String]
+  outputs : Map[String, CellOutput]
+}
+pub fn EvalContext::new() -> Self
+
+pub(all) struct EvalEngine {
+  evaluators : Map[String, (String, EvalContext) -> CellOutput]
+  context : EvalContext
+}
+pub fn EvalEngine::eval_cell(Self, Cell) -> EvalResult
+pub fn EvalEngine::eval_notebook(Self, Notebook) -> Array[EvalResult]
+pub fn EvalEngine::eval_stale(Self, Notebook, String) -> Array[EvalResult]
+pub fn EvalEngine::new() -> Self
+pub fn EvalEngine::register(Self, String, (String, EvalContext) -> CellOutput) -> Unit
+
+pub(all) struct EvalResult {
+  cell_id : String
+  output : CellOutput
+  exports : Map[String, String]
+  duration_ms : Double
+}
+pub fn EvalResult::new(String, CellOutput) -> Self
+
+pub(all) struct InlineDirective {
+  source : String
+  section : String?
+  recursive : Bool
+} derive(Eq, @debug.Debug)
+pub fn InlineDirective::new(String) -> Self
+pub impl Show for InlineDirective
+
+pub(all) struct Notebook {
+  path : String
+  cells : Array[Cell]
+  graph : DependencyGraph
+  inlines : Array[InlineDirective]
+  frontmatter : Map[String, String]
+}
+pub fn Notebook::get_cell(Self, String) -> Cell?
+pub fn Notebook::get_execution_order(Self) -> Array[Cell]
+pub fn Notebook::mark_stale_after_change(Self, String) -> Unit
+pub fn Notebook::new(String) -> Self
+pub fn Notebook::validate(Self) -> Array[NotebookError]
+
+pub(all) enum NotebookError {
+  DuplicateDefinition(String, Array[String])
+  CyclicDependency(Array[String])
+  UndefinedReference(String, String)
+} derive(@debug.Debug)
+pub impl Show for NotebookError
+
+pub(all) struct NotebookSession {
+  notebook : Notebook
+  engine : EvalEngine
+  outputs : Map[String, CellOutput]
+}
+pub fn NotebookSession::execute_all(Self) -> Array[(String, CellOutput)]
+pub fn NotebookSession::execute_cell(Self, String) -> CellOutput?
+pub fn NotebookSession::execute_stale(Self, String) -> Array[(String, CellOutput)]
+pub fn NotebookSession::get_cell_dependents(Self, String) -> Array[String]
+pub fn NotebookSession::get_cell_deps(Self, String) -> Array[String]
+pub fn NotebookSession::get_cell_ids(Self) -> Array[String]
+pub fn NotebookSession::get_cell_source(Self, String) -> String?
+pub fn NotebookSession::get_output(Self, String) -> CellOutput?
+pub fn NotebookSession::new(Notebook) -> Self
+pub fn NotebookSession::render_html(Self) -> String
+pub fn NotebookSession::to_json(Self) -> String
+pub fn NotebookSession::validate(Self) -> Array[NotebookError]
+
+pub(all) enum OutputFormat {
+  Text
+  Html
+  Json
+  Auto
+} derive(Eq, @debug.Debug)
+pub impl Show for OutputFormat
+
+// Type aliases
+
+// Traits
+pub trait Evaluator {
+  fn eval(Self, String, EvalContext) -> CellOutput
+  fn language(Self) -> String
+  fn can_handle(Self, String) -> Bool
+}
+

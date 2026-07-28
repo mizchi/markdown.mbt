@@ -12,6 +12,7 @@ import {
   highlight_css,
   highlight_bash,
   highlight_rust,
+  highlight_go,
 } from "../_build/js/release/build/syntree_api/syntree_api.js";
 
 export {
@@ -22,12 +23,13 @@ export {
   highlight_css as highlightCSS,
   highlight_bash as highlightBash,
   highlight_rust as highlightRust,
+  highlight_go as highlightGo,
 };
 
 /**
  * Highlight code based on language identifier.
  * @param {string} source - Source code to highlight
- * @param {string} lang - Language identifier (ts, typescript, mbt, moonbit, json, html, css, bash, sh)
+ * @param {string} lang - Language identifier (ts, typescript, mbt, moonbit, json, html, css, bash, rust, go)
  * @returns {string} Highlight HTML
  */
 export function highlight(source, lang) {
@@ -61,6 +63,9 @@ export function highlight(source, lang) {
     case "rust":
     case "rs":
       return highlight_rust(source);
+    case "go":
+    case "golang":
+      return highlight_go(source);
     default:
       // Return plain text wrapped in highlight format
       return `<pre class="highlight" style="background-color: #0d1117; color: #c9d1d9"><code><span class="line"><span style="color: #c9d1d9">${escapeHtml(source)}</span></span></code></pre>`;

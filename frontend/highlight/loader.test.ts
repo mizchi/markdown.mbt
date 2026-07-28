@@ -11,7 +11,17 @@ describe("frontend highlight loader", () => {
     expect(normalizeHighlightLanguage("mbt")).toBe("moonbit");
     expect(normalizeHighlightLanguage("tsx")).toBe("typescript");
     expect(normalizeHighlightLanguage("sh")).toBe("bash");
+    expect(normalizeHighlightLanguage("golang")).toBe("go");
     expect(normalizeHighlightLanguage("unknown")).toBeNull();
+  });
+
+  it("loads a Go highlighter on demand", async () => {
+    const highlighter = await loadHighlighter("go");
+
+    expect(highlighter).toBeTypeOf("function");
+    expect(highlighter?.("package main\nfunc main() {}")).toContain(
+      '<pre class="highlight',
+    );
   });
 
   it("keeps language highlighters unloaded until requested", async () => {

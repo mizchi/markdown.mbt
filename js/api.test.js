@@ -7,6 +7,8 @@ import {
   createDocument,
   insertEdit,
   deleteEdit,
+  parseFolddown,
+  parseFolddownIncludes,
   replaceEdit,
 } from "./api.js";
 
@@ -114,6 +116,105 @@ describe("toMarkdown", () => {
   it("serializes wikilinks when enabled", () => {
     const md = toMarkdown("[[MoonBit|MoonBit notes]]", { wikilinks: true });
     expect(md).toBe("[[MoonBit|MoonBit notes]]\n");
+  });
+});
+
+describe("parseFolddown", () => {
+  it("returns typed metadata and child Markdown from a Fold declaration", () => {
+    const result = parseFolddown(`
+<Fold id="intro" kind="concept" level="basic" locale="en" roles={["typescript-programmer"]}>
+## Immutable bindings
+
+Use \`let\` by default.
+</Fold>
+`);
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.nodes).toHaveLength(1);
+    expect(result.nodes[0]).toMatchObject({
+      id: "intro",
+      kind: "concept",
+      level: "basic",
+      locale: "en",
+      roles: ["typescript-programmer"],
+    });
+    expect(result.nodes[0].body).toContain("Immutable bindings");
+  });
+
+  it("returns reader profiles generated from Folddown frontmatter", () => {
+    const result = parseFolddown(`---
+folddown.readers: first_time,some_knowledge
+folddown.reader.first_time.label.ja: 初めて知った
+folddown.reader.first_time.label.en: First time
+folddown.reader.first_time.collapse: none
+folddown.reader.some_knowledge.label.ja: 多少知ってる
+folddown.reader.some_knowledge.label.en: Know some
+folddown.reader.some_knowledge.collapse: intro
+---
+<Fold id="intro" kind="concept" level="intro">## Intro</Fold>`);
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.readerProfiles).toEqual([
+      {
+        id: "first_time",
+        labelJa: "初めて知った",
+        labelEn: "First time",
+        collapseLevels: [],
+      },
+      {
+        id: "some_knowledge",
+        labelJa: "多少知ってる",
+        labelEn: "Know some",
+        collapseLevels: ["intro"],
+      },
+    ]);
+  });
+
+  it("returns content filters generated from Folddown frontmatter", () => {
+    const result = parseFolddown(`---
+folddown.content_filters: detail,interesting
+folddown.content_filter.detail.label.ja: 詳しく知りたい
+folddown.content_filter.detail.label.en: Learn in detail
+folddown.content_filter.detail.mode: all
+folddown.content_filter.interesting.label.ja: 面白い機能だけを知りたい
+folddown.content_filter.interesting.label.en: Interesting features only
+folddown.content_filter.interesting.mode: unfamiliar
+---
+<Fold id="intro" kind="concept" level="intro" familiarTo={["typescript-programmer"]}>## Intro</Fold>`);
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.nodes[0].familiarTo).toEqual(["typescript-programmer"]);
+    expect(result.contentFilters).toEqual([
+      {
+        id: "detail",
+        labelJa: "詳しく知りたい",
+        labelEn: "Learn in detail",
+        mode: "all",
+      },
+      {
+        id: "interesting",
+        labelJa: "面白い機能だけを知りたい",
+        labelEn: "Interesting features only",
+        mode: "unfamiliar",
+      },
+    ]);
+  });
+});
+
+describe("parseFolddownIncludes", () => {
+  it("returns typed local-document declarations", () => {
+    const result = parseFolddownIncludes(
+      '<Include src="./fragments/overview.en.mdx" sync="moonbit-overview" />',
+    );
+
+    expect(result.diagnostics).toEqual([]);
+    expect(result.includes).toEqual([
+      {
+        src: "./fragments/overview.en.mdx",
+        sync: "moonbit-overview",
+        raw: '<Include src="./fragments/overview.en.mdx" sync="moonbit-overview" />',
+      },
+    ]);
   });
 });
 

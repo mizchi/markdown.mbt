@@ -1,0 +1,33 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/markdown/x/slide"
+
+import {
+  "mizchi/markdown",
+}
+
+// Values
+pub fn parse(String) -> SlideDocument
+
+// Errors
+
+// Types and methods
+pub(all) struct Slide {
+  index : Int
+  start : Int
+  end : Int
+  blocks : Array[@markdown.Block]
+}
+
+pub(all) struct SlideDocument {
+  slides : Array[Slide]
+  source : String
+}
+pub fn SlideDocument::find_slide_at_position(Self, Int) -> Int
+pub fn SlideDocument::get_slide(Self, Int) -> Slide?
+pub fn SlideDocument::get_slide_source(Self, Int) -> String
+pub fn SlideDocument::slide_count(Self) -> Int
+
+// Type aliases
+
+// Traits
+

@@ -1,0 +1,10 @@
+supported_targets = "wasm"
+
+import {
+  "mizchi/markdown/mmmd_core" @renderer,
+  "moonbitlang/core/env",
+  "moonbitlang/x/fs",
+  "moonbitlang/x/sys",
+}
+
+pkgtype(kind: "executable")

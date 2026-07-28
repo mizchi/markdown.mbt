@@ -27,6 +27,7 @@ const highlighterLoaders: Record<HighlightLanguage, () => Promise<HighlighterMod
   css: () => import("./languages/css.js"),
   bash: () => import("./languages/bash.js"),
   rust: () => import("./languages/rust.js"),
+  go: () => import("./languages/go.js"),
 };
 
 const loadedHighlighters = new Map<HighlightLanguage, CodeHighlighter>();

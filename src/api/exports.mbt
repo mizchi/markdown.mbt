@@ -136,6 +136,18 @@ pub fn md_to_ast_json_with_wikilinks(source : String) -> String {
 }
 
 ///|
+/// Parse Folddown MDX to a typed reader manifest with diagnostics.
+pub fn folddown_parse_to_json(source : String) -> String {
+  @folddown.parse_source_to_json(source)
+}
+
+///|
+/// Parse Folddown Include declarations with diagnostics.
+pub fn folddown_parse_includes_to_json(source : String) -> String {
+  @folddown.parse_include_source_to_json(source)
+}
+
+///|
 /// Parse markdown and render using the source-preserving "literal" mode.
 /// The visible text of the output (HTML tags stripped, basic character
 /// references decoded) equals the lossless serialization of the parsed

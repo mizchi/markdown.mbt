@@ -73,6 +73,58 @@ export interface MarkdownOptions {
   autolink?: boolean;
 }
 
+/** A typed Folddown declaration with its Markdown child source. */
+export interface FolddownNode {
+  id: string;
+  kind: "concept" | "procedure" | "reference" | "evidence";
+  level: "intro" | "basic" | "advanced" | "expert";
+  locale: string | null;
+  requires: string[];
+  roles: string[];
+  goals: string[];
+  evidence: string[];
+  /** Reader-background roles for which this node is a direct correspondence. */
+  familiarTo: string[];
+  body: string;
+}
+
+/** A localized reader state generated from the Folddown frontmatter DSL. */
+export interface FolddownReaderProfile {
+  id: string;
+  labelJa: string;
+  labelEn: string;
+  collapseLevels: Array<FolddownNode["level"]>;
+}
+
+/** A localized content-selection state generated from frontmatter. */
+export interface FolddownContentFilter {
+  id: string;
+  labelJa: string;
+  labelEn: string;
+  mode: "all" | "unfamiliar";
+}
+
+/** A non-throwing Folddown parser result. */
+export interface FolddownParseResult {
+  nodes: FolddownNode[];
+  readerProfiles: FolddownReaderProfile[];
+  contentFilters: FolddownContentFilter[];
+  diagnostics: Array<{ code: string; message: string }>;
+}
+
+/** A typed external document declaration from `<Include>`. */
+export interface FolddownInclude {
+  src: string;
+  sync: string | null;
+  raw: string;
+}
+
+/** A non-throwing external-document declaration parser result. */
+export interface FolddownIncludeParseResult {
+  includes: FolddownInclude[];
+  diagnostics: Array<{ code: string; message: string }>;
+}
+
 /**
  * mdast extension node emitted when MarkdownOptions.wikilinks is enabled.
  */
@@ -124,6 +176,12 @@ export interface DocumentHandle {
  * console.log(ast.children[0].type); // "heading"
  */
 export function parse(source: string, options?: MarkdownOptions): import("mdast").Root;
+
+/** Parse typed Folddown MDX into its reader manifest. */
+export function parseFolddown(source: string): FolddownParseResult;
+
+/** Parse typed Folddown external-document declarations. */
+export function parseFolddownIncludes(source: string): FolddownIncludeParseResult;
 
 /**
  * Convert markdown to HTML.
