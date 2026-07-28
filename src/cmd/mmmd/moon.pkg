@@ -1,4 +1,4 @@
-supported_targets = "wasm"
+supported_targets = "js+wasm"
 
 import {
   "mizchi/markdown/mmmd_core" @renderer,

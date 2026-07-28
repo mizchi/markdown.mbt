@@ -1,6 +1,6 @@
 name = "mizchi/markdown"
 
-version = "0.7.1"
+version = "0.7.2"
 
 import {
   "moonbitlang/parser@0.3.11",
