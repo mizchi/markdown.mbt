@@ -1,6 +1,6 @@
 name = "mizchi/markdown"
 
-version = "0.7.3"
+version = "0.7.4"
 
 import {
   "moonbitlang/parser@0.3.11",
@@ -23,3 +23,4 @@ description = "Incremental Markdown parser and compiler"
 source = "src"
 
 preferred_target = "js"
+supported_targets = "js+wasm"

@@ -8,8 +8,8 @@ description: Render Markdown as terminal-friendly text or an HTML fragment. Merm
 Read Markdown from standard input and render one artifact to standard output.
 
 ```sh
-moon runwasm mizchi/markdown/cmd/mmmd@0.7.3 --format tui < document.md
-moon runwasm mizchi/markdown/cmd/mmmd@0.7.3 --format html < document.md
+moon runwasm mizchi/markdown/cmd/mmmd@0.7.4 --format tui < document.md
+moon runwasm mizchi/markdown/cmd/mmmd@0.7.4 --format html < document.md
 ```
 
 - Use `--format tui` for terminal output; Mermaid fenced blocks render as
