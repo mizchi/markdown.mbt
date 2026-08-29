@@ -115,8 +115,26 @@ fn BlockParser::try_html_block_start(
     self.line_start + start,
   )
   node.html_kind = kind
+  if kind == 1 {
+    // A raw text block runs until its own closing tag, so remember which.
+    node.info = raw_text_tag(line, start)
+  }
   node.end = self.line_end
   Some(node)
+}
+
+///|
+/// The raw text element name that opens a condition-1 block at `start`.
+fn raw_text_tag(line : String, start : Int) -> String {
+  let name_end = read_tag_name(line, start + 1)
+  for raw in html_raw_text_tags {
+    if line.unsafe_substring(start=start + 1, end=name_end)[:].equal_ignore_ascii_case(
+        raw[:],
+      ) {
+      return raw
+    }
+  }
+  ""
 }
 
 ///|
@@ -215,11 +233,7 @@ fn BlockParser::html_block_ends(self : BlockParser, node : Node) -> Bool {
     0
   }
   match node.html_kind {
-    1 =>
-      contains_from(line, from, "</script>") ||
-      contains_from(line, from, "</pre>") ||
-      contains_from(line, from, "</style>") ||
-      contains_from(line, from, "</textarea>")
+    1 => contains_from(line, from, "</" + node.info + ">")
     2 => contains_from(line, from, "-->")
     3 => contains_from(line, from, "?>")
     4 => contains_from(line, from, ">")

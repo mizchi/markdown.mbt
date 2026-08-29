@@ -280,3 +280,16 @@ test "render: Latin Extended-A labels fold to their own case pair" {
     ),
   )
 }
+
+//|
+test "render: raw text HTML block ends at its own closing tag" {
+  // </pre> must not close a <script> block.
+  let html = md_to_html("<script>\n</pre>\nstill script\n</script>\n")
+  @debug.debug_inspect(
+    html,
+    content=(
+      #|"<script>\n</pre>\nstill script\n</script>\n"
+    ),
+  )
+}
+
