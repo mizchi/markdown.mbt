@@ -50,8 +50,9 @@ pub fn is_unicode_punctuation(c : Char) -> Bool {
   }
   (code >= 0x2010 && code <= 0x2027) || // general punctuation
   (code >= 0x2030 && code <= 0x205E) ||
-  (code >= 0x2070 && code <= 0x2071) ||
-  (code >= 0x2074 && code <= 0x207E) ||
+  // Only the superscript signs and brackets; the superscript digits and the
+  // modifier letter next to them are No and Lm, not P* or S*.
+  (code >= 0x207A && code <= 0x207E) ||
   (code >= 0x208A && code <= 0x208E) ||
   (code >= 0x20A0 && code <= 0x20C0) || // currency symbols
   (code >= 0x2100 && code <= 0x2101) ||

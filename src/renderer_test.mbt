@@ -248,3 +248,16 @@ test "render footnote" {
     content="true",
   )
 }
+
+///|
+test "render: superscript letters are not punctuation for flanking" {
+  // U+2071 is a modifier letter, so the underscore stays intraword.
+  let html = md_to_html("a\u{2071}_b_\n")
+  @debug.debug_inspect(
+    html,
+    content=(
+      #|"<p>aⁱ_b_</p>\n"
+    ),
+  )
+}
+
