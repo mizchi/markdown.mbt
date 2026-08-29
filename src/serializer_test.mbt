@@ -161,3 +161,36 @@ test "serialize link title with a quote" {
     ),
   )
 }
+
+///|
+/// GFM strips `\|` from a cell before the inline parser runs, so every pipe
+/// the cell's content carries has to be written back escaped — including the
+/// ones nested inside code spans, emphasis and links (GFM example 200).
+/// Otherwise the serialized row splits into extra cells when re-parsed.
+test "serialize: table cells re-escape pipes nested in inline elements" {
+  let source =
+    #|| f\|oo |
+    #|| --- |
+    #|| b `\|` az |
+    #|| b **\|** im |
+    #|| [a \| b](x) |
+    #|
+  let output = serialize(parse(source).document)
+  @debug.debug_inspect(
+    output,
+    content=(
+      #|"| f\\|oo |\n| --- |\n| b `\\|` az |\n| b **\\|** im |\n| [a \\| b](x) |\n"
+    ),
+  )
+  // Re-parsing the serialized table has to give the same HTML back.
+  @debug.debug_inspect(md_to_html(output) == md_to_html(source), content="true")
+}
+
+///|
+/// A backslash that is itself literal content stays doubled, and the pipe
+/// behind it still gets its own escape.
+test "serialize: table cell keeps a literal backslash before a pipe" {
+  let source = "| a |\n| --- |\n| x \\\\\\| y |\n"
+  let output = serialize(parse(source).document)
+  @debug.debug_inspect(md_to_html(output) == md_to_html(source), content="true")
+}

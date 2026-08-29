@@ -114,12 +114,37 @@ fn serialize_inlines(inlines : Array[Inline], buf : StringBuilder) -> Unit {
 
 ///|
 /// Serialize table cell inline content (escapes pipes)
+///
+/// Every pipe a cell's content produces has to leave the cell as `\|`, and
+/// that includes the ones nested inside code spans, emphasis and links: GFM
+/// strips those escapes before the inline parser runs, so an unescaped pipe
+/// would split the row instead of staying in the cell. The inlines are
+/// rendered into a scratch buffer first so the rule applies uniformly to
+/// every inline kind rather than only to top-level text.
 fn serialize_table_cell_inlines(
   inlines : Array[Inline],
   buf : StringBuilder,
 ) -> Unit {
+  let cell = StringBuilder::new()
   for inline in inlines {
-    serialize_table_cell_inline(inline, buf)
+    serialize_table_cell_inline(inline, cell)
+  }
+  write_pipe_escaped(cell.to_string(), buf)
+}
+
+///|
+/// Copy `content` into `buf`, escaping every pipe that is not escaped
+/// already. A pipe counts as escaped when an odd run of backslashes
+/// precedes it, so cell text that the inline serializers already wrote as
+/// `\|` is left alone instead of being escaped twice.
+fn write_pipe_escaped(content : String, buf : StringBuilder) -> Unit {
+  let mut backslashes = 0
+  for c in content {
+    if c == '|' && backslashes % 2 == 0 {
+      buf.write_char('\\')
+    }
+    backslashes = if c == '\\' { backslashes + 1 } else { 0 }
+    buf.write_char(c)
   }
 }
 
