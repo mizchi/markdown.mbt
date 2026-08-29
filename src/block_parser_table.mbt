@@ -1,125 +1,86 @@
 ///| GFM table parsing (split from block_parser.mbt).
 
+///| A table is recognized while a paragraph is being built: as soon as its
+
+///| second line turns out to be a delimiter row with the same number of columns
+
+///| as the first, the paragraph becomes a table.
+
 ///|
-/// Try to parse GFM table
-fn BlockParser::try_parse_table(self : BlockParser, start : Int) -> Block? {
-  let saved = self.scanner.pos
-  let leading = self.read_leading_trivia()
-
-  // First line must be a potential header row (contains |)
-  let header_line = self.scanner.read_line()
-  if !header_line.contains("|") {
-    self.scanner.restore(saved)
-    return None
-  }
-  if char_is(self.scanner.peek(), '\n') {
-    self.scanner.advance(1)
-  }
-
-  // Second line must be separator row (contains | and -)
-  let separator_line = self.scanner.read_line()
-  if !separator_line.contains("|") || !separator_line.contains("-") {
-    self.scanner.restore(saved)
-    return None
-  }
-
-  // Parse alignments from separator row
-  let alignments = parse_table_alignments(separator_line)
-  if alignments.is_empty() {
-    self.scanner.restore(saved)
-    return None
-  }
-
-  // Count header columns - must match separator columns for valid table
-  let header_cells = split_table_cells(header_line)
-  let header_col_count = header_cells
-    .filter(fn(c) { !c.trim(chars=" \t\n\r").is_empty() })
+/// Turn `paragraph` into a table when its second line is a delimiter row.
+fn maybe_start_table(paragraph : Node) -> Unit {
+  guard paragraph.lines.length() == 2 else { return }
+  let header = paragraph.lines[0]
+  let delimiter = paragraph.lines[1]
+  guard delimiter.contains("|") && delimiter.contains("-") else { return }
+  let alignments = parse_table_alignments(delimiter)
+  guard !alignments.is_empty() else { return }
+  let header_columns = split_table_cells(header)
+    .filter(fn(c) { !c.trim(chars=" \t\r\n").is_empty() })
     .length()
-  if header_col_count != alignments.length() {
-    // Column count mismatch - not a valid table
-    self.scanner.restore(saved)
-    return None
-  }
-  if char_is(self.scanner.peek(), '\n') {
-    self.scanner.advance(1)
-  }
+  guard header_columns == alignments.length() else { return }
+  paragraph.kind = NodeKind::TableNode
+  paragraph.alignments = alignments
+  let _ = paragraph.lines.pop()
+}
 
-  // Parse header cells
-  let header = parse_table_row(
-    header_line,
-    alignments.length(),
-    self.strict,
-    self.wikilinks,
-    known_bmp=self.scanner.is_bmp(),
-  )
-
-  // Parse data rows
+///|
+/// Build the CST node for a finished table.
+fn BlockParser::table_to_block(
+  self : BlockParser,
+  node : Node,
+  span : Span,
+) -> Block? {
+  guard node.lines.length() >= 1 else { return None }
+  let columns = node.alignments.length()
+  let header = self.parse_table_row(node.lines[0], columns)
   let rows : Array[Array[TableCell]] = []
-  while !self.scanner.is_eof() && !self.scanner.is_blank_line() {
-    let row_start = self.scanner.pos
-    let row_line = self.scanner.read_line()
-    if !row_line.contains("|") {
-      // Not a table row, restore position and stop
-      self.scanner.restore(row_start)
-      break
-    }
-    rows.push(
-      parse_table_row(
-        row_line,
-        alignments.length(),
-        self.strict,
-        self.wikilinks,
-        known_bmp=self.scanner.is_bmp(),
-      ),
-    )
-    if char_is(self.scanner.peek(), '\n') {
-      self.scanner.advance(1)
-    }
+  for i = 1; i < node.lines.length(); i = i + 1 {
+    rows.push(self.parse_table_row(node.lines[i], columns))
   }
   Some(
     Block::Table(
       header~,
-      alignments~,
+      alignments=node.alignments,
       rows~,
-      span=Span::new(start, self.scanner.pos),
-      leading_trivia=leading,
+      span~,
+      leading_trivia=Trivia::empty(),
       trailing_trivia=Trivia::empty(),
     ),
   )
 }
 
 ///|
-/// Parse table alignments from separator row
+/// Parse table alignments from the delimiter row.
 fn parse_table_alignments(line : String) -> Array[TableAlign] {
   let alignments : Array[TableAlign] = []
   let cells = split_table_cells(line)
   for cell in cells {
-    let trimmed = cell.trim(chars=" \t\n\r").to_owned()
+    let trimmed = cell.trim(chars=" \t\r\n").to_owned()
+    // Every delimiter cell has to be a run of dashes, optionally fenced by
+    // colons; nothing else, and never empty.
     if trimmed.is_empty() {
-      continue
-    }
-    let has_left_colon = trimmed.has_prefix(":")
-    let has_right_colon = trimmed.has_suffix(":")
-
-    // Check if it's a valid separator (at least one dash)
-    let mut has_dash = false
-    for i = 0; i < trimmed.length(); i = i + 1 {
-      match trimmed.get_char(i) {
-        Some('-') => has_dash = true
-        Some(':') => () // Allowed
-        _ =>
-          // Invalid character in separator
-          return []
-      }
-    }
-    if !has_dash {
       return []
     }
-    let align = if has_left_colon && has_right_colon {
+    let mut dashes = 0
+    for i = 0; i < trimmed.length(); i = i + 1 {
+      let c = trimmed.unsafe_get(i)
+      if c == '-' {
+        dashes = dashes + 1
+      } else if c != ':' {
+        return []
+      }
+    }
+    if dashes == 0 {
+      return []
+    }
+    let starts = trimmed.unsafe_get(0) == ':'
+    let ends = trimmed.unsafe_get(trimmed.length() - 1) == ':'
+    let align = if starts && ends {
       TableAlign::Center
-    } else if has_left_colon {
+    } else if starts {
       TableAlign::Left
-    } else if has_right_colon {
+    } else if ends {
       TableAlign::Right
     } else {
       TableAlign::None
@@ -130,13 +91,11 @@ fn parse_table_alignments(line : String) -> Array[TableAlign] {
 }
 
 ///|
-/// Parse a table row into cells
-fn parse_table_row(
+/// Parse one table row into cells.
+fn BlockParser::parse_table_row(
+  self : BlockParser,
   line : String,
   expected_cols : Int,
-  strict : Bool,
-  wikilinks : Bool,
-  known_bmp~ : Bool,
 ) -> Array[TableCell] {
   let cells : Array[TableCell] = []
   let raw_cells = split_table_cells(line)
@@ -145,16 +104,11 @@ fn parse_table_row(
       break
     }
     let content = cell.trim(chars=" \t\n\r").to_owned()
-    let children = if known_bmp {
-      parse_inlines_known_bmp(content, strict~, wikilinks~)
-    } else {
-      parse_inlines(content, strict~, wikilinks~)
-    }
-    cells.push({ children, span: Span::new(0, content.length()) }, // Simplified span
-    )
+    cells.push({
+      children: self.parse_inline_content(content),
+      span: Span::new(0, content.length()),
+    })
   }
-
-  // Pad with empty cells if needed
   while cells.length() < expected_cols {
     cells.push({ children: [], span: Span::new(0, 0) })
   }
@@ -162,44 +116,44 @@ fn parse_table_row(
 }
 
 ///|
-/// Split table row into cells by |
+/// Split a table row on unescaped pipes, ignoring the optional outer ones.
 fn split_table_cells(line : String) -> Array[String] {
   let cells : Array[String] = []
+  let trimmed = line.trim(chars=" \t\r\n").to_owned()
+  let len = trimmed.length()
+  let mut start = 0
+  let mut end = len
+  if len > 0 && trimmed.unsafe_get(0) == '|' {
+    start = 1
+  }
+  if end > start && trimmed.unsafe_get(end - 1) == '|' {
+    // A trailing pipe only closes the row when it is not escaped.
+    let mut backslashes = 0
+    let mut k = end - 2
+    while k >= start && trimmed.unsafe_get(k) == '\\' {
+      backslashes = backslashes + 1
+      k = k - 1
+    }
+    if backslashes % 2 == 0 {
+      end = end - 1
+    }
+  }
   let buf = StringBuilder::new()
-  let mut in_escape = false
-  for i = 0; i < line.length(); i = i + 1 {
-    match line.get_char(i) {
-      Some('\\') if !in_escape => {
-        in_escape = true
-        buf.write_char('\\')
-      }
-      Some('|') if !in_escape => {
-        cells.push(buf.to_string())
-        // Reset buffer by creating new one
-        buf.reset()
-      }
-      Some(c) => {
-        in_escape = false
-        buf.write_char(c)
-      }
-      None => ()
+  let mut i = start
+  while i < end {
+    let c = trimmed.unsafe_get(i)
+    if c == '\\' && i + 1 < end && trimmed.unsafe_get(i + 1) == '|' {
+      buf.write_char('|')
+      i = i + 2
+    } else if c == '|' {
+      cells.push(buf.to_string())
+      buf.reset()
+      i = i + 1
+    } else {
+      buf.write_string(trimmed.unsafe_substring(start=i, end=i + 1))
+      i = i + 1
     }
   }
-
-  // Add last cell
-  let last = buf.to_string()
-  if !last.trim(chars=" \t\n\r").is_empty() {
-    cells.push(last)
-  }
-
-  // Remove first cell if empty (leading |)
-  if cells.length() > 0 {
-    match cells[0].trim(chars=" \t\n\r").to_owned() {
-      "" => {
-        let _ = cells.remove(0)
-      }
-      _ => ()
-    }
-  }
+  cells.push(buf.to_string())
   cells
 }

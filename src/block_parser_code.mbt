@@ -1,126 +1,59 @@
-///| Fenced and indented code-block parsing.
+///| Fenced code block parsing (split from block_parser.mbt).
 
 ///|
-/// Try to parse fenced code block
-fn BlockParser::try_parse_fenced_code(
+/// A run of at least three backticks or tildes opens a fenced code block. The
+/// info string follows on the same line and, for backtick fences, may not
+/// itself contain a backtick.
+fn BlockParser::try_open_code_fence(
   self : BlockParser,
-  start : Int,
-  indent : Int,
-) -> Block? {
-  if indent > 3 {
-    return None
+  container : Node,
+) -> Node? {
+  let c = self.peek_line(self.next_nonspace)
+  guard c == '`' || c == '~' else { return None }
+  let mut i = self.next_nonspace
+  while i < self.line_len && self.line.unsafe_get(i) == c {
+    i = i + 1
   }
-  let leading = self.read_leading_trivia()
-  let fence_char = match self.scanner.peek() {
-    Some(c) if c == '`' || c == '~' => c
-    _ => return None
-  }
-  let fence_marker = if fence_char == '`' {
-    FenceMarker::Backtick
-  } else {
-    FenceMarker::Tilde
-  }
-  let fence_length = self.scanner.count_char(fence_char)
-  if fence_length < 3 {
-    return None
-  }
-  self.scanner.advance(fence_length)
-
-  // Read info string (language + optional filename)
-  let _ = self.scanner.skip_spaces()
-  let info = self.scanner.read_line().trim_end(chars=" \t").to_owned()
-
-  // Skip newline
-  if char_is(self.scanner.peek(), '\n') {
-    self.scanner.advance(1)
-  }
-
-  // Read code content until closing fence
-  let code_buf = StringBuilder::new()
-  while !self.scanner.is_eof() {
-    let line_indent = self.scanner.count_leading_spaces()
-
-    // Check for closing fence
-    if line_indent <= 3 {
-      let saved = self.scanner.pos
-      let _ = self.scanner.skip_spaces()
-      let closing_count = self.scanner.count_char(fence_char)
-      if closing_count >= fence_length {
-        // Found closing fence
-        self.scanner.advance(closing_count)
-        let _ = self.scanner.skip_spaces()
-        if char_is(self.scanner.peek(), '\n') || self.scanner.is_eof() {
-          if char_is(self.scanner.peek(), '\n') {
-            self.scanner.advance(1)
-          }
-          break
-        }
+  let length = i - self.next_nonspace
+  guard length >= 3 else { return None }
+  let info_raw = self.line.unsafe_substring(start=i, end=self.line_len)
+  if c == '`' {
+    for j = 0; j < info_raw.length(); j = j + 1 {
+      if info_raw.unsafe_get(j) == '`' {
+        return None
       }
-      self.scanner.restore(saved)
-    }
-
-    // Read code line (remove up to `indent` leading spaces)
-    self.scanner.append_line_stripped_indent_to(code_buf, indent)
-    if char_is(self.scanner.peek(), '\n') {
-      code_buf.write_char('\n')
-      self.scanner.advance(1)
     }
   }
-  let trailing = Trivia::empty()
-  Some(
-    Block::FencedCode(
-      fence_marker~,
-      fence_length~,
-      info~,
-      code=code_buf.to_string(),
-      indent~,
-      span=Span::new(start, self.scanner.pos),
-      leading_trivia=leading,
-      trailing_trivia=trailing,
-    ),
+  let node = self.add_child(
+    container,
+    NodeKind::FencedCodeNode,
+    self.line_start + self.next_nonspace,
   )
+  node.marker = c.unsafe_to_char()
+  node.fence_length = length
+  node.fence_indent = self.indent
+  node.info = info_raw.trim(chars=" \t").to_owned()
+  node.info_pending = true
+  node.end = self.line_end
+  // Consume the rest of the line so that the info string is not mistaken for
+  // the block's first content line.
+  self.advance_offset(self.line_len - self.offset, false)
+  Some(node)
 }
 
 ///|
-/// Try to parse indented code block
-fn BlockParser::try_parse_indented_code(
-  self : BlockParser,
-  start : Int,
-) -> Block? {
-  let leading = Trivia::empty()
-  let code_buf = StringBuilder::new()
-  while !self.scanner.is_eof() {
-    let line_start = self.scanner.pos
-
-    // Check if line starts with 4+ spaces
-    let indent = self.scanner.count_leading_spaces()
-    if indent < 4 && !self.scanner.is_blank_line() {
-      self.scanner.restore(line_start)
-      break
-    }
-    if self.scanner.is_blank_line() {
-      code_buf.write_char('\n')
-      self.scanner.skip_line()
-    } else {
-      // Skip 4 spaces
-      self.scanner.advance(4)
-      self.scanner.append_line_to(code_buf)
-      if char_is(self.scanner.peek(), '\n') {
-        code_buf.write_char('\n')
-        self.scanner.advance(1)
-      }
-    }
+/// A run of the fence character, at least as long as the opening one and
+/// followed by nothing but whitespace, closes the block.
+fn BlockParser::scan_close_code_fence(self : BlockParser, node : Node) -> Bool {
+  let c = self.peek_line(self.next_nonspace)
+  guard c.to_int() == node.marker.to_int() else { return false }
+  let mut i = self.next_nonspace
+  while i < self.line_len && self.line.unsafe_get(i) == c {
+    i = i + 1
   }
-  let code = code_buf.to_string().trim_end(chars="\n").to_owned()
-  if code.is_empty() {
-    return None
+  guard i - self.next_nonspace >= node.fence_length else { return false }
+  while i < self.line_len && is_space_or_tab(self.line.unsafe_get(i)) {
+    i = i + 1
   }
-  Some(
-    Block::IndentedCode(
-      code~,
-      span=Span::new(start, self.scanner.pos),
-      leading_trivia=leading,
-      trailing_trivia=Trivia::empty(),
-    ),
-  )
+  i >= self.line_len
 }

@@ -85,6 +85,20 @@ pub fn parse_incremental(
 
   // Re-parse just this region
   let region_result = parse(reparse_region, wikilinks~)
+
+  // Link reference definitions are document-scoped: a reused block can hold a
+  // reference that this edit resolves or breaks, and the definition itself may
+  // live outside the re-parsed region. Fall back to a full parse whenever any
+  // are involved.
+  if !old_doc.definitions.is_empty() || !region_result.definitions.is_empty() {
+    let full = parse(new_source, wikilinks~)
+    return {
+      document: full.document,
+      reused_before: 0,
+      reparsed: full.document.children.length(),
+      reused_after: 0,
+    }
+  }
   let new_blocks_raw = region_result.document.children
 
   // Adjust spans in re-parsed blocks
@@ -113,6 +127,7 @@ pub fn parse_incremental(
   let new_doc = Document::{
     frontmatter: old_doc.frontmatter,
     children: final_blocks,
+    definitions: old_doc.definitions,
     span: Span::new(0, new_source.length()),
   }
   {

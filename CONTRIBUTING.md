@@ -42,23 +42,12 @@ moon test --target js src/cmark_tests
 
 ### Managing Skipped Tests
 
-This parser implements a **practical subset** of CommonMark. Edge cases and complex patterns are intentionally not supported to keep the single-pass parser simple and fast.
-
-Skipped tests are managed in `scripts/gen-tests.js` in the `SKIP_TESTS` object:
+Skipped tests are managed in `scripts/gen-tests.js` in the `SKIP_TESTS` object,
+which lists the CommonMark example numbers per spec section:
 
 ```javascript
 const SKIP_TESTS = {
-  'Section Name': {
-    reason: 'Reason for skipping',
-    examples: [123, 456, 789],  // CommonMark example numbers
-  },
-  // For multiple reasons within a section:
-  'Links': {
-    reasons: {
-      url_edge: [488, 489, ...],
-      ref_link: [518, 519, ...],
-    },
-  },
+  'Section Name': [123, 456, 789],
 };
 ```
 
@@ -74,22 +63,42 @@ When regenerating tests, skipped tests will automatically get `#skip("reason")` 
 ### Test Summary
 
 - **Total tests**: 542
-- **Passing**: 207 (38.2%)
-- **Skipped**: 335 (61.8%)
+- **Passing**: 397 (73.2%)
+- **Skipped**: 145 (26.8%)
 
-### Skip Categories
+What is left is serialization, not parsing: link reference definitions are
+dropped rather than written back out, setext headings are kept instead of being
+normalized to ATX, and a handful of escaping and autolink details differ.
+Parsing itself is checked separately, and exactly, by the conformance suite
+below.
 
-| Category | Count | Reason |
-|----------|-------|--------|
-| Emphasis | 81 | Single-pass parser limitation (Rule 9/10, mod 3) |
-| Links | 74 | URL edge cases, reference link complexities |
-| List items | 34 | Complex indentation, lazy continuation |
-| Lists | 21 | Tight/loose distinction, complex nesting |
-| Setext headings | 20 | Not implemented (ATX headings sufficient) |
-| Images | 17 | Similar to links edge cases |
-| Block quotes | 13 | Lazy continuation and nesting |
-| Code spans | 13 | Backtick counting edge cases |
-| Others | ~67 | Tabs, escapes, headings, code blocks, line breaks |
+## CommonMark Spec Conformance Tests
+
+`gen-tests.js` above checks how our *Markdown* serialization lines up with
+remark. The conformance suite is stricter and independent: it renders every
+example in the CommonMark spec and requires byte-identical HTML. All 652 pass,
+and `SKIP_TESTS` in its generator is empty — keep it that way.
+
+```bash
+# Generate/regenerate the suite (spec.json is cached under node_modules/.cache)
+node scripts/gen-spec-tests.js
+
+# Run it
+moon test src/spec_tests --target js
+```
+
+The generated files live in `src/spec_tests/` and are git-ignored; only
+`scripts/gen-spec-tests.js` is checked in. Should a change ever regress an
+example, list it in that generator's `SKIP_TESTS` table so the gap is explicit,
+and use `--no-skip` to run the whole spec regardless:
+
+```bash
+node scripts/gen-spec-tests.js --no-skip
+moon test src/spec_tests --target js
+```
+
+Bare-URL autolinking is a GFM extension, so the suite renders with
+`autolink=false`.
 
 ## Architecture
 

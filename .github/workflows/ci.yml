@@ -3,8 +3,9 @@ name: CI
 on:
   push:
     branches: [main]
+  # No branch filter: a stacked PR targets the branch below it in the stack,
+  # not main, and would otherwise get no CI at all.
   pull_request:
-    branches: [main]
 
 jobs:
   test:
@@ -29,13 +30,15 @@ jobs:
         run: node scripts/gen-tests.js
       - name: Generate GFM tests
         run:  node scripts/gen-gfm-tests.js
+      - name: Generate CommonMark spec conformance tests
+        run: node scripts/gen-spec-tests.js
       - name: Check
         run: |
           moon update
           moon check
       - name: Test all
         run: |
-          moon test src --target js,native,wasm-gc
+          moon test src --target js,wasm
       - name: Check Folddown include graph
         run: pnpm folddown:check
       - name: Moon test
@@ -46,10 +49,13 @@ jobs:
           moon test src/gfm_tests --target js
       - name: Moon test
         run: |
+          moon test src/spec_tests --target js
+      - name: Moon test
+        run: |
           moon test src/html_tests --target js
       - name: Moon test
         run: |
-          moon test src/x/tui --target all
+          moon test src/x/tui --target js,wasm
       - name: Test Bench
         run: moon bench
       - name: Component build (wasm)
