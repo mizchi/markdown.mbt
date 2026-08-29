@@ -113,6 +113,7 @@ pub fn parse_incremental(
   let new_doc = Document::{
     frontmatter: old_doc.frontmatter,
     children: final_blocks,
+    definitions: old_doc.definitions,
     span: Span::new(0, new_source.length()),
   }
   {

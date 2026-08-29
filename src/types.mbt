@@ -144,6 +144,9 @@ pub impl Show for Trivia with output(self : Trivia, logger : &Logger) -> Unit {
 pub(all) struct Document {
   frontmatter : Frontmatter?
   children : Array[Block]
+  /// Link reference definitions collected from the whole document, needed to
+  /// resolve `[foo]` style references when rendering.
+  definitions : Array[LinkDefinition]
   span : Span
 }
 

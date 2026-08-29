@@ -315,7 +315,11 @@ fn serialize_bullet_list_items(
   for item in items {
     // Write indentation
     write_chars(buf, ' ', indent)
-    buf.write_string("- ")
+    buf.write_char('-')
+    // An empty item is just the marker; anything else needs a space after it.
+    if !item.children.is_empty() || !(item.checked is None) {
+      buf.write_char(' ')
+    }
 
     // Task list checkbox
     match item.checked {

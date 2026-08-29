@@ -43,6 +43,11 @@ fn BlockParser::detect_list_marker(
           self.scanner.restore(saved)
           return Some((ListMarkerKind::Bullet(BulletMarker::Dash), 2))
         }
+        // A marker alone on its line starts a list with an empty item.
+        Some('\n') | None => {
+          self.scanner.restore(saved)
+          return Some((ListMarkerKind::Bullet(BulletMarker::Dash), 1))
+        }
         _ => ()
       }
     }
@@ -53,6 +58,11 @@ fn BlockParser::detect_list_marker(
           self.scanner.restore(saved)
           return Some((ListMarkerKind::Bullet(BulletMarker::Asterisk), 2))
         }
+        // A marker alone on its line starts a list with an empty item.
+        Some('\n') | None => {
+          self.scanner.restore(saved)
+          return Some((ListMarkerKind::Bullet(BulletMarker::Asterisk), 1))
+        }
         _ => ()
       }
     }
@@ -62,6 +72,11 @@ fn BlockParser::detect_list_marker(
         Some(' ') | Some('\t') => {
           self.scanner.restore(saved)
           return Some((ListMarkerKind::Bullet(BulletMarker::Plus), 2))
+        }
+        // A marker alone on its line starts a list with an empty item.
+        Some('\n') | None => {
+          self.scanner.restore(saved)
+          return Some((ListMarkerKind::Bullet(BulletMarker::Plus), 1))
         }
         _ => ()
       }

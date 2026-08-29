@@ -269,7 +269,7 @@ pub extern "js" fn remark_stringify(input : String) -> String =
   #|         return line;
   #|       }
   #|       if (inFence) return line;
-  #|       return line.replace(/^((?:[ \\t]*>\\s*)*[ \\t]*)\\* (?=\\S)/, "$1- ");
+  #|       return line.replace(/^((?:[ \\t]*>\\s*)*[ \\t]*)\\*(?= \\S|$)/, "$1-");
   #|     }).join("\\n");
   #|   }
   #| }

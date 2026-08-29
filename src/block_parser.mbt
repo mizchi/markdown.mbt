@@ -32,6 +32,10 @@ priv struct BlockParser {
   definitions : Array[LinkDefinition]
   strict : Bool
   wikilinks : Bool
+  /// Inline content is parsed only after the whole document has been read, so
+  /// that every link reference definition is already in scope. Each entry pairs
+  /// the (still empty) children array of a block with its raw source.
+  pending_inlines : Array[(Array[Inline], String)]
 }
 
 ///|
@@ -40,22 +44,46 @@ fn BlockParser::new(
   strict : Bool,
   wikilinks : Bool,
 ) -> BlockParser {
-  { scanner, definitions: [], strict, wikilinks }
+  { scanner, definitions: [], strict, wikilinks, pending_inlines: [] }
 }
 
 ///|
+/// Reserve an inline children array; it is filled in by `resolve_inlines`
+/// once the document's link reference definitions are all known.
 fn BlockParser::parse_inline_content(
   self : BlockParser,
   content : String,
 ) -> Array[Inline] {
-  if self.scanner.is_bmp() {
-    parse_inlines_known_bmp(
-      content,
-      strict=self.strict,
-      wikilinks=self.wikilinks,
-    )
-  } else {
-    parse_inlines(content, strict=self.strict, wikilinks=self.wikilinks)
+  let children : Array[Inline] = []
+  self.pending_inlines.push((children, content))
+  children
+}
+
+///|
+/// Index the link reference definitions collected while parsing blocks. The
+/// first definition of a label wins.
+fn BlockParser::definition_map(
+  self : BlockParser,
+) -> Map[String, LinkDefinition] {
+  let defs : Map[String, LinkDefinition] = Map([], capacity=self.definitions.length())
+  for def in self.definitions {
+    let key = normalize_label(def.label)
+    if !defs.contains(key) {
+      defs[key] = def
+    }
+  }
+  defs
+}
+
+///|
+/// Parse every deferred inline run now that definitions are known.
+fn BlockParser::resolve_inlines(self : BlockParser) -> Unit {
+  let defs = self.definition_map()
+  for entry in self.pending_inlines {
+    let (children, content) = entry
+    for inline in parse_inlines_with_defs(content, defs, self.wikilinks) {
+      children.push(inline)
+    }
   }
 }
 
@@ -69,9 +97,11 @@ fn BlockParser::parse_document(self : BlockParser) -> ParseResult {
 
   // Parse blocks
   let children = self.parse_blocks()
+  self.resolve_inlines()
   let document = Document::{
     frontmatter,
     children,
+    definitions: self.definitions,
     span: Span::new(start, self.scanner.pos),
   }
   { document, definitions: self.definitions }

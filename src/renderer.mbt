@@ -3,45 +3,57 @@
 ///| Renders markdown AST to HTML
 
 ///|
+/// Everything the block/inline renderers need to know beyond the node itself.
+priv struct RenderCtx {
+  autolink : Bool
+  defs : Map[String, LinkDefinition]
+}
+
+///|
 /// Render a document to HTML
 pub fn render_html(doc : Document, autolink? : Bool = true) -> String {
+  let defs : Map[String, LinkDefinition] = Map(
+    [],
+    capacity=doc.definitions.length(),
+  )
+  for def in doc.definitions {
+    let key = normalize_label(def.label)
+    if !defs.contains(key) {
+      defs[key] = def
+    }
+  }
+  let ctx = RenderCtx::{ autolink, defs }
   let buf = StringBuilder::new()
   for block in doc.children {
-    render_block_html(block, buf, autolink~)
+    render_block_html(block, buf, ctx)
   }
   buf.to_string()
 }
 
 ///|
 /// Render a block element to HTML
-fn render_block_html(
-  block : Block,
-  buf : StringBuilder,
-  autolink? : Bool = true,
-) -> Unit {
+fn render_block_html(block : Block, buf : StringBuilder, ctx : RenderCtx) -> Unit {
   match block {
     Block::Paragraph(children~, ..) => {
       buf.write_string("<p>")
-      render_inlines_html(children, buf, autolink~)
+      render_inlines_html(children, buf, ctx)
       buf.write_string("</p>\n")
     }
     Block::Heading(level~, children~, ..) => {
       buf.write_string("<h")
       buf.write_string(level.to_string())
       buf.write_char('>')
-      render_inlines_html(children, buf, autolink~)
+      render_inlines_html(children, buf, ctx)
       buf.write_string("</h")
       buf.write_string(level.to_string())
       buf.write_string(">\n")
     }
     Block::ThematicBreak(..) => buf.write_string("<hr />\n")
     Block::FencedCode(info~, code~, ..) => {
-      if info.is_empty() {
+      let lang = code_block_language(info)
+      if lang.is_empty() {
         buf.write_string("<pre><code>")
       } else {
-        // Extract language from info string (first word)
-        let parts = info.split(" ").collect()
-        let lang = if parts.length() > 0 { parts[0].to_owned() } else { info }
         buf.write_string("<pre><code class=\"language-")
         buf.write_string(escape_html(lang))
         buf.write_string("\">")
@@ -57,7 +69,7 @@ fn render_block_html(
     Block::Blockquote(children~, ..) => {
       buf.write_string("<blockquote>\n")
       for child in children {
-        render_block_html(child, buf, autolink~)
+        render_block_html(child, buf, ctx)
       }
       buf.write_string("</blockquote>\n")
     }
@@ -70,7 +82,7 @@ fn render_block_html(
         buf.write_string("<ul>\n")
       }
       for item in items {
-        render_list_item_html(item, buf, tight, has_task, autolink~)
+        render_list_item_html(item, buf, tight, has_task, ctx)
       }
       buf.write_string("</ul>\n")
     }
@@ -92,7 +104,7 @@ fn render_block_html(
         buf.write_string("\">\n")
       }
       for item in items {
-        render_list_item_html(item, buf, tight, has_task, autolink~)
+        render_list_item_html(item, buf, tight, has_task, ctx)
       }
       buf.write_string("</ol>\n")
     }
@@ -110,7 +122,7 @@ fn render_block_html(
         } else {
           TableAlign::None
         }
-        render_table_cell_html(cell, buf, "th", align, autolink~)
+        render_table_cell_html(cell, buf, "th", align, ctx)
       }
       buf.write_string("</tr>\n</thead>\n")
       if rows.length() > 0 {
@@ -123,7 +135,7 @@ fn render_block_html(
             } else {
               TableAlign::None
             }
-            render_table_cell_html(cell, buf, "td", align, autolink~)
+            render_table_cell_html(cell, buf, "td", align, ctx)
           }
           buf.write_string("</tr>\n")
         }
@@ -137,10 +149,40 @@ fn render_block_html(
       buf.write_string(escape_html(label))
       buf.write_string("\">\n")
       for child in children {
-        render_block_html(child, buf, autolink~)
+        render_block_html(child, buf, ctx)
       }
       buf.write_string("</div>\n")
     }
+  }
+}
+
+///|
+/// The language class of a fenced code block: the first word of the info
+/// string, with escapes and entity references resolved.
+fn code_block_language(info : String) -> String {
+  let decoded = unescape_string(info)
+  let len = decoded.length()
+  let mut start = 0
+  while start < len && is_html_space(decoded.unsafe_get(start)) {
+    start = start + 1
+  }
+  let mut end = start
+  while end < len && !is_html_space(decoded.unsafe_get(end)) {
+    end = end + 1
+  }
+  decoded.unsafe_substring(start~, end~)
+}
+
+///|
+/// Write code-block content, guaranteeing the trailing newline CommonMark
+/// requires inside `<pre><code>`.
+fn write_code_content(code : String, buf : StringBuilder) -> Unit {
+  if code.is_empty() {
+    return
+  }
+  buf.write_string(escape_html(code))
+  if !code.has_suffix("\n") {
+    buf.write_char('\n')
   }
 }
 
@@ -151,7 +193,7 @@ fn render_list_item_html(
   buf : StringBuilder,
   tight : Bool,
   is_task_list : Bool,
-  autolink? : Bool = true,
+  ctx : RenderCtx,
 ) -> Unit {
   // Task list items get a special class
   if is_task_list && !(item.checked is None) {
@@ -171,16 +213,15 @@ fn render_list_item_html(
     // Tight list: render inline content without <p> wrapper
     for child in item.children {
       match child {
-        Paragraph(children~, ..) =>
-          render_inlines_html(children, buf, autolink~)
-        _ => render_block_html(child, buf, autolink~)
+        Paragraph(children~, ..) => render_inlines_html(children, buf, ctx)
+        _ => render_block_html(child, buf, ctx)
       }
     }
   } else {
     // Loose list: render blocks normally
     buf.write_char('\n')
     for child in item.children {
-      render_block_html(child, buf, autolink~)
+      render_block_html(child, buf, ctx)
     }
   }
   buf.write_string("</li>\n")
@@ -193,7 +234,7 @@ fn render_table_cell_html(
   buf : StringBuilder,
   tag : String,
   align : TableAlign,
-  autolink? : Bool = true,
+  ctx : RenderCtx,
 ) -> Unit {
   buf.write_char('<')
   buf.write_string(tag)
@@ -204,7 +245,7 @@ fn render_table_cell_html(
     TableAlign::None => ()
   }
   buf.write_char('>')
-  render_inlines_html(cell.children, buf, autolink~)
+  render_inlines_html(cell.children, buf, ctx)
   buf.write_string("</")
   buf.write_string(tag)
   buf.write_string(">\n")
@@ -215,10 +256,10 @@ fn render_table_cell_html(
 fn render_inlines_html(
   inlines : Array[Inline],
   buf : StringBuilder,
-  autolink? : Bool = true,
+  ctx : RenderCtx,
 ) -> Unit {
   for inline in inlines {
-    render_inline_html(inline, buf, autolink~)
+    render_inline_html(inline, buf, ctx)
   }
 }
 
@@ -254,7 +295,7 @@ fn render_text_html(
         if url_end > start {
           let url = content.unsafe_substring(start~, end=url_end)
           buf.write_string("<a href=\"")
-          buf.write_string(escape_html_attr(url))
+          write_escaped_href(url, buf)
           buf.write_string("\">")
           buf.write_string(escape_html(url))
           buf.write_string("</a>")
@@ -285,107 +326,171 @@ fn write_escaped_text_range(
 }
 
 ///|
+/// Resolve a reference link/image label against the document's definitions.
+fn RenderCtx::lookup(self : RenderCtx, label : String) -> LinkDefinition? {
+  self.defs.get(normalize_label(label))
+}
+
+///|
 /// Render a single inline element to HTML
 fn render_inline_html(
   inline : Inline,
   buf : StringBuilder,
-  autolink? : Bool = true,
+  ctx : RenderCtx,
 ) -> Unit {
   match inline {
-    Inline::Text(content~, ..) => render_text_html(content, buf, autolink~)
+    Inline::Text(content~, ..) =>
+      render_text_html(content, buf, autolink=ctx.autolink)
     Inline::Code(content~, ..) => {
       buf.write_string("<code>")
-      buf.write_string(escape_html(content))
+      buf.write_string(escape_html(normalize_code_span(content)))
       buf.write_string("</code>")
     }
     Inline::WikiLink(target~, label~, fragment~, ..) => {
       let href = render_wikilink_destination(target, fragment)
       let text = if label.is_empty() { href } else { label }
       buf.write_string("<a href=\"")
-      buf.write_string(escape_html_attr(href))
+      write_escaped_href(href, buf)
       buf.write_string("\">")
       buf.write_string(escape_html(text))
       buf.write_string("</a>")
     }
     Inline::Emphasis(children~, ..) => {
       buf.write_string("<em>")
-      render_inlines_html(children, buf, autolink~)
+      render_inlines_html(children, buf, ctx)
       buf.write_string("</em>")
     }
     Inline::Strong(children~, ..) => {
       buf.write_string("<strong>")
-      render_inlines_html(children, buf, autolink~)
+      render_inlines_html(children, buf, ctx)
       buf.write_string("</strong>")
     }
     Inline::Strikethrough(children~, ..) => {
       buf.write_string("<del>")
-      render_inlines_html(children, buf, autolink~)
+      render_inlines_html(children, buf, ctx)
       buf.write_string("</del>")
     }
-    Inline::Link(children~, url~, title~, ..) => {
-      buf.write_string("<a href=\"")
-      buf.write_string(escape_html_attr(url))
-      buf.write_char('"')
-      if !title.is_empty() {
-        buf.write_string(" title=\"")
-        buf.write_string(escape_html_attr(title))
-        buf.write_char('"')
+    Inline::Link(children~, url~, title~, ..) =>
+      write_anchor(children, url, title, buf, ctx)
+    Inline::RefLink(children~, label~, ..) =>
+      match ctx.lookup(label) {
+        Some(def) => write_anchor(children, def.url, def.title, buf, ctx)
+        None => {
+          buf.write_char('[')
+          render_inlines_html(children, buf, ctx)
+          buf.write_string("][")
+          buf.write_string(escape_html(label))
+          buf.write_char(']')
+        }
       }
-      buf.write_char('>')
-      render_inlines_html(children, buf, autolink=false)
-      buf.write_string("</a>")
-    }
-    Inline::RefLink(children~, label~, ..) => {
-      // Reference links should be resolved before rendering
-      // For now, render as plain text with the label
-      buf.write_char('[')
-      render_inlines_html(children, buf, autolink=false)
-      buf.write_string("][")
-      buf.write_string(escape_html(label))
-      buf.write_char(']')
-    }
     Inline::Autolink(url~, is_email~, ..) => {
       buf.write_string("<a href=\"")
       if is_email {
         buf.write_string("mailto:")
       }
-      buf.write_string(escape_html_attr(url))
+      write_escaped_href(url, buf)
       buf.write_string("\">")
       buf.write_string(escape_html(url))
       buf.write_string("</a>")
     }
-    Inline::Image(alt~, url~, title~, ..) => {
-      buf.write_string("<img src=\"")
-      buf.write_string(escape_html_attr(url))
-      buf.write_string("\" alt=\"")
-      buf.write_string(escape_html_attr(alt))
-      buf.write_char('"')
-      if !title.is_empty() {
-        buf.write_string(" title=\"")
-        buf.write_string(escape_html_attr(title))
-        buf.write_char('"')
+    Inline::Image(alt~, url~, title~, ..) =>
+      write_image(alt, url, title, buf, ctx)
+    Inline::RefImage(alt~, label~, ..) =>
+      match ctx.lookup(label) {
+        Some(def) => write_image(alt, def.url, def.title, buf, ctx)
+        None => {
+          buf.write_string("![")
+          buf.write_string(escape_html(alt))
+          buf.write_string("][")
+          buf.write_string(escape_html(label))
+          buf.write_char(']')
+        }
       }
-      buf.write_string(" />")
-    }
-    Inline::RefImage(alt~, label~, ..) => {
-      // Reference images should be resolved before rendering
-      buf.write_string("![")
-      buf.write_string(escape_html(alt))
-      buf.write_string("][")
-      buf.write_string(escape_html(label))
-      buf.write_char(']')
-    }
     Inline::HtmlInline(html~, ..) => buf.write_string(html)
     Inline::SoftBreak(..) => buf.write_char('\n')
     Inline::HardBreak(..) => buf.write_string("<br />\n")
     Inline::FootnoteReference(label~, ..) => {
       buf.write_string("<sup><a href=\"#fn-")
-      buf.write_string(escape_html_attr(label))
+      write_escaped_href(label, buf)
       buf.write_string("\" id=\"fnref-")
-      buf.write_string(escape_html_attr(label))
+      write_escaped_href(label, buf)
       buf.write_string("\">")
       buf.write_string(escape_html(label))
       buf.write_string("</a></sup>")
+    }
+  }
+}
+
+///|
+fn write_anchor(
+  children : Array[Inline],
+  url : String,
+  title : String,
+  buf : StringBuilder,
+  ctx : RenderCtx,
+) -> Unit {
+  buf.write_string("<a href=\"")
+  write_escaped_href(url, buf)
+  buf.write_char('"')
+  if !title.is_empty() {
+    buf.write_string(" title=\"")
+    buf.write_string(escape_html(title))
+    buf.write_char('"')
+  }
+  buf.write_char('>')
+  render_inlines_html(children, buf, { ..ctx, autolink: false })
+  buf.write_string("</a>")
+}
+
+///|
+fn write_image(
+  alt : String,
+  url : String,
+  title : String,
+  buf : StringBuilder,
+  ctx : RenderCtx,
+) -> Unit {
+  buf.write_string("<img src=\"")
+  write_escaped_href(url, buf)
+  buf.write_string("\" alt=\"")
+  buf.write_string(escape_html(render_alt_text(alt, ctx)))
+  buf.write_char('"')
+  if !title.is_empty() {
+    buf.write_string(" title=\"")
+    buf.write_string(escape_html(title))
+    buf.write_char('"')
+  }
+  buf.write_string(" />")
+}
+
+///|
+/// An image's `alt` keeps the source of its label so it round-trips; the HTML
+/// form is that label rendered as plain text.
+fn render_alt_text(alt : String, ctx : RenderCtx) -> String {
+  let buf = StringBuilder::new()
+  write_plain_text(parse_inlines_with_defs(alt, ctx.defs, false), buf)
+  buf.to_string()
+}
+
+///|
+fn write_plain_text(inlines : Array[Inline], buf : StringBuilder) -> Unit {
+  for inline in inlines {
+    match inline {
+      Inline::Text(content~, ..) => buf.write_string(content)
+      Inline::Code(content~, ..) => buf.write_string(normalize_code_span(content))
+      Inline::HtmlInline(html~, ..) => buf.write_string(html)
+      Inline::SoftBreak(..) | Inline::HardBreak(..) => buf.write_char('\n')
+      Inline::Emphasis(children~, ..)
+      | Inline::Strong(children~, ..)
+      | Inline::Strikethrough(children~, ..)
+      | Inline::Link(children~, ..)
+      | Inline::RefLink(children~, ..) => write_plain_text(children, buf)
+      Inline::Image(alt~, ..) | Inline::RefImage(alt~, ..) =>
+        buf.write_string(alt)
+      Inline::Autolink(url~, ..) => buf.write_string(url)
+      Inline::WikiLink(target~, label~, ..) =>
+        buf.write_string(if label.is_empty() { target } else { label })
+      Inline::FootnoteReference(label~, ..) => buf.write_string(label)
     }
   }
 }
@@ -430,9 +535,59 @@ fn escape_html(s : String, attr? : Bool = false) -> String {
 }
 
 ///|
-/// Escape HTML special characters in attribute values
-fn escape_html_attr(s : String) -> String {
-  escape_html(s, attr=true)
+/// Characters that may appear literally in an `href`; everything else is
+/// percent-encoded (or, for `&` and `'`, written as a character reference).
+/// The table matches the reference implementation's.
+fn is_href_safe(code : Int) -> Bool {
+  if code < 0x21 || code > 0x7E {
+    return false
+  }
+  match code {
+    0x22 | 0x26 | 0x27 | 0x3C | 0x3E | 0x5C | 0x5E | 0x60 | 0x7B | 0x7C | 0x7D =>
+      false
+    _ => true
+  }
+}
+
+///|
+fn write_hex_byte(byte : Int, buf : StringBuilder) -> Unit {
+  let digits = "0123456789ABCDEF"
+  buf.write_char('%')
+  buf.write_string(
+    digits.unsafe_substring(start=(byte >> 4) & 0xF, end=((byte >> 4) & 0xF) + 1),
+  )
+  buf.write_string(
+    digits.unsafe_substring(start=byte & 0xF, end=(byte & 0xF) + 1),
+  )
+}
+
+///|
+/// Percent-encode a URL for use in an `href`/`src` attribute.
+fn write_escaped_href(url : String, buf : StringBuilder) -> Unit {
+  for c in url {
+    let code = c.to_int()
+    if is_href_safe(code) {
+      buf.write_char(c)
+    } else if code == 0x26 {
+      buf.write_string("&amp;")
+    } else if code == 0x27 {
+      buf.write_string("&#x27;")
+    } else if code < 0x80 {
+      write_hex_byte(code, buf)
+    } else if code < 0x800 {
+      write_hex_byte(0xC0 | (code >> 6), buf)
+      write_hex_byte(0x80 | (code & 0x3F), buf)
+    } else if code < 0x10000 {
+      write_hex_byte(0xE0 | (code >> 12), buf)
+      write_hex_byte(0x80 | ((code >> 6) & 0x3F), buf)
+      write_hex_byte(0x80 | (code & 0x3F), buf)
+    } else {
+      write_hex_byte(0xF0 | (code >> 18), buf)
+      write_hex_byte(0x80 | ((code >> 12) & 0x3F), buf)
+      write_hex_byte(0x80 | ((code >> 6) & 0x3F), buf)
+      write_hex_byte(0x80 | (code & 0x3F), buf)
+    }
+  }
 }
 
 ///|
@@ -448,24 +603,12 @@ pub fn md_to_html(
 
 ///|
 /// Parse markdown and render to HTML (strict mode)
+///
+/// Kept for backwards compatibility: the parser is now always spec-strict.
 pub fn md_to_html_strict(
   source : String,
   wikilinks? : Bool = false,
   autolink? : Bool = true,
 ) -> String {
-  let result = parse(source, strict=true, wikilinks~)
-  render_html(result.document, autolink~)
-}
-
-///|
-/// Write code-block content, guaranteeing the trailing newline CommonMark
-/// requires inside `<pre><code>`.
-fn write_code_content(code : String, buf : StringBuilder) -> Unit {
-  if code.is_empty() {
-    return
-  }
-  buf.write_string(escape_html(code))
-  if !code.has_suffix("\n") {
-    buf.write_char('\n')
-  }
+  md_to_html(source, wikilinks~, autolink~)
 }

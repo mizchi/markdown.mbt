@@ -45,13 +45,7 @@ fn BlockParser::try_parse_table(self : BlockParser, start : Int) -> Block? {
   }
 
   // Parse header cells
-  let header = parse_table_row(
-    header_line,
-    alignments.length(),
-    self.strict,
-    self.wikilinks,
-    known_bmp=self.scanner.is_bmp(),
-  )
+  let header = self.parse_table_row(header_line, alignments.length())
 
   // Parse data rows
   let rows : Array[Array[TableCell]] = []
@@ -63,15 +57,7 @@ fn BlockParser::try_parse_table(self : BlockParser, start : Int) -> Block? {
       self.scanner.restore(row_start)
       break
     }
-    rows.push(
-      parse_table_row(
-        row_line,
-        alignments.length(),
-        self.strict,
-        self.wikilinks,
-        known_bmp=self.scanner.is_bmp(),
-      ),
-    )
+    rows.push(self.parse_table_row(row_line, alignments.length()))
     if char_is(self.scanner.peek(), '\n') {
       self.scanner.advance(1)
     }
@@ -131,12 +117,10 @@ fn parse_table_alignments(line : String) -> Array[TableAlign] {
 
 ///|
 /// Parse a table row into cells
-fn parse_table_row(
+fn BlockParser::parse_table_row(
+  self : BlockParser,
   line : String,
   expected_cols : Int,
-  strict : Bool,
-  wikilinks : Bool,
-  known_bmp~ : Bool,
 ) -> Array[TableCell] {
   let cells : Array[TableCell] = []
   let raw_cells = split_table_cells(line)
@@ -145,11 +129,7 @@ fn parse_table_row(
       break
     }
     let content = cell.trim(chars=" \t\n\r").to_owned()
-    let children = if known_bmp {
-      parse_inlines_known_bmp(content, strict~, wikilinks~)
-    } else {
-      parse_inlines(content, strict~, wikilinks~)
-    }
+    let children = self.parse_inline_content(content)
     cells.push({ children, span: Span::new(0, content.length()) }, // Simplified span
     )
   }
