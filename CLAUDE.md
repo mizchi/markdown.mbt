@@ -9,7 +9,9 @@ src/
 ├── types.mbt                       # CST type definitions (Span, Block, Inline)
 ├── scanner.mbt                     # O(1) character access (Array[Char])
 ├── unicode.mbt                     # Shared Unicode classification helpers
-├── block_parser.mbt                # Block parser dispatcher / paragraph / blockquote / thematic break
+├── entity.mbt                      # Entity / numeric character reference decoding
+├── entity_data.mbt                 # Generated HTML5 named reference table
+├── block_parser.mbt                # Block container algorithm / paragraph / blockquote / thematic break
 ├── block_parser_heading.mbt        # ATX & setext heading parsing
 ├── block_parser_code.mbt           # Fenced & indented code-block parsing
 ├── block_parser_link_def.mbt       # Link reference & GFM footnote definitions
@@ -17,10 +19,9 @@ src/
 ├── block_parser_table.mbt          # GFM table parsing
 ├── block_parser_html.mbt           # HTML block parsing
 ├── block_parser_frontmatter.mbt    # YAML frontmatter parsing
-├── inline_parser.mbt               # Inline parser dispatcher (single-pass)
-├── inline_parser_emphasis.mbt      # `*` / `_` emphasis + strong (single-pass)
+├── inline_parser.mbt               # Inline scan: text, escapes, code spans, autolinks, raw HTML
+├── inline_parser_emphasis.mbt      # `*` / `_` / `~` delimiter stack
 ├── inline_parser_link.mbt          # Links, images, wikilinks, footnote refs
-├── inline_parser_strict.mbt        # CommonMark delimiter-stack emphasis
 ├── incremental.mbt                 # Incremental parsing (EditInfo)
 ├── serializer.mbt                  # Lossless block serializer + md_parse_and_render
 ├── serializer_inline.mbt           # Inline serialization (text, emphasis, links, ...)
@@ -50,6 +51,7 @@ src/
 - **CST is the source of truth**: Markdown text is the serialization of CST
 - **Lossless**: Preserves trivia (whitespace, newlines) and markers (`*` vs `_`)
 - **Incremental**: Re-parses only changed blocks, reuses before/after
+- **Conformant**: `md_to_html` matches all 652 CommonMark 0.31.2 examples
 
 ## Development Commands
 
@@ -72,30 +74,37 @@ When fixing features, follow this cycle:
 # 1. Verify basic behavior with main tests
 moon test --target js src
 
-# 2. Check progress with CommonMark compatibility tests
+# 2. Check the CommonMark spec conformance suite (must stay at 100%)
+moon test --target js src/spec_tests
+
+# 3. Check the remark serialization comparison
 moon test --target js src/cmark_tests
 
-# 3. Run specific category tests (e.g., code spans)
+# 4. Run specific category tests (e.g., code spans)
 moon test --target js src/cmark_tests/code_spans_test.mbt
 
-# 4. Run benchmarks and compare with baseline
+# 5. Run benchmarks and compare with baseline
 moon bench
 # Compare visually with .bench-baseline
 
-# 5. If performance issues exist, re-test after optimization
+# 6. If performance issues exist, re-test after optimization
 moon test --target js src  # Verify optimization didn't break anything
 moon bench                  # Confirm improvement
 
-# 6. Update baseline (when optimization is complete)
+# 7. Update baseline (when optimization is complete)
 just bench-accept
 ```
 
-### CommonMark Compatibility Tests (cmark_tests)
+### Generated test suites
 
-`src/cmark_tests/` is auto-generated, **do not edit directly**.
+`src/spec_tests/`, `src/cmark_tests/` and `src/gfm_tests/` are auto-generated,
+**do not edit directly**.
 
-- To add/remove test skips: Edit `SKIP_TESTS` in `scripts/gen-tests.js`
-- To regenerate: `node scripts/gen-tests.js`
+- `src/spec_tests/` — CommonMark 0.31.2 HTML conformance, from
+  `scripts/gen-spec-tests.js`. All 652 examples pass; its `SKIP_TESTS` table is
+  empty and should stay that way.
+- `src/cmark_tests/` — Markdown serialization compared with remark, from
+  `scripts/gen-tests.js`. Skips live in its `SKIP_TESTS` table.
 - Details: [CONTRIBUTING.md](./CONTRIBUTING.md)
 
 ### Performance Optimization Tips
