@@ -1,226 +1,183 @@
 ///| Link reference definitions and GFM footnote definitions.
 
-///|
+///| Split out from block_parser.mbt to keep that file focused on the container
 
-///| Split out from block_parser.mbt to keep that file focused on the block
-
-///| dispatcher and paragraph parsing.
+///| algorithm.
 
 ///|
-/// Try to parse GFM footnote definition [^label]: content
-fn BlockParser::try_parse_footnote_definition(
+/// Strip the link reference definitions a paragraph starts with, registering
+/// each one, and return what is left of the paragraph.
+fn BlockParser::strip_link_definitions(
   self : BlockParser,
-  start : Int,
-) -> Block? {
-  let saved = self.scanner.pos
-  let leading = self.read_leading_trivia()
-
-  // [^label]:
-  if !char_is(self.scanner.peek(), '[') {
-    self.scanner.restore(saved)
-    return None
-  }
-  self.scanner.advance(1)
-  if !char_is(self.scanner.peek(), '^') {
-    self.scanner.restore(saved)
-    return None
-  }
-  self.scanner.advance(1)
-
-  // Read label (alphanumeric, -, _)
-  let label_buf = StringBuilder::new()
-  while !self.scanner.is_eof() {
-    match self.scanner.peek() {
-      Some(']') => break
-      Some(c) if (c >= 'a' && c <= 'z') ||
-        (c >= 'A' && c <= 'Z') ||
-        (c >= '0' && c <= '9') ||
-        c == '-' ||
-        c == '_' => {
-        label_buf.write_char(c)
-        self.scanner.advance(1)
-      }
-      _ => {
-        self.scanner.restore(saved)
-        return None
-      }
-    }
-  }
-  let label = label_buf.to_string()
-  if label.is_empty() {
-    self.scanner.restore(saved)
-    return None
-  }
-  self.scanner.advance(1) // ]
-  if !char_is(self.scanner.peek(), ':') {
-    self.scanner.restore(saved)
-    return None
-  }
-  self.scanner.advance(1)
-
-  // Skip optional space after :
-  if char_is(self.scanner.peek(), ' ') {
-    self.scanner.advance(1)
-  }
-
-  // Read content (first line + continuation lines with indentation)
-  let content_buf = StringBuilder::new()
-  self.scanner.append_line_to(content_buf)
-  if char_is(self.scanner.peek(), '\n') {
-    self.scanner.advance(1)
-  }
-
-  // Read continuation lines (indented with at least 2 spaces or tab)
-  while !self.scanner.is_eof() {
-    let line_start = self.scanner.pos
-    let indent = self.scanner.skip_spaces()
-    if self.scanner.is_blank_line() {
-      // Blank line may continue or end footnote
-      content_buf.write_char('\n')
-      if char_is(self.scanner.peek(), '\n') {
-        self.scanner.advance(1)
-      }
-      continue
-    }
-    if indent >= 2 {
-      // Continuation line
-      content_buf.write_char('\n')
-      self.scanner.append_line_to(content_buf)
-      if char_is(self.scanner.peek(), '\n') {
-        self.scanner.advance(1)
-      }
-    } else {
-      // Not a continuation, restore and stop
-      self.scanner.restore(line_start)
-      break
-    }
-  }
-
-  // Parse content as blocks
-  let content = content_buf.to_string()
-  let inner_scanner = if self.scanner.is_bmp() {
-    Scanner::new_bmp(content)
-  } else {
-    Scanner::new(content)
-  }
-  let inner_parser = BlockParser::new(
-    inner_scanner,
-    self.strict,
-    self.wikilinks,
-  )
-  let inner_result = inner_parser.parse_document()
-  Some(
-    Block::FootnoteDefinition(
-      label~,
-      children=inner_result.document.children,
-      span=Span::new(start, self.scanner.pos),
-      leading_trivia=leading,
-      trailing_trivia=Trivia::empty(),
-    ),
-  )
+  node : Node,
+) -> String {
+  self.take_link_definitions(node, true)
 }
 
 ///|
-/// Try to parse link reference definition
-fn BlockParser::try_parse_link_definition(
+/// Same, but without registering anything: used to decide whether a paragraph
+/// would still hold text.
+fn BlockParser::strip_link_definitions_dry(
   self : BlockParser,
-  start : Int,
-) -> LinkDefinition? {
-  let saved = self.scanner.pos
-  let _ = self.scanner.skip_spaces()
+  node : Node,
+) -> String {
+  self.take_link_definitions(node, false)
+}
 
-  // [label]:
-  if !char_is(self.scanner.peek(), '[') {
+///|
+fn BlockParser::take_link_definitions(
+  self : BlockParser,
+  node : Node,
+  register : Bool,
+) -> String {
+  let content = joined_lines(node)
+  let len = content.length()
+  let mut pos = 0
+  while pos < len && content.unsafe_get(pos) == '[' {
+    match self.parse_link_reference(node, content, pos, register) {
+      Some(next) => pos = next
+      None => break
+    }
+  }
+  if pos == 0 {
+    return content
+  }
+  content.unsafe_substring(start=pos, end=len)
+}
+
+///|
+fn skip_spaces_tabs(text : String, start : Int) -> Int {
+  let len = text.length()
+  let mut i = start
+  while i < len && is_space_or_tab(text.unsafe_get(i)) {
+    i = i + 1
+  }
+  i
+}
+
+///|
+/// Skip whitespace, allowing at most one line ending. Returns the new position
+/// and how many line endings were crossed.
+fn skip_ws_one_newline(text : String, start : Int) -> (Int, Int) {
+  let len = text.length()
+  let mut i = skip_spaces_tabs(text, start)
+  let mut newlines = 0
+  if i < len && text.unsafe_get(i) == '\n' {
+    newlines = 1
+    i = skip_spaces_tabs(text, i + 1)
+  }
+  (i, newlines)
+}
+
+///|
+/// Parse `[label]: destination "title"` at `pos`, returning the position just
+/// past it.
+fn BlockParser::parse_link_reference(
+  self : BlockParser,
+  node : Node,
+  text : String,
+  pos : Int,
+  register : Bool,
+) -> Int? {
+  let len = text.length()
+  guard pos < len && text.unsafe_get(pos) == '[' else { return None }
+  let label_start = pos + 1
+  let mut i = label_start
+  let mut label_end = -1
+  while i < len {
+    let c = text.unsafe_get(i)
+    if c == '\\' && i + 1 < len {
+      i = i + 2
+      continue
+    }
+    if c == '[' {
+      return None
+    }
+    if c == ']' {
+      label_end = i
+      break
+    }
+    i = i + 1
+  }
+  guard label_end >= 0 else { return None }
+  let label = text.unsafe_substring(start=label_start, end=label_end)
+  guard label.length() <= 999 && !is_blank_text(label) else { return None }
+  i = label_end + 1
+  guard i < len && text.unsafe_get(i) == ':' else { return None }
+  i = i + 1
+  let (after_colon, _) = skip_ws_one_newline(text, i)
+  i = after_colon
+  guard parse_link_destination(text, i) is Some((raw_dest, after_dest)) else {
     return None
   }
-  self.scanner.advance(1)
-
-  // Read label
-  let label_buf = StringBuilder::new()
-  while !self.scanner.is_eof() {
-    match self.scanner.peek() {
-      Some(']') => break
-      Some('\n') | None => {
-        self.scanner.restore(saved)
-        return None
+  guard after_dest > i else { return None }
+  let mut end = -1
+  let mut title = ""
+  let (title_start, newlines) = skip_ws_one_newline(text, after_dest)
+  if title_start > after_dest || newlines > 0 {
+    match parse_link_title(text, title_start) {
+      Some((raw_title, after_title)) => {
+        let line_end = skip_spaces_tabs(text, after_title)
+        if line_end >= len || text.unsafe_get(line_end) == '\n' {
+          title = unescape_string(raw_title)
+          end = if line_end < len { line_end + 1 } else { line_end }
+        }
       }
-      Some(c) => {
-        label_buf.write_char(c)
-        self.scanner.advance(1)
-      }
+      None => ()
     }
   }
-  self.scanner.advance(1) // ]
-  if !char_is(self.scanner.peek(), ':') {
-    self.scanner.restore(saved)
+  if end < 0 {
+    let line_end = skip_spaces_tabs(text, after_dest)
+    guard line_end >= len || text.unsafe_get(line_end) == '\n' else {
+      return None
+    }
+    end = if line_end < len { line_end + 1 } else { line_end }
+  }
+  if register {
+    self.definitions.push({
+      label,
+      url: normalize_destination(raw_dest),
+      title,
+      span: Span::new(source_offset_in(node, pos), source_offset_in(node, end)),
+    })
+  }
+  Some(end)
+}
+
+///|
+/// GFM footnote definition: `[^label]: content`.
+fn BlockParser::try_footnote_definition(
+  self : BlockParser,
+  container : Node,
+) -> Node? {
+  guard self.peek_line(self.next_nonspace) == '[' else { return None }
+  guard self.peek_line(self.next_nonspace + 1) == '^' else { return None }
+  let mut i = self.next_nonspace + 2
+  while i < self.line_len {
+    let c = self.line.unsafe_get(i)
+    if c == ']' {
+      break
+    }
+    if !(is_ascii_alnum_unit(c) || c == '-' || c == '_') {
+      return None
+    }
+    i = i + 1
+  }
+  guard i < self.line_len && i > self.next_nonspace + 2 else { return None }
+  guard i + 1 < self.line_len && self.line.unsafe_get(i + 1) == ':' else {
     return None
   }
-  self.scanner.advance(1)
-
-  // Skip whitespace
-  let _ = self.scanner.skip_spaces()
-  if char_is(self.scanner.peek(), '\n') {
-    self.scanner.advance(1)
-    let _ = self.scanner.skip_spaces()
+  let label = self.line.unsafe_substring(start=self.next_nonspace + 2, end=i)
+  let node = self.add_child(
+    container,
+    NodeKind::FootnoteDefNode,
+    self.line_start + self.next_nonspace,
+  )
+  node.label = label
+  node.end = self.line_end
+  self.advance_offset(i + 2 - self.offset, false)
+  if is_space_or_tab(self.peek_line(self.offset)) {
+    self.advance_offset(1, true)
   }
-
-  // Read URL
-  let url = if char_is(self.scanner.peek(), '<') {
-    self.scanner.advance(1)
-    let url_buf = StringBuilder::new()
-    while !self.scanner.is_eof() && !char_is(self.scanner.peek(), '>') {
-      match self.scanner.consume() {
-        Some(c) => url_buf.write_char(c)
-        None => break
-      }
-    }
-    self.scanner.advance(1) // >
-    url_buf.to_string()
-  } else {
-    let url_buf = StringBuilder::new()
-    while !self.scanner.is_eof() {
-      match self.scanner.peek() {
-        Some(' ') | Some('\t') | Some('\n') | None => break
-        Some(c) => {
-          url_buf.write_char(c)
-          self.scanner.advance(1)
-        }
-      }
-    }
-    url_buf.to_string()
-  }
-  let _ = self.scanner.skip_spaces()
-
-  // Optional title
-  let title = match self.scanner.peek() {
-    Some('"') | Some('\'') => {
-      let quote = match self.scanner.consume() {
-        Some(c) => c
-        None => '"'
-      }
-      let title_buf = StringBuilder::new()
-      while !self.scanner.is_eof() && !char_is(self.scanner.peek(), quote) {
-        match self.scanner.consume() {
-          Some(c) => title_buf.write_char(c)
-          None => break
-        }
-      }
-      if char_is(self.scanner.peek(), quote) {
-        self.scanner.advance(1)
-      }
-      title_buf.to_string()
-    }
-    _ => ""
-  }
-
-  // Skip to end of line
-  self.scanner.skip_line()
-  let def : LinkDefinition = {
-    label: label_buf.to_string().to_lower(),
-    url,
-    title,
-    span: Span::new(start, self.scanner.pos),
-  }
-  self.definitions.push(def)
-  Some(def)
+  Some(node)
 }

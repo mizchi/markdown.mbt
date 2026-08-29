@@ -30,6 +30,8 @@ jobs:
         run: node scripts/gen-tests.js
       - name: Generate GFM tests
         run:  node scripts/gen-gfm-tests.js
+      - name: Generate CommonMark spec conformance tests
+        run: node scripts/gen-spec-tests.js
       - name: Check
         run: |
           moon update
@@ -43,6 +45,9 @@ jobs:
       - name: Moon test
         run: |
           moon test src/gfm_tests --target js
+      - name: Moon test
+        run: |
+          moon test src/spec_tests --target js
       - name: Moon test
         run: |
           moon test src/html_tests --target js

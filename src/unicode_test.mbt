@@ -919,39 +919,35 @@ test "BUG DEMO: parse emphasis with emoji content" {
 }
 
 ///|
-test "BUG DEMO: Span with emoji is wrong" {
+test "span of a paragraph holding an emoji covers both code units" {
   let result = parse("😀")
   match result.document.children[0] {
     Block::Paragraph(span~, ..) => {
-      // Span should cover the whole emoji
-      // Scanner.len thinks it's 1 code point
-      // But the actual string is 2 UTF-16 units
-      // This mismatch causes issues
+      // Spans are UTF-16 offsets, so the surrogate pair counts as two.
       @debug.debug_inspect(span.from, content="0")
-      // span.to will be 1 (code points) but the string needs 2 (UTF-16 units)
-      @debug.debug_inspect(span.to, content="1")
+      @debug.debug_inspect(span.to, content="2")
     }
     _ => fail("Expected Paragraph")
   }
 }
 
 ///|
-test "BUG DEMO: text after emoji is shifted" {
+test "text after an emoji is not shifted" {
   let result = parse("😀テスト")
   match result.document.children[0] {
     Block::Paragraph(children~, span~, ..) => {
       match children[0] {
         Inline::Text(content~, ..) =>
-          // The content should be "😀テスト"
-          // But due to Scanner position mismatch with substring,
-          // it might be garbled
-          @debug.debug_inspect(content.length() >= 1, content="true")
+          @debug.debug_inspect(
+            content,
+            content=(
+              #|"😀テスト"
+            ),
+          )
         _ => fail("Expected Text")
       }
-      // Actual behavior: span.to is 4, not 5
-      // This shows the Scanner is NOT using code points for len
-      // when the emoji is involved
-      @debug.debug_inspect(span.to, content="4") // Actually 4 - mysterious!
+      // Two UTF-16 units for the emoji plus three for テスト.
+      @debug.debug_inspect(span.to, content="5")
     }
     _ => fail("Expected Paragraph")
   }

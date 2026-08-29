@@ -173,7 +173,13 @@ test "parse link with title" {
 
 ///|
 test "parse reference link" {
-  let inlines = parse_inlines("[text][ref]")
+  // Reference links only resolve against a definition, so go through the
+  // document parser to get one in scope.
+  let doc = parse("[text][ref]\n\n[ref]: /url\n").document
+  guard doc.children[0] is Block::Paragraph(children~, ..) else {
+    fail("Expected Paragraph")
+  }
+  let inlines = children
   match inlines[0] {
     Inline::RefLink(label~, children~, ..) => {
       @debug.debug_inspect(
@@ -246,7 +252,11 @@ test "parse image with title" {
 
 ///|
 test "parse reference image" {
-  let inlines = parse_inlines("![alt][ref]")
+  let doc = parse("![alt][ref]\n\n[ref]: /url\n").document
+  guard doc.children[0] is Block::Paragraph(children~, ..) else {
+    fail("Expected Paragraph")
+  }
+  let inlines = children
   match inlines[0] {
     Inline::RefImage(alt~, label~, ..) => {
       @debug.debug_inspect(

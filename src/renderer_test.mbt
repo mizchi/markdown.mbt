@@ -133,7 +133,8 @@ test "render image" {
   @debug.debug_inspect(
     html,
     content=(
-      #|"<p><img src=\"image.png\" alt=\"alt\"></p>\n"
+      #|"<p><img src=\"image.png\" alt=\"alt\" /></p>\n"
+
     ),
   )
 }
@@ -177,7 +178,8 @@ test "render thematic break" {
   @debug.debug_inspect(
     html,
     content=(
-      #|"<hr>\n"
+      #|"<hr />\n"
+
     ),
   )
 }
@@ -246,3 +248,72 @@ test "render footnote" {
     content="true",
   )
 }
+
+///|
+test "render: superscript letters are not punctuation for flanking" {
+  // U+2071 is a modifier letter, so the underscore stays intraword.
+  let html = md_to_html("a\u{2071}_b_\n")
+  @debug.debug_inspect(
+    html,
+    content=(
+      #|"<p>aⁱ_b_</p>\n"
+    ),
+  )
+}
+
+
+///|
+test "render: Latin Extended-A labels fold to their own case pair" {
+  // U+013A is lowercase; it must not match U+013B.
+  let mismatched = md_to_html("[\u{13a}]\n\n[\u{13b}]: /wrong\n")
+  @debug.debug_inspect(
+    mismatched,
+    content=(
+      #|"<p>[ĺ]</p>\n"
+    ),
+  )
+  let matched = md_to_html("[\u{139}]\n\n[\u{13a}]: /right\n")
+  @debug.debug_inspect(
+    matched,
+    content=(
+      #|"<p><a href=\"/right\">Ĺ</a></p>\n"
+    ),
+  )
+}
+
+//|
+test "render: raw text HTML block ends at its own closing tag" {
+  // </pre> must not close a <script> block.
+  let html = md_to_html("<script>\n</pre>\nstill script\n</script>\n")
+  @debug.debug_inspect(
+    html,
+    content=(
+      #|"<script>\n</pre>\nstill script\n</script>\n"
+    ),
+  )
+}
+
+
+///|
+test "render: delimiter row cells need a dash" {
+  let html = md_to_html("a | b\n--- | :\n")
+  @debug.debug_inspect(
+    html,
+    content=(
+      #|"<p>a | b\n--- | :</p>\n"
+    ),
+  )
+}
+
+
+///|
+test "render: a line without a cell separator ends the table" {
+  let html = md_to_html("a | b\n--- | ---\nordinary text\n")
+  @debug.debug_inspect(
+    html,
+    content=(
+      #|"<table>\n<thead>\n<tr>\n<th>a</th>\n<th>b</th>\n</tr>\n</thead>\n</table>\n<p>ordinary text</p>\n"
+    ),
+  )
+}
+

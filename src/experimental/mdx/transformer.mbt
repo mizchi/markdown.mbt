@@ -25,7 +25,12 @@ pub fn strip_mdx_blocks(doc : @markdown.Document) -> @markdown.Document {
       new_children.push(block)
     }
   }
-  { frontmatter: doc.frontmatter, children: new_children, span: doc.span }
+  {
+    frontmatter: doc.frontmatter,
+    children: new_children,
+    definitions: doc.definitions,
+    span: doc.span,
+  }
 }
 
 ///|
@@ -46,7 +51,12 @@ fn strip_blocks(
       new_children.push(block)
     }
   }
-  { frontmatter: doc.frontmatter, children: new_children, span: doc.span }
+  {
+    frontmatter: doc.frontmatter,
+    children: new_children,
+    definitions: doc.definitions,
+    span: doc.span,
+  }
 }
 
 ///|
@@ -94,7 +104,12 @@ pub fn transform_mdx(
       None => new_children.push(block) // Keep non-MDX blocks
     }
   }
-  { frontmatter: doc.frontmatter, children: new_children, span: doc.span }
+  {
+    frontmatter: doc.frontmatter,
+    children: new_children,
+    definitions: doc.definitions,
+    span: doc.span,
+  }
 }
 
 // =============================================================================

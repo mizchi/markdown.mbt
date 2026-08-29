@@ -91,7 +91,7 @@ describe("toHtml", () => {
       "list",
       "thematicBreak",
     ]);
-    expect(toHtml(source)).toBe("<ul>\n<li>a</li>\n<li>m</li>\n</ul>\n<hr>\n");
+    expect(toHtml(source)).toBe("<ul>\n<li>a</li>\n<li>m</li>\n</ul>\n<hr />\n");
   });
 });
 

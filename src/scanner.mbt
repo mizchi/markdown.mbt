@@ -63,11 +63,6 @@ fn Scanner::new_bmp(source : String) -> Scanner {
 }
 
 ///|
-fn Scanner::is_bmp(self : Scanner) -> Bool {
-  self.utf16_offsets is None
-}
-
-///|
 /// Convert code point index to UTF-16 index
 fn Scanner::to_utf16_index(self : Scanner, cp_index : Int) -> Int {
   match self.utf16_offsets {
@@ -82,126 +77,6 @@ fn Scanner::unsafe_char_at(self : Scanner, index : Int) -> Char {
     Some(_) => self.chars[index]
     None => self.source.unsafe_get(index).unsafe_to_char()
   }
-}
-
-///|
-fn Scanner::move_to_line_end(self : Scanner) -> (Int, Int) {
-  let start = self.pos
-  match self.utf16_offsets {
-    Some(_) =>
-      while self.pos < self.len {
-        if self.chars[self.pos] == '\n' {
-          break
-        }
-        self.pos += 1
-      }
-    None =>
-      while self.pos < self.len {
-        if self.source.unsafe_get(self.pos) == 0x0A {
-          break
-        }
-        self.pos += 1
-      }
-  }
-  (start, self.pos)
-}
-
-///|
-fn Scanner::write_range_to(
-  self : Scanner,
-  buf : StringBuilder,
-  start : Int,
-  end : Int,
-) -> Unit {
-  if end <= start {
-    return
-  }
-  let utf16_start = self.to_utf16_index(start)
-  let utf16_end = self.to_utf16_index(end)
-  buf.write_view(self.source[utf16_start:utf16_end])
-}
-
-///|
-fn Scanner::append_line_to(self : Scanner, buf : StringBuilder) -> Unit {
-  let (start, end) = self.move_to_line_end()
-  self.write_range_to(buf, start, end)
-}
-
-///|
-fn Scanner::append_line_stripped_indent_to(
-  self : Scanner,
-  buf : StringBuilder,
-  indent : Int,
-) -> Unit {
-  let (start, end) = self.move_to_line_end()
-  let mut stripped = 0
-  let mut idx = start
-  while idx < end && stripped < indent {
-    match self.unsafe_char_at(idx) {
-      ' ' => {
-        stripped += 1
-        idx += 1
-      }
-      '\t' => {
-        stripped += 4
-        idx += 1
-      }
-      _ => break
-    }
-  }
-  self.write_range_to(buf, idx, end)
-}
-
-///|
-fn Scanner::line_contains(self : Scanner, needle : String) -> Bool {
-  let needle_len = needle.length()
-  if needle_len == 0 {
-    return true
-  }
-  match self.utf16_offsets {
-    Some(_) => {
-      let mut idx = self.pos
-      while idx + needle_len <= self.len && self.chars[idx] != '\n' {
-        let mut matched = true
-        for j = 0; j < needle_len; j = j + 1 {
-          if idx + j >= self.len || self.chars[idx + j] == '\n' {
-            matched = false
-            break
-          }
-          let code = self.chars[idx + j].to_int()
-          if code > 0xFFFF || code.to_uint16() != needle.unsafe_get(j) {
-            matched = false
-            break
-          }
-        }
-        if matched {
-          return true
-        }
-        idx += 1
-      }
-    }
-    None => {
-      let mut idx = self.pos
-      while idx + needle_len <= self.len && self.source.unsafe_get(idx) != 0x0A {
-        let mut matched = true
-        for j = 0; j < needle_len; j = j + 1 {
-          if idx + j >= self.len || self.source.unsafe_get(idx + j) == 0x0A {
-            matched = false
-            break
-          }
-          if self.source.unsafe_get(idx + j) != needle.unsafe_get(j) {
-            matched = false
-            break
-          }
-        }
-        if matched {
-          return true
-        }
-        idx += 1
-      }
-    }
-  }
-  false
 }
 
 ///|

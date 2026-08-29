@@ -1,9 +1,416 @@
-///| Link, image, wikilink and footnote reference parsing
+///| Links, images, wikilinks and footnote references.
 
-///| (split from inline_parser.mbt).
+///| Bracket handling follows the "look for link or image" procedure from the
+
+///| CommonMark spec appendix.
 
 ///|
-/// Split wiki destination into page target and optional fragment.
+fn InlineCtx::open_bracket(self : InlineCtx, pos : Int, image : Bool) -> Unit {
+  let width = if image { 2 } else { 1 }
+  let literal = if image { "![" } else { "[" }
+  let slot = self.append({
+    inline: Some(
+      Inline::Text(content=literal, span=Span::new(pos, pos + width)),
+    ),
+    mergeable: false,
+    ch: ' ',
+    count: 0,
+    orig: 0,
+    can_open: false,
+    can_close: false,
+    start: pos,
+    prev: -1,
+    next: -1,
+  })
+  self.brackets.push({
+    slot,
+    content_start: pos + width,
+    image,
+    active: true,
+    delim_bottom: self.delims.length(),
+  })
+}
+
+///|
+/// Handle a `]`, turning the matching bracket into a link or image when one of
+/// the inline or reference forms applies. Returns the index to resume from.
+fn InlineCtx::close_bracket(self : InlineCtx, pos : Int) -> Int {
+  let text = self.text
+  let len = self.len
+  if self.brackets.is_empty() {
+    self.push_text("]", pos, pos + 1)
+    return pos + 1
+  }
+  let bracket = self.brackets[self.brackets.length() - 1]
+  let _ = self.brackets.pop()
+  if !bracket.active {
+    self.push_text("]", pos, pos + 1)
+    return pos + 1
+  }
+  let label_src = text.unsafe_substring(start=bracket.content_start, end=pos)
+  let mut dest = ""
+  let mut title = ""
+  let mut ref_label : String? = None
+  let mut end = -1
+
+  // Inline form: `](dest "title")`.
+  if pos + 1 < len && text.unsafe_get(pos + 1) == '(' {
+    match parse_inline_link_tail(text, pos + 1) {
+      Some((d, t, e)) => {
+        dest = d
+        title = t
+        end = e
+      }
+      None => ()
+    }
+  }
+  if end < 0 {
+    // Reference forms: full `][label]`, collapsed `][]`, or shortcut.
+    let (label, after) = match read_reference_label(text, pos + 1) {
+      Some((label, after)) =>
+        if label.is_empty() {
+          (label_src, after)
+        } else {
+          (label, after)
+        }
+      None => (label_src, pos + 1)
+    }
+    match self.defs.get(normalize_label(label)) {
+      Some(def) => {
+        dest = def.url
+        title = def.title
+        ref_label = Some(label)
+        end = after
+      }
+      None => ()
+    }
+  }
+  if end < 0 {
+    self.push_text("]", pos, pos + 1)
+    return pos + 1
+  }
+
+  // Resolve emphasis inside the bracket before wrapping it up.
+  self.process_emphasis(bracket.delim_bottom)
+  let children = self.materialize(self.slots[bracket.slot].next, -1)
+  let mut cur = self.slots[bracket.slot].next
+  while cur >= 0 {
+    let next = self.slots[cur].next
+    self.unlink(cur)
+    cur = next
+  }
+  self.unlink(bracket.slot)
+  let span = Span::new(
+    bracket.content_start - (if bracket.image { 2 } else { 1 }),
+    end,
+  )
+  let node = if bracket.image {
+    match ref_label {
+      Some(label) => Inline::RefImage(alt=label_src, label~, span~)
+      None => Inline::Image(alt=label_src, url=dest, title~, span~)
+    }
+  } else {
+    match ref_label {
+      Some(label) => Inline::RefLink(children~, label~, span~)
+      None => Inline::Link(children~, url=dest, title~, span~)
+    }
+  }
+  let _ = self.push_inline(node, span.from)
+  if !bracket.image {
+    // No links inside links: earlier `[` openers can no longer match.
+    for entry in self.brackets {
+      if !entry.image {
+        entry.active = false
+      }
+    }
+  }
+  end
+}
+
+///|
+/// Parse `(dest "title")` starting at the `(`.
+fn parse_inline_link_tail(text : String, start : Int) -> (String, String, Int)? {
+  let len = text.length()
+  let mut i = start + 1
+  i = skip_link_space(text, i)
+  let (dest, after_dest) = match parse_link_destination(text, i) {
+    Some(v) => v
+    None => ("", i)
+  }
+  i = after_dest
+  let before_space = i
+  i = skip_link_space(text, i)
+  let mut title = ""
+  if i > before_space || before_space == after_dest {
+    match parse_link_title(text, i) {
+      Some((t, after_title)) => {
+        title = t
+        i = skip_link_space(text, after_title)
+      }
+      None => ()
+    }
+  }
+  guard i < len && text.unsafe_get(i) == ')' else { return None }
+  Some((normalize_destination(dest), unescape_string(title), i + 1))
+}
+
+///|
+fn skip_link_space(text : String, start : Int) -> Int {
+  let len = text.length()
+  let mut i = start
+  while i < len && is_html_space(text.unsafe_get(i)) {
+    i = i + 1
+  }
+  i
+}
+
+///|
+/// A link destination: either `<...>` or a bare run with balanced parentheses.
+fn parse_link_destination(text : String, start : Int) -> (String, Int)? {
+  let len = text.length()
+  guard start < len else { return None }
+  if text.unsafe_get(start) == '<' {
+    let mut i = start + 1
+    while i < len {
+      let c = text.unsafe_get(i)
+      if c == '>' {
+        return Some((text.unsafe_substring(start=start + 1, end=i), i + 1))
+      }
+      if c == '\n' || c == '<' {
+        return None
+      }
+      if c == '\\' && i + 1 < len {
+        i = i + 2
+      } else {
+        i = i + 1
+      }
+    }
+    return None
+  }
+  let mut i = start
+  let mut depth = 0
+  while i < len {
+    let c = text.unsafe_get(i)
+    if c == '\\' &&
+      i + 1 < len &&
+      is_punctuation(text.unsafe_get(i + 1).unsafe_to_char()) {
+      i = i + 2
+      continue
+    }
+    if is_html_space(c) || c < 0x20 {
+      break
+    }
+    if c == '(' {
+      depth = depth + 1
+    } else if c == ')' {
+      if depth == 0 {
+        break
+      }
+      depth = depth - 1
+    }
+    i = i + 1
+  }
+  if depth != 0 {
+    return None
+  }
+  Some((text.unsafe_substring(start~, end=i), i))
+}
+
+///|
+/// A link title in `"…"`, `'…'` or `(…)`.
+fn parse_link_title(text : String, start : Int) -> (String, Int)? {
+  let len = text.length()
+  guard start < len else { return None }
+  let open = text.unsafe_get(start)
+  let close : UInt16 = if open == '"' {
+    '"'
+  } else if open == '\'' {
+    '\''
+  } else if open == '(' {
+    ')'
+  } else {
+    return None
+  }
+  let mut i = start + 1
+  while i < len {
+    let c = text.unsafe_get(i)
+    if c == '\\' && i + 1 < len {
+      i = i + 2
+      continue
+    }
+    if c == close {
+      return Some((text.unsafe_substring(start=start + 1, end=i), i + 1))
+    }
+    if open == '(' && c == '(' {
+      return None
+    }
+    i = i + 1
+  }
+  None
+}
+
+///|
+/// Read the `[label]` that may follow a `]`, distinguishing the collapsed form
+/// `[]` (empty label) from a full reference. Returns `None` for the shortcut
+/// form, where nothing follows.
+fn read_reference_label(text : String, start : Int) -> (String, Int)? {
+  let len = text.length()
+  guard start < len && text.unsafe_get(start) == '[' else { return None }
+  let mut i = start + 1
+  while i < len {
+    let c = text.unsafe_get(i)
+    if c == '\\' && i + 1 < len {
+      i = i + 2
+      continue
+    }
+    if c == '[' {
+      return None
+    }
+    if c == ']' {
+      let label = text.unsafe_substring(start=start + 1, end=i)
+      if label.length() > 999 {
+        return None
+      }
+      return Some((label, i + 1))
+    }
+    i = i + 1
+  }
+  None
+}
+
+///|
+/// Fold a link label for matching: trim, collapse internal whitespace, and
+/// case-fold.
+fn normalize_label(label : String) -> String {
+  let len = label.length()
+  let buf = StringBuilder::new()
+  let mut i = 0
+  let mut pending_space = false
+  let mut written = false
+  while i < len {
+    let c = label.unsafe_get(i)
+    if is_html_space(c) {
+      pending_space = written
+      i = i + 1
+      continue
+    }
+    if pending_space {
+      buf.write_char(' ')
+      pending_space = false
+    }
+    let ch = char_at_index(label, i)
+    let width = if ch.to_int() > 0xFFFF { 2 } else { 1 }
+    // A few characters fold to more than one: ß and ẞ both become "ss".
+    if ch == '\u{df}' || ch == '\u{1e9e}' {
+      buf.write_string("ss")
+    } else {
+      buf.write_char(fold_case(ch))
+    }
+    written = true
+    i = i + width
+  }
+  buf.to_string()
+}
+
+///|
+/// Case folding for label matching. Covers the alphabets CommonMark's own test
+/// suite exercises — ASCII, Latin-1, Latin Extended-A, Greek and Cyrillic —
+/// and leaves anything else untouched.
+fn fold_case(c : Char) -> Char {
+  let code = c.to_int()
+  if code >= 'A'.to_int() && code <= 'Z'.to_int() {
+    return (code + 32).unsafe_to_char()
+  }
+  if code >= 0xC0 && code <= 0xDE && code != 0xD7 {
+    return (code + 32).unsafe_to_char()
+  }
+  if code >= 0x100 && code <= 0x17F {
+    return fold_latin_extended_a(code)
+  }
+  if code >= 0x391 && code <= 0x3A9 && code != 0x3A2 {
+    return (code + 32).unsafe_to_char()
+  }
+  if code >= 0x400 && code <= 0x40F {
+    return (code + 80).unsafe_to_char()
+  }
+  if code >= 0x410 && code <= 0x42F {
+    return (code + 32).unsafe_to_char()
+  }
+  c
+}
+
+///|
+/// Latin Extended-A is laid out as upper/lower pairs, but the parity flips
+/// twice inside the block, so the sub-ranges have to be spelled out.
+fn fold_latin_extended_a(code : Int) -> Char {
+  if code <= 0x137 || (code >= 0x14A && code <= 0x177) {
+    // Even is uppercase.
+    return (if code % 2 == 0 { code + 1 } else { code }).unsafe_to_char()
+  }
+  if (code >= 0x139 && code <= 0x148) || (code >= 0x179 && code <= 0x17E) {
+    // Odd is uppercase.
+    return (if code % 2 == 1 { code + 1 } else { code }).unsafe_to_char()
+  }
+  if code == 0x178 {
+    // Ÿ folds to ÿ, back in Latin-1.
+    return '\u{ff}'
+  }
+  // U+0138 ĸ, U+0149 ŉ and U+017F ſ have no simple pair here.
+  code.unsafe_to_char()
+}
+
+///|
+/// Resolve backslash escapes and entity references in a destination, then
+/// leave the result for the renderer to percent-encode.
+fn normalize_destination(dest : String) -> String {
+  unescape_string(dest)
+}
+
+///|
+/// Resolve backslash escapes and entity references.
+fn unescape_string(s : String) -> String {
+  let len = s.length()
+  let mut needs = false
+  for i = 0; i < len; i = i + 1 {
+    let c = s.unsafe_get(i)
+    if c == '\\' || c == '&' {
+      needs = true
+      break
+    }
+  }
+  if !needs {
+    return s
+  }
+  let buf = StringBuilder::new()
+  let mut i = 0
+  while i < len {
+    let c = s.unsafe_get(i)
+    if c == '\\' &&
+      i + 1 < len &&
+      is_punctuation(s.unsafe_get(i + 1).unsafe_to_char()) {
+      buf.write_string(s.unsafe_substring(start=i + 1, end=i + 2))
+      i = i + 2
+    } else if c == '&' {
+      match decode_entity(s, i) {
+        Some((value, end)) => {
+          buf.write_string(value)
+          i = end
+        }
+        None => {
+          buf.write_char('&')
+          i = i + 1
+        }
+      }
+    } else {
+      buf.write_string(s.unsafe_substring(start=i, end=i + 1))
+      i = i + 1
+    }
+  }
+  buf.to_string()
+}
+
+///|
+/// Split a wiki destination into page target and optional fragment.
 fn split_wikilink_destination(destination : String) -> (String, String) {
   let parts = destination.split("#").collect()
   if parts.length() <= 1 {
@@ -14,525 +421,96 @@ fn split_wikilink_destination(destination : String) -> (String, String) {
 }
 
 ///|
-/// Try to parse a wiki link: [[target]] or [[target|label]].
-fn InlineParser::try_parse_wikilink(
-  self : InlineParser,
-  start : Int,
-) -> Inline? {
-  if !self.wikilinks || !self.scanner.matches("[[") {
+/// `[[target]]` or `[[target|label]]` (opt-in extension).
+fn parse_wikilink(text : String, start : Int) -> (Inline, Int)? {
+  let len = text.length()
+  guard start + 1 < len && text.unsafe_get(start + 1) == '[' else {
     return None
   }
-  self.scanner.advance(2) // Skip [[
   let target_buf = StringBuilder::new()
   let label_buf = StringBuilder::new()
   let mut in_label = false
-  while !self.scanner.is_eof() {
-    match self.scanner.peek() {
-      Some(']') if char_is(self.scanner.peek_at(1), ']') => {
-        self.scanner.advance(2)
-        let raw_target = target_buf.to_string().trim(chars=" \t").to_owned()
-        if raw_target.is_empty() {
-          self.scanner.restore(start)
-          return None
-        }
-        let raw_label = if in_label {
-          label_buf.to_string().trim(chars=" \t").to_owned()
-        } else {
-          ""
-        }
-        let (target, fragment) = split_wikilink_destination(raw_target)
-        return Some(
+  let mut i = start + 2
+  while i < len {
+    let c = text.unsafe_get(i)
+    if c == ']' && i + 1 < len && text.unsafe_get(i + 1) == ']' {
+      let raw_target = target_buf.to_string().trim(chars=" \t").to_owned()
+      if raw_target.is_empty() {
+        return None
+      }
+      let raw_label = if in_label {
+        label_buf.to_string().trim(chars=" \t").to_owned()
+      } else {
+        ""
+      }
+      let (target, fragment) = split_wikilink_destination(raw_target)
+      return Some(
+        (
           Inline::WikiLink(
             target~,
             label=raw_label,
             fragment~,
-            span=Span::new(start, self.scanner.pos),
+            span=Span::new(start, i + 2),
           ),
-        )
-      }
-      Some('\n') => {
-        self.scanner.restore(start)
-        return None
-      }
-      Some('[') if char_is(self.scanner.peek_at(1), '[') => {
-        self.scanner.restore(start)
-        return None
-      }
-      Some('|') if !in_label => {
-        in_label = true
-        self.scanner.advance(1)
-      }
-      Some('\\') => {
-        self.scanner.advance(1)
-        match self.scanner.consume() {
-          Some(c) =>
-            if in_label {
-              label_buf.write_char(c)
-            } else {
-              target_buf.write_char(c)
-            }
-          None => break
-        }
-      }
-      Some(c) => {
-        if in_label {
-          label_buf.write_char(c)
-        } else {
-          target_buf.write_char(c)
-        }
-        self.scanner.advance(1)
-      }
-      None => break
-    }
-  }
-  self.scanner.restore(start)
-  None
-}
-
-///|
-/// Try to parse link
-fn InlineParser::try_parse_link(self : InlineParser, start : Int) -> Inline? {
-  self.scanner.advance(1) // Skip [
-
-  // Parse link text
-  let text_buf = StringBuilder::new()
-  let mut bracket_depth = 1
-  while !self.scanner.is_eof() && bracket_depth > 0 {
-    match self.scanner.peek() {
-      Some('[') => {
-        bracket_depth += 1
-        text_buf.write_char('[')
-        self.scanner.advance(1)
-      }
-      Some(']') => {
-        bracket_depth -= 1
-        if bracket_depth > 0 {
-          text_buf.write_char(']')
-        }
-        self.scanner.advance(1)
-      }
-      Some('\\') => {
-        self.scanner.advance(1)
-        match self.scanner.consume() {
-          Some(c) => text_buf.write_char(c)
-          None => break
-        }
-      }
-      Some(c) => {
-        text_buf.write_char(c)
-        self.scanner.advance(1)
-      }
-      None => break
-    }
-  }
-  let link_text = text_buf.to_string()
-
-  // Check for inline link (url)
-  if char_is(self.scanner.peek(), '(') {
-    self.scanner.advance(1)
-
-    // Parse URL
-    let url_buf = StringBuilder::new()
-    let mut paren_depth = 1
-
-    // Skip leading whitespace
-    let _ = self.scanner.skip_spaces()
-
-    // Check for angle-bracketed URL
-    if char_is(self.scanner.peek(), '<') {
-      self.scanner.advance(1)
-      let mut angle_url_has_newline = false
-      while !self.scanner.is_eof() {
-        match self.scanner.peek() {
-          Some('>') => {
-            self.scanner.advance(1)
-            break
-          }
-          Some('\n') => {
-            // Newline in angle-bracket URL invalidates the link
-            angle_url_has_newline = true
-            break
-          }
-          Some(c) => {
-            url_buf.write_char(c)
-            self.scanner.advance(1)
-          }
-          None => break
-        }
-      }
-      if angle_url_has_newline {
-        self.scanner.restore(start)
-        return None
-      }
-    } else {
-      let mut url_has_newline = false
-      while !self.scanner.is_eof() {
-        match self.scanner.peek() {
-          Some('(') => {
-            paren_depth += 1
-            url_buf.write_char('(')
-            self.scanner.advance(1)
-          }
-          Some(')') => {
-            paren_depth -= 1
-            if paren_depth == 0 {
-              break
-            }
-            url_buf.write_char(')')
-            self.scanner.advance(1)
-          }
-          Some(' ') | Some('\t') => break // End of URL
-          Some('\n') => {
-            // Newline in non-angle-bracket URL invalidates the link
-            url_has_newline = true
-            break
-          }
-          Some(c) => {
-            url_buf.write_char(c)
-            self.scanner.advance(1)
-          }
-          None => break
-        }
-      }
-      // If URL contains newline, abort link parsing
-      if url_has_newline {
-        self.scanner.restore(start)
-        return None
-      }
-    }
-    let url = url_buf.to_string()
-
-    // Skip whitespace (including newlines) before title
-    while !self.scanner.is_eof() {
-      match self.scanner.peek() {
-        Some(' ') | Some('\t') | Some('\n') => self.scanner.advance(1)
-        _ => break
-      }
-    }
-
-    // Parse optional title (supports ", ', and () delimiters)
-    let title = match self.scanner.peek() {
-      Some('"') | Some('\'') => {
-        let quote = match self.scanner.consume() {
-          Some(c) => c
-          None => '"'
-        }
-        let title_buf = StringBuilder::new()
-        while !self.scanner.is_eof() {
-          match self.scanner.peek() {
-            Some(c) if c == quote => {
-              self.scanner.advance(1)
-              break
-            }
-            Some('\\') => {
-              self.scanner.advance(1)
-              match self.scanner.consume() {
-                Some(c) => title_buf.write_char(c)
-                None => break
-              }
-            }
-            Some(c) => {
-              title_buf.write_char(c)
-              self.scanner.advance(1)
-            }
-            None => break
-          }
-        }
-        title_buf.to_string()
-      }
-      Some('(') => {
-        self.scanner.advance(1) // Skip opening (
-        let title_buf = StringBuilder::new()
-        let mut paren_depth = 1
-        while !self.scanner.is_eof() && paren_depth > 0 {
-          match self.scanner.peek() {
-            Some(')') => {
-              paren_depth -= 1
-              if paren_depth == 0 {
-                self.scanner.advance(1)
-                break
-              }
-              title_buf.write_char(')')
-              self.scanner.advance(1)
-            }
-            Some('(') => {
-              paren_depth += 1
-              title_buf.write_char('(')
-              self.scanner.advance(1)
-            }
-            Some('\\') => {
-              self.scanner.advance(1)
-              match self.scanner.consume() {
-                Some(c) => title_buf.write_char(c)
-                None => break
-              }
-            }
-            Some(c) => {
-              title_buf.write_char(c)
-              self.scanner.advance(1)
-            }
-            None => break
-          }
-        }
-        title_buf.to_string()
-      }
-      _ => ""
-    }
-
-    // Skip whitespace and closing paren
-    let _ = self.scanner.skip_spaces()
-    if char_is(self.scanner.peek(), ')') {
-      self.scanner.advance(1)
-
-      // Parse link text as inlines
-      let children = if self.scanner.is_bmp() {
-        parse_inlines_known_bmp(link_text, wikilinks=self.wikilinks)
-      } else {
-        parse_inlines(link_text, wikilinks=self.wikilinks)
-      }
-
-      // CommonMark: Links cannot contain other links
-      // If link text contains a link, the outer link is invalid
-      if contains_link(children) {
-        self.scanner.restore(start)
-        return None
-      }
-      return Some(
-        Inline::Link(
-          children~,
-          url~,
-          title~,
-          span=Span::new(start, self.scanner.pos),
+          i + 2,
         ),
       )
     }
-  }
-
-  // Check for reference link [text][ref]
-  if char_is(self.scanner.peek(), '[') {
-    self.scanner.advance(1)
-    let label_buf = StringBuilder::new()
-    while !self.scanner.is_eof() {
-      match self.scanner.peek() {
-        Some(']') => {
-          self.scanner.advance(1)
-          break
-        }
-        Some(c) => {
-          label_buf.write_char(c)
-          self.scanner.advance(1)
-        }
-        None => break
-      }
-    }
-    let label = label_buf.to_string()
-    let children = if self.scanner.is_bmp() {
-      parse_inlines_known_bmp(link_text, wikilinks=self.wikilinks)
-    } else {
-      parse_inlines(link_text, wikilinks=self.wikilinks)
-    }
-
-    // CommonMark: Links cannot contain other links
-    if contains_link(children) {
-      self.scanner.restore(start)
+    if c == '\n' {
       return None
     }
-    return Some(
-      Inline::RefLink(
-        children~,
-        label~,
-        span=Span::new(start, self.scanner.pos),
-      ),
-    )
-  }
-
-  // Not a valid link
-  self.scanner.restore(start)
-  None
-}
-
-///|
-/// Try to parse footnote reference [^label]
-fn InlineParser::try_parse_footnote_reference(
-  self : InlineParser,
-  start : Int,
-) -> Inline? {
-  self.scanner.advance(1) // Skip [
-  if !char_is(self.scanner.peek(), '^') {
-    self.scanner.restore(start)
-    return None
-  }
-  self.scanner.advance(1) // Skip ^
-
-  // Read label (alphanumeric, -, _)
-  let label_buf = StringBuilder::new()
-  while !self.scanner.is_eof() {
-    match self.scanner.peek() {
-      Some(']') => break
-      Some(c) if (c >= 'a' && c <= 'z') ||
-        (c >= 'A' && c <= 'Z') ||
-        (c >= '0' && c <= '9') ||
-        c == '-' ||
-        c == '_' => {
-        label_buf.write_char(c)
-        self.scanner.advance(1)
-      }
-      _ => {
-        self.scanner.restore(start)
-        return None
-      }
+    if c == '[' && i + 1 < len && text.unsafe_get(i + 1) == '[' {
+      return None
     }
-  }
-  let label = label_buf.to_string()
-  if label.is_empty() {
-    self.scanner.restore(start)
-    return None
-  }
-  if !char_is(self.scanner.peek(), ']') {
-    self.scanner.restore(start)
-    return None
-  }
-  self.scanner.advance(1) // Skip ]
-  Some(
-    Inline::FootnoteReference(label~, span=Span::new(start, self.scanner.pos)),
-  )
-}
-
-///|
-/// Try to parse image
-fn InlineParser::try_parse_image(self : InlineParser, start : Int) -> Inline? {
-  self.scanner.advance(1) // Skip !
-  if !char_is(self.scanner.peek(), '[') {
-    self.scanner.restore(start)
-    return None
-  }
-  self.scanner.advance(1) // Skip [
-
-  // Parse alt text
-  let alt_buf = StringBuilder::new()
-  while !self.scanner.is_eof() {
-    match self.scanner.peek() {
-      Some(']') => {
-        self.scanner.advance(1)
-        break
-      }
-      Some('\\') => {
-        self.scanner.advance(1)
-        match self.scanner.consume() {
-          Some(c) => alt_buf.write_char(c)
-          None => break
-        }
-      }
-      Some(c) => {
-        alt_buf.write_char(c)
-        self.scanner.advance(1)
-      }
-      None => break
+    if c == '|' && !in_label {
+      in_label = true
+      i = i + 1
+      continue
     }
-  }
-  let alt = alt_buf.to_string()
-
-  // Check for inline image (url)
-  if char_is(self.scanner.peek(), '(') {
-    self.scanner.advance(1)
-
-    // Parse URL (same as link)
-    let url_buf = StringBuilder::new()
-    let _ = self.scanner.skip_spaces()
-    if char_is(self.scanner.peek(), '<') {
-      self.scanner.advance(1)
-      while !self.scanner.is_eof() {
-        match self.scanner.peek() {
-          Some('>') => {
-            self.scanner.advance(1)
-            break
-          }
-          Some(c) => {
-            url_buf.write_char(c)
-            self.scanner.advance(1)
-          }
-          None => break
-        }
-      }
+    let piece = if c == '\\' && i + 1 < len {
+      let s = text.unsafe_substring(start=i + 1, end=i + 2)
+      i = i + 2
+      s
     } else {
-      while !self.scanner.is_eof() {
-        match self.scanner.peek() {
-          Some(')') | Some(' ') | Some('\t') => break
-          Some(c) => {
-            url_buf.write_char(c)
-            self.scanner.advance(1)
-          }
-          None => break
-        }
-      }
+      let s = text.unsafe_substring(start=i, end=i + 1)
+      i = i + 1
+      s
     }
-    let url = url_buf.to_string()
-    let _ = self.scanner.skip_spaces()
-
-    // Parse optional title
-    let title = match self.scanner.peek() {
-      Some('"') | Some('\'') => {
-        let quote = match self.scanner.consume() {
-          Some(c) => c
-          None => '"'
-        }
-        let title_buf = StringBuilder::new()
-        while !self.scanner.is_eof() {
-          match self.scanner.peek() {
-            Some(c) if c == quote => {
-              self.scanner.advance(1)
-              break
-            }
-            Some(c) => {
-              title_buf.write_char(c)
-              self.scanner.advance(1)
-            }
-            None => break
-          }
-        }
-        title_buf.to_string()
-      }
-      _ => ""
-    }
-    let _ = self.scanner.skip_spaces()
-    if char_is(self.scanner.peek(), ')') {
-      self.scanner.advance(1)
-      return Some(
-        Inline::Image(
-          alt~,
-          url~,
-          title~,
-          span=Span::new(start, self.scanner.pos),
-        ),
-      )
+    if in_label {
+      label_buf.write_string(piece)
+    } else {
+      target_buf.write_string(piece)
     }
   }
-
-  // Check for reference image ![alt][ref]
-  if char_is(self.scanner.peek(), '[') {
-    self.scanner.advance(1)
-    let label_buf = StringBuilder::new()
-    while !self.scanner.is_eof() {
-      match self.scanner.peek() {
-        Some(']') => {
-          self.scanner.advance(1)
-          break
-        }
-        Some(c) => {
-          label_buf.write_char(c)
-          self.scanner.advance(1)
-        }
-        None => break
-      }
-    }
-    return Some(
-      Inline::RefImage(
-        alt~,
-        label=label_buf.to_string(),
-        span=Span::new(start, self.scanner.pos),
-      ),
-    )
-  }
-  self.scanner.restore(start)
   None
+}
+
+///|
+/// `[^label]` footnote reference (GFM).
+fn parse_footnote_reference(text : String, start : Int) -> (Inline, Int)? {
+  let len = text.length()
+  guard start + 1 < len && text.unsafe_get(start + 1) == '^' else {
+    return None
+  }
+  let mut i = start + 2
+  while i < len {
+    let c = text.unsafe_get(i)
+    if c == ']' {
+      break
+    }
+    if !(is_ascii_alnum_unit(c) || c == '-' || c == '_') {
+      return None
+    }
+    i = i + 1
+  }
+  guard i < len && i > start + 2 else { return None }
+  Some(
+    (
+      Inline::FootnoteReference(
+        label=text.unsafe_substring(start=start + 2, end=i),
+        span=Span::new(start, i + 1),
+      ),
+      i + 1,
+    ),
+  )
 }

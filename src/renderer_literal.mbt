@@ -580,7 +580,14 @@ fn render_block_literal(
           render_inlines_literal(children, buf, opts)
           buf.write_char('\n')
           let underline_char = if level == 1 { '=' } else { '-' }
-          write_marker_repeat(buf, underline_char, 3)
+          // Match the serializer, which sizes the underline to the last line.
+          let content = StringBuilder::new()
+          serialize_inlines(children, content)
+          write_marker_repeat(
+            buf,
+            underline_char,
+            last_line_width(content.to_string()),
+          )
         }
       }
       write_heading_close(buf, level)
