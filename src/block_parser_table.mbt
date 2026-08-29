@@ -36,11 +36,7 @@ fn BlockParser::table_to_block(
   let header = self.parse_table_row(node.lines[0], columns)
   let rows : Array[Array[TableCell]] = []
   for i = 1; i < node.lines.length(); i = i + 1 {
-    let line = node.lines[i]
-    if !line.contains("|") {
-      break
-    }
-    rows.push(self.parse_table_row(line, columns))
+    rows.push(self.parse_table_row(node.lines[i], columns))
   }
   Some(
     Block::Table(
@@ -61,18 +57,21 @@ fn parse_table_alignments(line : String) -> Array[TableAlign] {
   let cells = split_table_cells(line)
   for cell in cells {
     let trimmed = cell.trim(chars=" \t\r\n").to_owned()
+    // Every delimiter cell has to be a run of dashes, optionally fenced by
+    // colons; nothing else, and never empty.
     if trimmed.is_empty() {
-      continue
+      return []
     }
-    let mut valid = true
+    let mut dashes = 0
     for i = 0; i < trimmed.length(); i = i + 1 {
       let c = trimmed.unsafe_get(i)
-      if c != '-' && c != ':' {
-        valid = false
-        break
+      if c == '-' {
+        dashes = dashes + 1
+      } else if c != ':' {
+        return []
       }
     }
-    if !valid {
+    if dashes == 0 {
       return []
     }
     let starts = trimmed.unsafe_get(0) == ':'

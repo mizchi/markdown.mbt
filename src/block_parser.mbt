@@ -248,6 +248,25 @@ fn is_space_or_tab(c : UInt16) -> Bool {
 }
 
 ///|
+/// Whether the rest of the line holds an unescaped `|`, which is what makes it
+/// a table row.
+fn BlockParser::line_has_cell_separator(self : BlockParser) -> Bool {
+  let mut i = self.next_nonspace
+  while i < self.line_len {
+    let c = self.line.unsafe_get(i)
+    if c == '\\' {
+      i = i + 2
+      continue
+    }
+    if c == '|' {
+      return true
+    }
+    i = i + 1
+  }
+  false
+}
+
+///|
 /// Move `count` characters (or columns, when `columns` is set) forward,
 /// expanding tabs to the next tab stop.
 fn BlockParser::advance_offset(
@@ -564,8 +583,14 @@ fn BlockParser::check_open_blocks(self : BlockParser) -> (Node, Bool, Bool) {
         if self.blank && container.html_kind >= 6 {
           all_matched = false
         }
-      NodeKind::ParagraphNode | NodeKind::TableNode =>
+      NodeKind::ParagraphNode =>
         if self.blank {
+          all_matched = false
+        }
+      NodeKind::TableNode =>
+        // Only a line that still looks like a row keeps the table open;
+        // anything else has to be reconsidered as ordinary block content.
+        if self.blank || !self.line_has_cell_separator() {
           all_matched = false
         }
       NodeKind::HeadingNode | NodeKind::ThematicBreakNode => all_matched = false

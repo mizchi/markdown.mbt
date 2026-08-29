@@ -293,3 +293,27 @@ test "render: raw text HTML block ends at its own closing tag" {
   )
 }
 
+
+///|
+test "render: delimiter row cells need a dash" {
+  let html = md_to_html("a | b\n--- | :\n")
+  @debug.debug_inspect(
+    html,
+    content=(
+      #|"<p>a | b\n--- | :</p>\n"
+    ),
+  )
+}
+
+
+///|
+test "render: a line without a cell separator ends the table" {
+  let html = md_to_html("a | b\n--- | ---\nordinary text\n")
+  @debug.debug_inspect(
+    html,
+    content=(
+      #|"<table>\n<thead>\n<tr>\n<th>a</th>\n<th>b</th>\n</tr>\n</thead>\n</table>\n<p>ordinary text</p>\n"
+    ),
+  )
+}
+
