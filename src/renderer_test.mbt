@@ -261,3 +261,22 @@ test "render: superscript letters are not punctuation for flanking" {
   )
 }
 
+
+///|
+test "render: Latin Extended-A labels fold to their own case pair" {
+  // U+013A is lowercase; it must not match U+013B.
+  let mismatched = md_to_html("[\u{13a}]\n\n[\u{13b}]: /wrong\n")
+  @debug.debug_inspect(
+    mismatched,
+    content=(
+      #|"<p>[ĺ]</p>\n"
+    ),
+  )
+  let matched = md_to_html("[\u{139}]\n\n[\u{13a}]: /right\n")
+  @debug.debug_inspect(
+    matched,
+    content=(
+      #|"<p><a href=\"/right\">Ĺ</a></p>\n"
+    ),
+  )
+}

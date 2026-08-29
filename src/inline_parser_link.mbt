@@ -314,7 +314,8 @@ fn normalize_label(label : String) -> String {
 
 ///|
 /// Case folding for label matching. Covers the alphabets CommonMark's own test
-/// suite exercises; anything else is left untouched.
+/// suite exercises — ASCII, Latin-1, Latin Extended-A, Greek and Cyrillic —
+/// and leaves anything else untouched.
 fn fold_case(c : Char) -> Char {
   let code = c.to_int()
   if code >= 'A'.to_int() && code <= 'Z'.to_int() {
@@ -324,11 +325,7 @@ fn fold_case(c : Char) -> Char {
     return (code + 32).unsafe_to_char()
   }
   if code >= 0x100 && code <= 0x17F {
-    // Latin Extended-A is laid out as upper/lower pairs.
-    if code % 2 == 0 {
-      return (code + 1).unsafe_to_char()
-    }
-    return c
+    return fold_latin_extended_a(code)
   }
   if code >= 0x391 && code <= 0x3A9 && code != 0x3A2 {
     return (code + 32).unsafe_to_char()
@@ -340,6 +337,26 @@ fn fold_case(c : Char) -> Char {
     return (code + 32).unsafe_to_char()
   }
   c
+}
+
+///|
+/// Latin Extended-A is laid out as upper/lower pairs, but the parity flips
+/// twice inside the block, so the sub-ranges have to be spelled out.
+fn fold_latin_extended_a(code : Int) -> Char {
+  if code <= 0x137 || (code >= 0x14A && code <= 0x177) {
+    // Even is uppercase.
+    return (if code % 2 == 0 { code + 1 } else { code }).unsafe_to_char()
+  }
+  if (code >= 0x139 && code <= 0x148) || (code >= 0x179 && code <= 0x17E) {
+    // Odd is uppercase.
+    return (if code % 2 == 1 { code + 1 } else { code }).unsafe_to_char()
+  }
+  if code == 0x178 {
+    // Ÿ folds to ÿ, back in Latin-1.
+    return '\u{ff}'
+  }
+  // U+0138 ĸ, U+0149 ŉ and U+017F ſ have no simple pair here.
+  code.unsafe_to_char()
 }
 
 ///|
