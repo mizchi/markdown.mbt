@@ -170,3 +170,33 @@ test "incremental result stats" {
     None => fail("Could not find 'P3' in source")
   }
 }
+
+///|
+test "incremental: deleting a link definition unresolves its references" {
+  let old_source = "[id]\n\n[id]: /old\n"
+  let old_doc = parse(old_source).document
+  let new_source = "[id]\n\n"
+  let edit = EditInfo::delete(6, 10)
+  let result = parse_incremental(old_doc, old_source, new_source, edit)
+  @debug.debug_inspect(
+    render_html(result.document),
+    content=(
+      #|"<p>[id]</p>\n"
+    ),
+  )
+}
+
+///|
+test "incremental: adding a link definition resolves reused references" {
+  let old_source = "[id]\n\n"
+  let old_doc = parse(old_source).document
+  let new_source = "[id]\n\n[id]: /new\n"
+  let edit = EditInfo::insert(6, 11)
+  let result = parse_incremental(old_doc, old_source, new_source, edit)
+  @debug.debug_inspect(
+    render_html(result.document),
+    content=(
+      #|"<p><a href=\"/new\">id</a></p>\n"
+    ),
+  )
+}
