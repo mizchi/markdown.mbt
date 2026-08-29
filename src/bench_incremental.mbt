@@ -6,7 +6,7 @@
 
 ///|
 fn generate_paragraph_doc(count : Int) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("# Document Title\n\n")
   for i = 0; i < count; i = i + 1 {
     buf.write_string(

@@ -60,7 +60,7 @@ fn sanitize_html(
 ) -> String {
   let chars = html.to_array()
   let len = chars.length()
-  let output = StringBuilder::new()
+  let output = StringBuilder()
   let mut pos = 0
   while pos < len {
     if chars[pos] == '<' {
@@ -283,7 +283,7 @@ fn parse_and_sanitize_tag(
   }
 
   // Parse attributes
-  let output = StringBuilder::new()
+  let output = StringBuilder()
   output.write_char('<')
   if is_closing {
     output.write_char('/')
@@ -466,7 +466,7 @@ fn parse_attribute_value(chars : Array[Char], start : Int) -> (String, Int) {
 fn strip_all_html(html : String) -> String {
   let chars = html.to_array()
   let len = chars.length()
-  let output = StringBuilder::new()
+  let output = StringBuilder()
   let mut pos = 0
   let mut in_tag = false
   while pos < len {
@@ -514,7 +514,7 @@ fn is_attr_name_char(c : Char) -> Bool {
 
 ///|
 fn extract_string(chars : Array[Char], start : Int, end : Int) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for i = start; i < end && i < chars.length(); i = i + 1 {
     buf.write_char(chars[i])
   }
@@ -524,7 +524,7 @@ fn extract_string(chars : Array[Char], start : Int, end : Int) -> String {
 ///|
 fn to_lowercase_san(s : String) -> String {
   let chars = s.to_array()
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for c in chars {
     if c >= 'A' && c <= 'Z' {
       let lower = (c.to_int() + 32).unsafe_to_char()
@@ -539,7 +539,7 @@ fn to_lowercase_san(s : String) -> String {
 ///|
 fn escape_attr_value(s : String) -> String {
   let chars = s.to_array()
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for c in chars {
     match c {
       '"' => buf.write_string("&quot;")
@@ -594,7 +594,7 @@ fn decode_html_entities(s : String) -> String {
 fn decode_numeric_entities(s : String) -> String {
   let chars = s.to_array()
   let len = chars.length()
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut i = 0
   while i < len {
     if chars[i] == '&' && i + 2 < len && chars[i + 1] == '#' {
@@ -685,7 +685,7 @@ fn replace_string(s : String, from : String, to : String) -> String {
   if f_len == 0 || f_len > s_len {
     return s
   }
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut i = 0
   while i < s_len {
     let mut found = true

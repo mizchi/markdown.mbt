@@ -44,7 +44,7 @@ pub fn render_tui_with_options(
   doc : @markdown.Document,
   options : TuiOptions,
 ) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for block in doc.children {
     render_block_tui_with_options(block, buf, options)
   }

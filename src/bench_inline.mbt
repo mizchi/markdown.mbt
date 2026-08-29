@@ -38,7 +38,7 @@ let inline_many_emphasis : String = "*a* *b* *c* *d* *e* *f* *g* *h* *i* *j* **k
 
 ///|
 fn generate_inline_stress(count : Int) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for i = 0; i < count; i = i + 1 {
     buf.write_string("*em\{i}* **strong\{i}** `code\{i}` ")
   }

@@ -45,7 +45,7 @@ fn extract_from_blocks(
 ///|
 /// Extract frontmatter as key-value pairs
 pub fn extract_frontmatter(doc : @markdown.Document) -> Map[String, String] {
-  let result : Map[String, String] = {}
+  let result : Map[String, String] = Map([])
   match doc.frontmatter {
     Some(fm) =>
       // Use parsed entries from frontmatter

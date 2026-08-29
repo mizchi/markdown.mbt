@@ -11,7 +11,7 @@ fn BlockParser::try_parse_frontmatter(self : BlockParser) -> Frontmatter? {
   if i < self.len {
     i = i + 1
   }
-  let yaml = StringBuilder::new()
+  let yaml = StringBuilder()
   let mut found_closing = false
   let mut end = i
   while i < self.len {

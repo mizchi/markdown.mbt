@@ -89,7 +89,7 @@ pub fn render_html_literal(
   image_preview? : Bool = false,
 ) -> String {
   let opts : LiteralOpts = { positions, image_preview }
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for block in doc.children {
     render_block_literal(block, buf, opts)
   }
@@ -581,7 +581,7 @@ fn render_block_literal(
           buf.write_char('\n')
           let underline_char = if level == 1 { '=' } else { '-' }
           // Match the serializer, which sizes the underline to the last line.
-          let content = StringBuilder::new()
+          let content = StringBuilder()
           serialize_inlines(children, content)
           write_marker_repeat(
             buf,
@@ -613,7 +613,7 @@ fn render_block_literal(
       // emit `data-src` on them. The outer <blockquote> annotation is
       // enough — clicks inside it walk up to here.
       for child in children {
-        let child_buf = StringBuilder::new()
+        let child_buf = StringBuilder()
         render_block_literal(child, child_buf, opts.nested())
         write_blockquote_prefixed(buf, child_buf.to_string())
       }
@@ -663,7 +663,7 @@ fn render_block_literal(
           buf.write_char('\n')
           write_marker(buf, "    ")
         }
-        let child_buf = StringBuilder::new()
+        let child_buf = StringBuilder()
         render_block_literal(child, child_buf, opts.nested())
         buf.write_string(strip_trailing_newline(child_buf.to_string()))
         first = false

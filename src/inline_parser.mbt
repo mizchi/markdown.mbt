@@ -270,7 +270,7 @@ fn parse_inlines_with_defs(
 fn InlineCtx::scan(self : InlineCtx) -> Unit {
   let text = self.text
   let len = self.len
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut run_start = 0
   let mut i = 0
   // Flush the pending literal run that ends just before `end`.
@@ -589,7 +589,7 @@ fn normalize_code_span(raw : String) -> String {
   if !has_break {
     return stripped
   }
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for i = 0; i < len; i = i + 1 {
     let c = stripped.unsafe_get(i)
     if c == '\n' || c == '\r' {

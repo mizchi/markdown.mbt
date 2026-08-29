@@ -105,7 +105,7 @@ pub fn CrdtDocument::delete(self : CrdtDocument, idx : Int) -> Unit {
 ///|
 /// Get active (non-deleted) text
 pub fn CrdtDocument::get_text(self : CrdtDocument) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for run in self.runs {
     if !run.deleted {
       buf.write_string(run.content)

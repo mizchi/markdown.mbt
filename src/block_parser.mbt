@@ -359,7 +359,7 @@ fn BlockParser::rest_of_line(self : BlockParser) -> String {
   if !self.partially_consumed_tab {
     return self.line.unsafe_substring(start=from, end=self.line_len)
   }
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   from = from + 1
   let chars_to_tab = TabStop - self.column % TabStop
   for i = 0; i < chars_to_tab; i = i + 1 {
@@ -519,7 +519,7 @@ fn sanitize_line(text : String) -> String {
   if !has_nul {
     return text
   }
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for i = 0; i < len; i = i + 1 {
     if text.unsafe_get(i) == 0 {
       buf.write_string(ReplacementChar)
@@ -903,7 +903,7 @@ fn BlockParser::finalize_lists(self : BlockParser, node : Node) -> Unit {
 
 ///|
 fn joined_lines(node : Node) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for i, line in node.lines {
     if i > 0 {
       buf.write_char('\n')
@@ -915,7 +915,7 @@ fn joined_lines(node : Node) -> String {
 
 ///|
 fn code_lines(node : Node) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for line in node.lines {
     buf.write_string(line)
     buf.write_char('\n')
@@ -930,7 +930,7 @@ fn trimmed_code_lines(node : Node) -> String {
   while end > 0 && is_blank_text(node.lines[end - 1]) {
     end = end - 1
   }
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for i = 0; i < end; i = i + 1 {
     buf.write_string(node.lines[i])
     buf.write_char('\n')

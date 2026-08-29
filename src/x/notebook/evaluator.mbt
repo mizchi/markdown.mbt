@@ -118,7 +118,7 @@ fn extract_exports_from_output(
   output : CellOutput,
   export_names : Array[String],
 ) -> Map[String, String] {
-  let exports : Map[String, String] = {}
+  let exports : Map[String, String] = Map([])
   match output {
     Json(json_str) =>
       // Try to extract exports object from JSON result
@@ -179,7 +179,7 @@ fn extract_json_value_at(json : String, start : Int) -> String? {
   // String value
   if c == '"' {
     pos = pos + 1
-    let buf = StringBuilder::new()
+    let buf = StringBuilder()
     while pos < chars.length() && chars[pos] != '"' {
       if chars[pos] == '\\' && pos + 1 < chars.length() {
         pos = pos + 1
@@ -194,7 +194,7 @@ fn extract_json_value_at(json : String, start : Int) -> String? {
 
   // Number value
   if (c >= '0' && c <= '9') || c == '-' {
-    let buf = StringBuilder::new()
+    let buf = StringBuilder()
     while pos < chars.length() &&
           (
             (chars[pos] >= '0' && chars[pos] <= '9') ||
@@ -266,7 +266,7 @@ pub fn render_output_to_html(output : CellOutput) -> String {
     Json(s) => "<pre class=\"cell-output json\">\{escape_html(s)}</pre>"
     Error(s) => "<pre class=\"cell-output error\">\{escape_html(s)}</pre>"
     Multi(outputs) => {
-      let buf = StringBuilder::new()
+      let buf = StringBuilder()
       buf.write_string("<div class=\"cell-output multi\">")
       for out in outputs {
         buf.write_string(render_output_to_html(out))
@@ -280,7 +280,7 @@ pub fn render_output_to_html(output : CellOutput) -> String {
 ///|
 /// Escape HTML special characters
 fn escape_html(s : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let chars = s.to_array()
   for c in chars {
     match c {

@@ -12,9 +12,9 @@ export default defineConfig({
   build: {
     rollupOptions: {
       input: {
-        index: resolve(__dirname, "playground/index.html"),
-        literal: resolve(__dirname, "playground/literal/index.html"),
-        folddown: resolve(__dirname, "playground/folddown.html"),
+        index: resolve(import.meta.dirname, "playground/index.html"),
+        literal: resolve(import.meta.dirname, "playground/literal/index.html"),
+        folddown: resolve(import.meta.dirname, "playground/folddown.html"),
       },
     },
   },

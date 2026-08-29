@@ -154,7 +154,7 @@ pub fn NotebookSession::validate(
 ///|
 /// Serialize notebook state to JSON
 pub fn NotebookSession::to_json(self : NotebookSession) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("{")
 
   // Path
@@ -210,7 +210,7 @@ pub fn NotebookSession::to_json(self : NotebookSession) -> String {
 ///|
 /// Escape and quote string for JSON
 fn json_string(s : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("\"")
   let chars = s.to_array()
   for c in chars {
@@ -230,7 +230,7 @@ fn json_string(s : String) -> String {
 ///|
 /// Convert string array to JSON array
 fn json_array(arr : Array[String]) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("[")
   for i, s in arr {
     if i > 0 {
@@ -249,7 +249,7 @@ fn json_array(arr : Array[String]) -> String {
 ///|
 /// Render all cell outputs to HTML
 pub fn NotebookSession::render_html(self : NotebookSession) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("<div class=\"notebook\">")
   for cell in self.notebook.get_execution_order() {
     buf.write_string("<div class=\"cell\" data-id=\"")
@@ -277,7 +277,7 @@ pub fn NotebookSession::render_html(self : NotebookSession) -> String {
 ///|
 /// Escape HTML content
 fn escape_html_content(s : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let chars = s.to_array()
   for c in chars {
     match c {

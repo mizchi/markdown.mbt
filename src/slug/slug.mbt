@@ -11,7 +11,7 @@
 /// - "日本語タイトル" → "日本語タイトル"
 /// - "API Reference" → "api-reference"
 pub fn generate_heading_id(text : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let lower = text.to_lower()
   let mut prev_was_separator = false
   for c in lower {

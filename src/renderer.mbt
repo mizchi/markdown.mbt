@@ -13,7 +13,7 @@ priv struct HtmlBuf {
 
 ///|
 fn HtmlBuf::new() -> HtmlBuf {
-  { inner: StringBuilder::new(), at_line_start: true }
+  { inner: StringBuilder(), at_line_start: true }
 }
 
 ///|
@@ -512,7 +512,7 @@ fn write_image(
 /// An image's `alt` keeps the source of its label so it round-trips; the HTML
 /// form is that label rendered as plain text.
 fn render_alt_text(alt : String, ctx : RenderCtx) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   write_plain_text(parse_inlines_with_defs(alt, ctx.defs, false), buf)
   buf.to_string()
 }
@@ -566,7 +566,7 @@ fn escape_html(s : String, attr? : Bool = false) -> String {
   if !needs_escape {
     return s
   }
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for c in s {
     match c {
       '&' => buf.write_string("&amp;")

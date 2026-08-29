@@ -77,7 +77,7 @@ pub fn build_dependency_graph_with_cell_deps(
 ///|
 /// Topological sort using Kahn's algorithm
 fn topological_sort(graph : DependencyGraph) -> Array[String] {
-  let in_degree : Map[String, Int] = {}
+  let in_degree : Map[String, Int] = Map([])
   let result : Array[String] = []
 
   // Initialize in-degree for all cells
@@ -124,8 +124,8 @@ fn topological_sort(graph : DependencyGraph) -> Array[String] {
 /// Check for circular dependencies
 pub fn detect_cycles(graph : DependencyGraph) -> Array[Array[String]] {
   let cycles : Array[Array[String]] = []
-  let visited : Map[String, Bool] = {}
-  let rec_stack : Map[String, Bool] = {}
+  let visited : Map[String, Bool] = Map([])
+  let rec_stack : Map[String, Bool] = Map([])
   let path : Array[String] = []
   fn dfs(node : String) -> Bool {
     visited[node] = true
@@ -180,7 +180,7 @@ pub fn get_stale_cells(
   changed_cell_id : String,
 ) -> Array[String] {
   let stale : Array[String] = []
-  let visited : Map[String, Bool] = {}
+  let visited : Map[String, Bool] = Map([])
   fn mark_stale(cell_id : String) {
     if visited.get(cell_id).unwrap_or(false) {
       return
@@ -280,7 +280,7 @@ fn analyze_moonbit_variables(
         }
         // Extract references from function body, with parameters as local bindings
         match decl_body {
-          DeclBody(expr~, ..) => {
+          DeclBody(expr~) => {
             let local_bindings = defines.copy()
             // Add function parameters to local scope
             match fun_decl.decl_params {
@@ -590,7 +590,7 @@ fn analyze_js_variables(source : String) -> (Array[String], Array[String]) {
 ///|
 /// Extract identifier from string start
 fn extract_identifier(s : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let chars = s.to_array()
   for i, c in chars {
     if i == 0 {
@@ -624,7 +624,7 @@ fn is_ident_char(c : Char) -> Bool {
 /// Split string into lines
 fn split_lines(s : String) -> Array[String] {
   let result : Array[String] = []
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let chars = s.to_array()
   for c in chars {
     if c == '\n' {
@@ -649,7 +649,7 @@ fn split_lines(s : String) -> Array[String] {
 pub fn check_duplicate_definitions(
   cells : Array[Cell],
 ) -> Array[(String, Array[String])] {
-  let var_to_cells : Map[String, Array[String]] = {}
+  let var_to_cells : Map[String, Array[String]] = Map([])
 
   // Collect all definitions
   for cell in cells {

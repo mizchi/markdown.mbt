@@ -7,7 +7,7 @@
 /// this serialization difference alone never fails the comparison.
 fn normalize_void_tags(s : String) -> String {
   let len = s.length()
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut i = 0
   let mut last = 0
   while i + 2 < len {

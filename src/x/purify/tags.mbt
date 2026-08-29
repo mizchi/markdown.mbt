@@ -169,7 +169,7 @@ fn array_contains_str(arr : Array[String], item : String) -> Bool {
 ///|
 fn to_lowercase(s : String) -> String {
   let chars = s.to_array()
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for c in chars {
     if c >= 'A' && c <= 'Z' {
       let lower = (c.to_int() + 32).unsafe_to_char()

@@ -138,7 +138,7 @@ fn split_table_cells(line : String) -> Array[String] {
       end = end - 1
     }
   }
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut i = start
   while i < end {
     let c = trimmed.unsafe_get(i)

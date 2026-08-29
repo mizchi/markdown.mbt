@@ -704,7 +704,7 @@ fn find_closing_tag(content : String, start : Int, tag : String) -> Int {
 
 ///|
 fn get_paragraph_text(children : Array[@markdown.Inline]) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for child in children {
     match child {
       @markdown.Inline::Text(content~, ..) => buf.write_string(content)
@@ -806,7 +806,7 @@ fn parse_string_literal(chars : Array[Char], start : Int) -> String {
 
 ///|
 fn substring(chars : Array[Char], start : Int, end : Int) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for i = start; i < end && i < chars.length(); i = i + 1 {
     buf.write_char(chars[i])
   }

@@ -33,7 +33,7 @@ let web_component : String = "<my-component data-value=\"123\" on-click={handler
 
 ///|
 fn generate_mdx_doc(imports : Int, exports : Int, components : Int) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for i = 0; i < imports; i = i + 1 {
     buf.write_string("import Component\{i} from './Component\{i}'\n")
   }

@@ -4,8 +4,8 @@ version = "0.7.4"
 
 import {
   "moonbitlang/parser@0.3.18",
-  "moonbitlang/x@0.4.47",
-  "mizchi/syntree@0.2.3",
+  "moonbitlang/x@0.5.1",
+  "mizchi/syntree@0.2.4",
   "mizchi/moomaid@0.4.0",
 }
 
@@ -22,4 +22,5 @@ description = "Incremental Markdown parser and compiler"
 source = "src"
 
 preferred_target = "js"
+
 supported_targets = "js+wasm"

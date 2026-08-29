@@ -85,7 +85,7 @@ pub fn create_js_evaluator() -> (String, EvalContext) -> CellOutput {
 ///|
 /// Build JSON string from evaluation context
 fn build_context_json(context : EvalContext) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("{")
   let mut first = true
   for key, value in context.variables {
@@ -141,7 +141,7 @@ fn extract_json_field(json : String, field : String) -> String? {
       // Check if string value
       if chars[pos] == '"' {
         pos += 1
-        let buf = StringBuilder::new()
+        let buf = StringBuilder()
         while pos < chars.length() && chars[pos] != '"' {
           if chars[pos] == '\\' && pos + 1 < chars.length() {
             pos += 1
@@ -292,7 +292,7 @@ pub fn create_moonbit_evaluator() -> (String, EvalContext) -> CellOutput {
 ///|
 /// Convert string array to JSON array string
 fn array_to_json(arr : Array[String]) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("[")
   for i, s in arr {
     if i > 0 {
@@ -309,7 +309,7 @@ fn array_to_json(arr : Array[String]) -> String {
 ///|
 /// Escape special characters in JSON string
 fn escape_json_string(s : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let chars = s.to_array()
   for c in chars {
     match c {
