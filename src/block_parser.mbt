@@ -655,6 +655,8 @@ fn BlockParser::add_text(
   }
   let last_line_blank = self.blank &&
     !(container.kind == NodeKind::BlockQuoteNode ||
+    container.kind == NodeKind::HeadingNode ||
+    container.kind == NodeKind::ThematicBreakNode ||
     container.kind == NodeKind::FencedCodeNode ||
     (
       container.kind == NodeKind::ItemNode &&
@@ -891,7 +893,8 @@ fn trimmed_code_lines(node : Node) -> String {
 ///|
 fn is_blank_text(line : String) -> Bool {
   for i = 0; i < line.length(); i = i + 1 {
-    if !is_space_or_tab(line.unsafe_get(i)) {
+    let c = line.unsafe_get(i)
+    if !is_space_or_tab(c) && c != '\n' && c != '\r' {
       return false
     }
   }
@@ -934,18 +937,24 @@ fn BlockParser::to_block(self : BlockParser, node : Node) -> Block? {
         ),
       )
     }
-    NodeKind::HeadingNode =>
+    NodeKind::HeadingNode => {
+      let content = if node.style == HeadingStyle::Setext {
+        self.strip_link_definitions(joined_lines(node))
+      } else {
+        joined_lines(node)
+      }
       Some(
         Block::Heading(
           level=node.level,
           style=node.style,
-          children=self.parse_inline_content(joined_lines(node)),
+          children=self.parse_inline_content(content),
           closing_hashes=node.closing_hashes,
           span~,
           leading_trivia=empty,
           trailing_trivia=empty,
         ),
       )
+    }
     NodeKind::ThematicBreakNode =>
       Some(
         Block::ThematicBreak(

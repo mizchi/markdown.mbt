@@ -28,14 +28,7 @@ const OUTPUT_DIR = path.join(__dirname, '../src/spec_tests');
 // a known gap in the parser, not an intentional deviation: the goal is for this
 // table to stay empty.
 const SKIP_TESTS = {
-  "Tabs": [7, 9],
-  "Thematic breaks": [61],
-  "Setext headings": [96, 98],
-  "HTML blocks": [175],
-  "Link reference definitions": [215],
-  "List items": [278, 292, 293, 294, 296, 298, 299, 300],
-  "Lists": [307, 315, 318, 319, 320, 321, 323],
-  "Links": [540, 552],
+
 };
 
 function shouldSkip(section, example) {
