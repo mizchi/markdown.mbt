@@ -95,7 +95,7 @@ fn parse_output_format(s : String) -> OutputFormat {
 /// Split string by whitespace (simple implementation)
 fn split_by_whitespace(s : String) -> Array[String] {
   let result : Array[String] = []
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let chars = s.to_array()
   for c in chars {
     if c == ' ' || c == '\t' {
@@ -117,7 +117,7 @@ fn split_by_whitespace(s : String) -> Array[String] {
 /// Split string by comma
 fn split_by_comma(s : String) -> Array[String] {
   let result : Array[String] = []
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let chars = s.to_array()
   for c in chars {
     if c == ',' {

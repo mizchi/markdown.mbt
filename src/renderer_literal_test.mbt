@@ -13,7 +13,7 @@
 /// Mirrors what a browser's text-rendering engine would emit (visible
 /// characters only) under `white-space: pre-wrap`.
 fn strip_html(html : String) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let len = html.length()
   let mut i = 0
   while i < len {

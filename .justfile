@@ -7,7 +7,8 @@ bench-accept:
 test:
   node scripts/gen-tests.js
   node scripts/gen-gfm-tests.js
-  moon test --target js -p mizchi/compat_tests
+  moon test --target js src/cmark_tests
+  moon test --target js src/gfm_tests
 
 # Run VRT (geometry + screenshot) for the playground editor.
 vrt:

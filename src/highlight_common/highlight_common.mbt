@@ -100,7 +100,7 @@ pub fn tokens_to_html(
   tokens : Array[@syntree.HighlightToken],
   theme : HighlightTheme,
 ) -> String {
-  let result = StringBuilder::new()
+  let result = StringBuilder()
   let chars = source.to_array()
   let len = chars.length()
   result.write_string("<pre class=\"highlight ")

@@ -10,7 +10,7 @@ let table_medium : String = "| Col1 | Col2 | Col3 | Col4 |\n|:---|:---:|---:|---
 
 ///|
 fn generate_large_table(rows : Int, cols : Int) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   // Header
   buf.write_string("|")
   for c = 0; c < cols; c = c + 1 {

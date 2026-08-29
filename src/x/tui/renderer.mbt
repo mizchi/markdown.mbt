@@ -5,7 +5,7 @@
 ///|
 /// Render a document to terminal string
 pub fn render_tui(doc : @markdown.Document) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for block in doc.children {
     render_block_tui(block, buf)
   }
@@ -208,7 +208,7 @@ fn render_block_tui(block : @markdown.Block, buf : StringBuilder) -> Unit {
       buf.write_string("│")
       for i, cell in header {
         buf.write_string(" ")
-        let cell_buf = StringBuilder::new()
+        let cell_buf = StringBuilder()
         render_inlines_tui_raw(cell.children, cell_buf)
         let content = cell_buf.to_string()
         buf.write_string(content)
@@ -239,7 +239,7 @@ fn render_block_tui(block : @markdown.Block, buf : StringBuilder) -> Unit {
           buf.write_string(" ")
           if i < row.length() {
             let cell = row[i]
-            let cell_buf = StringBuilder::new()
+            let cell_buf = StringBuilder()
             render_inlines_tui_raw(cell.children, cell_buf)
             let content = cell_buf.to_string()
             buf.write_string(content)

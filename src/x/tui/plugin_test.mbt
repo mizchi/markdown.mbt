@@ -69,7 +69,7 @@ fn reference_keyword_highlighter(
   info : @markdown.CodeBlockInfo,
   code : String,
 ) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
 
   // Header with language
   buf.write_string(bold)
@@ -161,7 +161,7 @@ fn reference_file_header_highlighter(
   info : @markdown.CodeBlockInfo,
   code : String,
 ) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   if !info.filename.is_empty() {
     buf.write_string(dim)
     buf.write_string("// ")
@@ -194,7 +194,7 @@ fn reference_line_number_highlighter(
   info : @markdown.CodeBlockInfo,
   code : String,
 ) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let lines = code.split("\n").collect()
 
   // Header
@@ -298,7 +298,7 @@ test "plugin: non-code blocks unaffected" {
 ///|
 test "plugin: meta in info string" {
   fn meta_highlighter(info : @markdown.CodeBlockInfo, code : String) -> String {
-    let buf = StringBuilder::new()
+    let buf = StringBuilder()
     if !info.meta.is_empty() {
       buf.write_string("META: ")
       buf.write_string(info.meta)

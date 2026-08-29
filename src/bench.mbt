@@ -5,7 +5,7 @@
 ///|
 /// Generate a sample markdown document of given size
 fn generate_sample_markdown(paragraphs : Int) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
 
   // Frontmatter
   buf.write_string("---\n")

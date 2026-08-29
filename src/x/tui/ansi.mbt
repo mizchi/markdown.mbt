@@ -102,7 +102,7 @@ pub let bg_white : String = "\u001b[47m"
 ///|
 /// Apply style to text
 pub fn style(text : String, codes : Array[String]) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for code in codes {
     buf.write_string(code)
   }

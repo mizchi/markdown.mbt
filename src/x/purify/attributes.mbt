@@ -236,7 +236,7 @@ pub fn is_safe_url(url : String, config : SanitizeConfig) -> Bool {
 fn extract_protocol(url : String) -> String? {
   let chars = url.to_array()
   let len = chars.length()
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for i = 0; i < len; i = i + 1 {
     let c = chars[i]
     if c == ':' {
@@ -271,7 +271,7 @@ fn extract_protocol(url : String) -> String? {
 /// Strip control characters (ASCII 0-31) used for URL obfuscation
 fn strip_control_chars(s : String) -> String {
   let chars = s.to_array()
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for c in chars {
     let code = c.to_int()
     // Keep only printable ASCII and higher Unicode
@@ -285,7 +285,7 @@ fn strip_control_chars(s : String) -> String {
 ///|
 fn to_lowercase_attr(s : String) -> String {
   let chars = s.to_array()
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for c in chars {
     if c >= 'A' && c <= 'Z' {
       let lower = (c.to_int() + 32).unsafe_to_char()
@@ -373,7 +373,7 @@ fn trim_string(s : String) -> String {
   if start == 0 && end == len {
     return s
   }
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for i = start; i < end; i = i + 1 {
     buf.write_char(chars[i])
   }

@@ -176,7 +176,7 @@ fn is_attr_name_char(c : Char) -> Bool {
 
 ///|
 fn attr_substring(chars : Array[Char], start : Int, end : Int) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for i = start; i < end && i < chars.length(); i = i + 1 {
     buf.write_char(chars[i])
   }

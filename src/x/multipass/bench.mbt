@@ -8,7 +8,7 @@ let inline_emphasis : String = "Make it *italic* and **bold** and `code` and eve
 
 ///|
 fn generate_inline_stress(count : Int) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   for i = 0; i < count; i = i + 1 {
     buf.write_string("*em\{i}* **strong\{i}** `code\{i}` ")
   }

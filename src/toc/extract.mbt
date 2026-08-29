@@ -48,7 +48,7 @@ fn build_toc_item(level : Int, children : Array[@md.Inline]) -> TocItem {
 ///|
 /// Extract plain text from Inline array
 pub fn extract_text_from_inlines(inlines : Array[@md.Inline]) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   append_inline_texts(inlines, buf)
   buf.to_string()
 }

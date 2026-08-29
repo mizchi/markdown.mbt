@@ -7,7 +7,7 @@
 ///|
 /// Generate a sample markdown document (CommonMark compatible, no frontmatter)
 fn generate_sample_markdown(paragraphs : Int) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("# Benchmark Document\n\n")
   for i in 0..<paragraphs {
     buf.write_string("## Section \{i + 1}\n\n")
@@ -33,7 +33,7 @@ fn generate_sample_markdown(paragraphs : Int) -> String {
 ///|
 /// Generate paragraph-only document for incremental testing
 fn generate_paragraph_doc(count : Int) -> String {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   buf.write_string("# Document Title\n\n")
   for i in 0..<count {
     buf.write_string(
@@ -49,7 +49,6 @@ fn generate_paragraph_doc(count : Int) -> String {
 struct BenchResult {
   name : String
   iterations : Int
-  total_secs : Double
   avg_us : Double // microseconds per iteration
 }
 
@@ -72,9 +71,8 @@ fn run_bench(name : String, iterations : Int, f : () -> Unit) -> BenchResult {
     f()
   }
   let elapsed_ms = instant_elapsed_ms(start)
-  let elapsed_secs = elapsed_ms / 1000.0
   let avg_us = elapsed_ms / iterations.to_double() * 1000.0
-  { name, iterations, total_secs: elapsed_secs, avg_us }
+  { name, iterations, avg_us }
 }
 
 ///|
@@ -166,9 +164,9 @@ fn main {
 
   // Edit in middle: replace "Paragraph" with "PARAGRAPH"
   let edit_offset = inc_doc_50.length() / 2
-  let new_doc_50 = inc_doc_50.substring(start=0, end=edit_offset) +
+  let new_doc_50 = inc_doc_50[:edit_offset].to_owned() +
     "CHANGED" +
-    inc_doc_50.substring(start=edit_offset + 7)
+    inc_doc_50[edit_offset + 7:].to_owned()
   let edit_50 = @markdown.EditInfo::replace(edit_offset, 7, 7)
   let r9 = run_bench("full_parse:50_paragraphs", 50, fn() {
     let _ = @markdown.parse(inc_doc_50)
@@ -188,9 +186,9 @@ fn main {
   println(r10.to_string())
   results.push(r10)
   let edit_offset_100 = inc_doc_100.length() / 2
-  let new_doc_100 = inc_doc_100.substring(start=0, end=edit_offset_100) +
+  let new_doc_100 = inc_doc_100[:edit_offset_100].to_owned() +
     "CHANGED" +
-    inc_doc_100.substring(start=edit_offset_100 + 7)
+    inc_doc_100[edit_offset_100 + 7:].to_owned()
   let edit_100 = @markdown.EditInfo::replace(edit_offset_100, 7, 7)
   let r11 = run_bench("full_parse:100_paragraphs", 30, fn() {
     let _ = @markdown.parse(inc_doc_100)
@@ -227,7 +225,7 @@ fn main {
   println("  100 paragraphs: \{speedup_100.to_string()}x faster")
 
   // Write results to file
-  let output = StringBuilder::new()
+  let output = StringBuilder()
   output.write_string("benchmark,iterations,avg_us\n")
   for r in results {
     output.write_string("\{r.name},\{r.iterations},\{r.avg_us}\n")
@@ -236,6 +234,6 @@ fn main {
     @fs.write_string_to_file("bench_results.csv", output.to_string())
     println("\nResults written to bench_results.csv")
   } catch {
-    e => println("\nFailed to write results: \{e}")
+    @fs.IOError(message) => println("\nFailed to write results: \{message}")
   }
 }

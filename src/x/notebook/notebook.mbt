@@ -57,7 +57,7 @@ pub fn extract_cells_from_code_blocks(
 fn extract_cell_deps(
   code_blocks : Array[(String, String)],
 ) -> Map[String, Array[String]] {
-  let deps_map : Map[String, Array[String]] = {}
+  let deps_map : Map[String, Array[String]] = Map([])
   for block in code_blocks {
     let (info_str, _) = block
     let (_, attrs) = parse_code_block_attrs(info_str)

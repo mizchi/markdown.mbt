@@ -15,7 +15,7 @@ priv struct AstEntry {
 }
 
 ///|
-let ast_store : Map[Int, AstEntry] = {}
+let ast_store : Map[Int, AstEntry] = Map([])
 
 ///|
 let ast_next_handle : Ref[Int] = { val: 1 }

@@ -345,7 +345,7 @@ fn parse_quoted(chars : Array[Char], start : Int) -> (String, Int)? {
   }
 
   let quote = chars[start]
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut pos = start + 1
   while pos < chars.length() {
     let current = chars[pos]

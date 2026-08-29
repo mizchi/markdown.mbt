@@ -654,7 +654,7 @@ fn MultiPassParser::parse_inline_link_dest(
   guard pos < self.text_len && pos < text_end else { return None }
 
   // Parse URL
-  let url_buf = StringBuilder::new()
+  let url_buf = StringBuilder()
   let c = self.char_at(pos).unwrap()
   if c == '<' {
     // Angle-bracketed URL
@@ -715,7 +715,7 @@ fn MultiPassParser::parse_inline_link_dest(
     if c == '"' || c == '\'' {
       let quote = c
       pos += 1
-      let title_buf = StringBuilder::new()
+      let title_buf = StringBuilder()
       while pos < self.text_len && pos < text_end {
         let tc = self.char_at(pos).unwrap()
         if tc == quote {
@@ -785,7 +785,7 @@ fn MultiPassParser::parse_ref_link(
   link_text : String,
 ) -> (@markdown.Inline, Int)? {
   let mut pos = start
-  let label_buf = StringBuilder::new()
+  let label_buf = StringBuilder()
 
   // Parse label until ]
   while pos < self.text_len && pos < text_end {
@@ -890,7 +890,7 @@ fn MultiPassParser::parse_image_dest(
   guard pos < self.text_len && pos < text_end else { return None }
 
   // Parse URL
-  let url_buf = StringBuilder::new()
+  let url_buf = StringBuilder()
   let c = self.char_at(pos).unwrap()
   if c == '<' {
     // Angle-bracketed URL
@@ -935,7 +935,7 @@ fn MultiPassParser::parse_image_dest(
     if c == '"' || c == '\'' {
       let quote = c
       pos += 1
-      let title_buf = StringBuilder::new()
+      let title_buf = StringBuilder()
       while pos < self.text_len && pos < text_end {
         let tc = self.char_at(pos).unwrap()
         if tc == quote {
@@ -988,7 +988,7 @@ fn MultiPassParser::parse_ref_image(
   alt : String,
 ) -> (@markdown.Inline, Int)? {
   let mut pos = start
-  let label_buf = StringBuilder::new()
+  let label_buf = StringBuilder()
 
   // Parse label until ]
   while pos < self.text_len && pos < text_end {
@@ -1018,7 +1018,7 @@ fn MultiPassParser::parse_autolink(
   text_end : Int,
 ) -> (@markdown.Inline, Int)? {
   let mut pos = start + 1 // Skip <
-  let url_buf = StringBuilder::new()
+  let url_buf = StringBuilder()
 
   // Scan until >
   while pos < self.text_len && pos < text_end {
@@ -1098,7 +1098,7 @@ fn process_escapes_str(
   end : Int,
   result : Array[@markdown.Inline],
 ) -> Unit {
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut i = start
   let mut text_start = start
   let text_len = text.length()

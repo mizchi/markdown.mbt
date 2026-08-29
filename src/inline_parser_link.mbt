@@ -283,7 +283,7 @@ fn read_reference_label(text : String, start : Int) -> (String, Int)? {
 /// case-fold.
 fn normalize_label(label : String) -> String {
   let len = label.length()
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut i = 0
   let mut pending_space = false
   let mut written = false
@@ -381,7 +381,7 @@ fn unescape_string(s : String) -> String {
   if !needs {
     return s
   }
-  let buf = StringBuilder::new()
+  let buf = StringBuilder()
   let mut i = 0
   while i < len {
     let c = s.unsafe_get(i)
@@ -427,8 +427,8 @@ fn parse_wikilink(text : String, start : Int) -> (Inline, Int)? {
   guard start + 1 < len && text.unsafe_get(start + 1) == '[' else {
     return None
   }
-  let target_buf = StringBuilder::new()
-  let label_buf = StringBuilder::new()
+  let target_buf = StringBuilder()
+  let label_buf = StringBuilder()
   let mut in_label = false
   let mut i = start + 2
   while i < len {
