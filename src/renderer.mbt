@@ -3,6 +3,48 @@
 ///| Renders markdown AST to HTML
 
 ///|
+/// Output buffer that remembers whether it is at the start of a line, so that
+/// block-level elements can always begin on one — the `cr()` of the reference
+/// implementation's HTML renderer.
+priv struct HtmlBuf {
+  inner : StringBuilder
+  mut at_line_start : Bool
+}
+
+///|
+fn HtmlBuf::new() -> HtmlBuf {
+  { inner: StringBuilder::new(), at_line_start: true }
+}
+
+///|
+fn HtmlBuf::write_string(self : HtmlBuf, s : String) -> Unit {
+  if s.is_empty() {
+    return
+  }
+  self.inner.write_string(s)
+  self.at_line_start = s.unsafe_get(s.length() - 1) == '\n'
+}
+
+///|
+fn HtmlBuf::write_char(self : HtmlBuf, c : Char) -> Unit {
+  self.inner.write_char(c)
+  self.at_line_start = c == '\n'
+}
+
+///|
+/// Start a new line unless the output already is at one.
+fn HtmlBuf::cr(self : HtmlBuf) -> Unit {
+  if !self.at_line_start {
+    self.write_char('\n')
+  }
+}
+
+///|
+fn HtmlBuf::to_string(self : HtmlBuf) -> String {
+  self.inner.to_string()
+}
+
+///|
 /// Everything the block/inline renderers need to know beyond the node itself.
 priv struct RenderCtx {
   autolink : Bool
@@ -23,7 +65,7 @@ pub fn render_html(doc : Document, autolink? : Bool = true) -> String {
     }
   }
   let ctx = RenderCtx::{ autolink, defs }
-  let buf = StringBuilder::new()
+  let buf = HtmlBuf::new()
   for block in doc.children {
     render_block_html(block, buf, ctx)
   }
@@ -32,18 +74,16 @@ pub fn render_html(doc : Document, autolink? : Bool = true) -> String {
 
 ///|
 /// Render a block element to HTML
-fn render_block_html(
-  block : Block,
-  buf : StringBuilder,
-  ctx : RenderCtx,
-) -> Unit {
+fn render_block_html(block : Block, buf : HtmlBuf, ctx : RenderCtx) -> Unit {
   match block {
     Block::Paragraph(children~, ..) => {
+      buf.cr()
       buf.write_string("<p>")
       render_inlines_html(children, buf, ctx)
       buf.write_string("</p>\n")
     }
     Block::Heading(level~, children~, ..) => {
+      buf.cr()
       buf.write_string("<h")
       buf.write_string(level.to_string())
       buf.write_char('>')
@@ -52,8 +92,12 @@ fn render_block_html(
       buf.write_string(level.to_string())
       buf.write_string(">\n")
     }
-    Block::ThematicBreak(..) => buf.write_string("<hr />\n")
+    Block::ThematicBreak(..) => {
+      buf.cr()
+      buf.write_string("<hr />\n")
+    }
     Block::FencedCode(info~, code~, ..) => {
+      buf.cr()
       let lang = code_block_language(info)
       if lang.is_empty() {
         buf.write_string("<pre><code>")
@@ -66,11 +110,13 @@ fn render_block_html(
       buf.write_string("</code></pre>\n")
     }
     Block::IndentedCode(code~, ..) => {
+      buf.cr()
       buf.write_string("<pre><code>")
       write_code_content(code, buf)
       buf.write_string("</code></pre>\n")
     }
     Block::Blockquote(children~, ..) => {
+      buf.cr()
       buf.write_string("<blockquote>\n")
       for child in children {
         render_block_html(child, buf, ctx)
@@ -78,6 +124,7 @@ fn render_block_html(
       buf.write_string("</blockquote>\n")
     }
     Block::BulletList(items~, tight~, ..) => {
+      buf.cr()
       // Check if this list contains task items
       let has_task = items.iter().any(fn(item) { !(item.checked is None) })
       if has_task {
@@ -91,6 +138,7 @@ fn render_block_html(
       buf.write_string("</ul>\n")
     }
     Block::OrderedList(items~, start~, tight~, ..) => {
+      buf.cr()
       let has_task = items.iter().any(fn(item) { !(item.checked is None) })
       if start == 1 {
         if has_task {
@@ -113,12 +161,14 @@ fn render_block_html(
       buf.write_string("</ol>\n")
     }
     Block::HtmlBlock(html~, ..) => {
+      buf.cr()
       buf.write_string(html)
       if !html.has_suffix("\n") {
         buf.write_char('\n')
       }
     }
     Block::Table(header~, alignments~, rows~, ..) => {
+      buf.cr()
       buf.write_string("<table>\n<thead>\n<tr>\n")
       for i, cell in header {
         let align = if i < alignments.length() {
@@ -149,6 +199,7 @@ fn render_block_html(
     }
     Block::BlankLines(..) => () // Blank lines don't produce HTML output
     Block::FootnoteDefinition(label~, children~, ..) => {
+      buf.cr()
       buf.write_string("<div class=\"footnote\" id=\"fn-")
       buf.write_string(escape_html(label))
       buf.write_string("\">\n")
@@ -180,7 +231,7 @@ fn code_block_language(info : String) -> String {
 ///|
 /// Write code-block content, guaranteeing the trailing newline CommonMark
 /// requires inside `<pre><code>`.
-fn write_code_content(code : String, buf : StringBuilder) -> Unit {
+fn write_code_content(code : String, buf : HtmlBuf) -> Unit {
   if code.is_empty() {
     return
   }
@@ -194,11 +245,12 @@ fn write_code_content(code : String, buf : StringBuilder) -> Unit {
 /// Render a list item to HTML
 fn render_list_item_html(
   item : ListItem,
-  buf : StringBuilder,
+  buf : HtmlBuf,
   tight : Bool,
   is_task_list : Bool,
   ctx : RenderCtx,
 ) -> Unit {
+  buf.cr()
   // Task list items get a special class
   if is_task_list && !(item.checked is None) {
     buf.write_string("<li class=\"task-list-item\">")
@@ -213,19 +265,12 @@ fn render_list_item_html(
     Some(false) => buf.write_string("<input type=\"checkbox\" disabled> ")
     None => ()
   }
-  if tight {
-    // Tight list: render inline content without <p> wrapper
-    for child in item.children {
-      match child {
-        Paragraph(children~, ..) => render_inlines_html(children, buf, ctx)
-        _ => render_block_html(child, buf, ctx)
-      }
-    }
-  } else {
-    // Loose list: render blocks normally
-    buf.write_char('\n')
-    for child in item.children {
-      render_block_html(child, buf, ctx)
+  for child in item.children {
+    match child {
+      // A tight list drops the <p> wrapper around its items' paragraphs.
+      Paragraph(children~, ..) if tight =>
+        render_inlines_html(children, buf, ctx)
+      _ => render_block_html(child, buf, ctx)
     }
   }
   buf.write_string("</li>\n")
@@ -235,7 +280,7 @@ fn render_list_item_html(
 /// Render a table cell to HTML
 fn render_table_cell_html(
   cell : TableCell,
-  buf : StringBuilder,
+  buf : HtmlBuf,
   tag : String,
   align : TableAlign,
   ctx : RenderCtx,
@@ -259,7 +304,7 @@ fn render_table_cell_html(
 /// Render inline elements to HTML
 fn render_inlines_html(
   inlines : Array[Inline],
-  buf : StringBuilder,
+  buf : HtmlBuf,
   ctx : RenderCtx,
 ) -> Unit {
   for inline in inlines {
@@ -281,7 +326,7 @@ fn render_wikilink_destination(target : String, fragment : String) -> String {
 /// Render text content, optionally turning bare http(s) URLs into anchors.
 fn render_text_html(
   content : String,
-  buf : StringBuilder,
+  buf : HtmlBuf,
   autolink? : Bool = true,
 ) -> Unit {
   if !autolink {
@@ -322,7 +367,7 @@ fn write_escaped_text_range(
   content : String,
   start : Int,
   end : Int,
-  buf : StringBuilder,
+  buf : HtmlBuf,
 ) -> Unit {
   if end > start {
     buf.write_string(escape_html(content.unsafe_substring(start~, end~)))
@@ -337,11 +382,7 @@ fn RenderCtx::lookup(self : RenderCtx, label : String) -> LinkDefinition? {
 
 ///|
 /// Render a single inline element to HTML
-fn render_inline_html(
-  inline : Inline,
-  buf : StringBuilder,
-  ctx : RenderCtx,
-) -> Unit {
+fn render_inline_html(inline : Inline, buf : HtmlBuf, ctx : RenderCtx) -> Unit {
   match inline {
     Inline::Text(content~, ..) =>
       render_text_html(content, buf, autolink=ctx.autolink)
@@ -430,7 +471,7 @@ fn write_anchor(
   children : Array[Inline],
   url : String,
   title : String,
-  buf : StringBuilder,
+  buf : HtmlBuf,
   ctx : RenderCtx,
 ) -> Unit {
   buf.write_string("<a href=\"")
@@ -451,7 +492,7 @@ fn write_image(
   alt : String,
   url : String,
   title : String,
-  buf : StringBuilder,
+  buf : HtmlBuf,
   ctx : RenderCtx,
 ) -> Unit {
   buf.write_string("<img src=\"")
@@ -566,7 +607,7 @@ fn is_href_safe(code : Int) -> Bool {
 }
 
 ///|
-fn write_hex_byte(byte : Int, buf : StringBuilder) -> Unit {
+fn write_hex_byte(byte : Int, buf : HtmlBuf) -> Unit {
   let digits = "0123456789ABCDEF"
   buf.write_char('%')
   buf.write_string(
@@ -582,7 +623,7 @@ fn write_hex_byte(byte : Int, buf : StringBuilder) -> Unit {
 
 ///|
 /// Percent-encode a URL for use in an `href`/`src` attribute.
-fn write_escaped_href(url : String, buf : StringBuilder) -> Unit {
+fn write_escaped_href(url : String, buf : HtmlBuf) -> Unit {
   for c in url {
     let code = c.to_int()
     if is_href_safe(code) {
