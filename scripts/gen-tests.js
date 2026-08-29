@@ -45,121 +45,34 @@ const INCLUDE_SECTIONS = [
   'Textual content',
 ];
 
-// Tests to skip with reasons
-// This parser implements a practical subset of CommonMark.
-// Edge cases and complex patterns are intentionally not supported.
-// Generated from actual test failures (340 failures out of 542 tests)
+// Examples whose Markdown output still differs from remark's. The parser
+// itself is CommonMark-conformant (see `gen-spec-tests.js`); what is left here
+// is serialization: link reference definitions are dropped rather than written
+// back out, setext headings are kept instead of normalized to ATX, and a few
+// escaping and autolink details differ.
 const SKIP_TESTS = {
-  // Tabs: Tab handling in various contexts
-  'Tabs': {
-    reason: 'Tab handling edge case',
-    examples: [1, 2, 4, 5, 6, 7, 8, 9],
-  },
-  // Backslash escapes: Output format differences
-  'Backslash escapes': {
-    reason: 'Escape output format difference',
-    examples: [12, 14, 15, 20, 21, 22, 23, 24],
-  },
-  // Thematic breaks: Edge cases with lists
-  'Thematic breaks': {
-    reason: 'Thematic break edge case',
-    examples: [45, 46, 48, 49, 55, 59, 60, 61],
-  },
-  // ATX headings: Edge cases
-  'ATX headings': {
-    reason: 'ATX heading edge case',
-    examples: [63, 64, 65, 66, 69, 70, 75, 76],
-  },
-  // Setext headings: Not implemented (ATX is sufficient)
-  'Setext headings': {
-    reason: 'Setext headings not implemented',
-    examples: [80, 82, 83, 84, 86, 87, 88, 89, 90, 91, 93, 94, 95, 96, 97, 98, 99, 102, 103, 106],
-  },
-  // Indented code blocks: Edge cases
-  'Indented code blocks': {
-    reason: 'Indented code edge case',
-    examples: [108, 109, 112, 115],
-  },
-  // Fenced code blocks: Edge cases
-  'Fenced code blocks': {
-    reason: 'Fenced code edge case',
-    examples: [121, 138, 141, 145, 146],
-  },
-  // Paragraphs: No longer skipped (whitespace handling fixed)
-  // Block quotes: Lazy continuation and nesting
-  'Block quotes': {
-    reason: 'Block quote edge case',
-    examples: [228, 229, 230, 231, 232, 233, 238, 239, 240, 244, 247, 250, 251],
-  },
-  // List items: Complex indentation and lazy continuation
-  'List items': {
-    reason: 'List item edge case',
-    examples: [254, 256, 258, 259, 260, 262, 263, 264, 266, 270, 271, 273, 274, 277, 278, 279, 280, 281, 282, 283, 285, 286, 287, 288, 289, 290, 291, 292, 293, 294, 296, 297, 298, 299, 300],
-  },
-  // Lists: Tight/loose distinction and complex nesting
-  'Lists': {
-    reason: 'List edge case',
-    examples: [301, 302, 304, 306, 307, 309, 311, 312, 313, 314, 315, 316, 317, 318, 319, 320, 321, 323, 324, 325, 326],
-  },
-  // Code spans: Backtick counting edge cases
-  'Code spans': {
-    reason: 'Code span edge case',
-    examples: [331, 335, 336, 338, 341, 342, 343, 344, 345, 346, 347, 348, 349],
-  },
-  // Emphasis: Single-pass parser cannot handle all edge cases (Rule 9/10, mod 3)
-  'Emphasis and strong emphasis': {
-    reason: 'Single-pass parser limitation: emphasis edge case',
-    examples: [351, 352, 353, 354, 358, 359, 360, 361, 362, 363, 365, 366, 367, 368, 371, 372, 374, 375, 376, 379, 380, 383, 384, 385, 386, 387, 388, 389, 391, 392, 397, 398, 400, 401, 402, 404, 406, 407, 408, 412, 416, 417, 419, 420, 421, 422, 424, 425, 426, 433, 434, 435, 436, 438, 439, 441, 442, 443, 444, 445, 446, 447, 448, 449, 450, 451, 452, 453, 454, 455, 456, 457, 458, 459, 461, 465, 468, 469, 470, 471, 472, 473, 474, 475, 476, 477, 478, 479, 480, 481],
-  },
-  // Links: URL edge cases and reference link complexities
-  'Links': {
-    reasons: {
-      // URL edge cases: spaces, newlines, nested parens, escape normalization
-      url_edge: [488, 489, 490, 491, 492, 493, 494, 496, 497, 498, 499, 500, 503, 506, 508, 509, 510, 511, 512, 513, 514, 515],
-      // Reference link edge cases
-      ref_link: [518, 519, 520, 521, 522, 523, 524, 525, 526, 527, 528, 529, 530, 531, 532, 533, 534, 535, 536, 537, 538, 539, 540, 541, 542, 543, 544, 545, 546, 547, 548, 549, 550, 551, 552, 553, 554, 555, 556, 557, 558, 559, 560, 561, 562, 563, 564, 565, 566, 567, 568, 569, 570, 571],
-    },
-  },
-  // Images: Similar to links edge cases
-  'Images': {
-    reason: 'Image edge case',
-    examples: [573, 574, 575, 576, 577, 582, 583, 584, 585, 586, 587, 588, 589, 590, 591, 592, 593],
-  },
-  // Autolinks: Protocol and email edge cases
-  'Autolinks': {
-    reason: 'Autolink edge case',
-    examples: [602, 603, 606, 608, 609, 610, 611, 612],
-  },
-  // Hard line breaks: Edge cases
-  'Hard line breaks': {
-    reason: 'Hard line break edge case',
-    examples: [642, 644, 646],
-  },
-  // Soft line breaks: No longer skipped (whitespace handling fixed)
+  "Backslash escapes": [12, 14, 15, 20, 23, 24],
+  "Thematic breaks": [45, 46, 55, 59],
+  "ATX headings": [63, 64, 65, 70, 75, 76],
+  "Setext headings": [80, 83, 84, 86, 87, 88, 89, 90, 91, 93, 96, 97, 102, 103, 106],
+  "Indented code blocks": [115],
+  "Fenced code blocks": [141, 146],
+  "Block quotes": [228, 229, 230, 232, 238, 239, 240, 244],
+  "List items": [259, 260, 266, 278, 285, 298, 299, 300],
+  "Lists": [302, 304, 306, 309, 311, 312, 313, 314, 315, 317, 318, 326],
+  "Code spans": [331],
+  "Emphasis and strong emphasis": [416, 417],
+  "Links": [488, 490, 491, 493, 494, 497, 506, 508, 509, 512, 513, 518, 519, 520, 527, 528, 529, 530, 531, 532, 533, 534, 535, 536, 537, 538, 539, 540, 541, 542, 543, 544, 545, 549, 550, 553, 554, 555, 556, 557, 558, 559, 560, 561, 562, 563, 564, 565, 566, 567, 568, 569, 570, 571],
+  "Images": [573, 574, 575, 576, 577, 582, 583, 584, 585, 586, 587, 588, 589, 591, 592, 593],
+  "Autolinks": [602, 603, 606, 608, 609, 610, 611, 612],
+  "Hard line breaks": [644, 646],
 };
 
 // Get skip reason for a test
 function getSkipReason(section, example) {
-  const config = SKIP_TESTS[section];
-  if (!config) return null;
-
-  // Check if using multiple reasons (like Links)
-  if (config.reasons) {
-    for (const [key, examples] of Object.entries(config.reasons)) {
-      if (examples.includes(example)) {
-        if (key === 'url_edge') return 'URL edge case: spaces, newlines, nested parens';
-        if (key === 'ref_link') return 'Reference link edge case';
-        return key;
-      }
-    }
-    return null;
-  }
-
-  // Single reason for all examples
-  if (config.examples && config.examples.includes(example)) {
-    return config.reason;
-  }
-  return null;
+  const examples = SKIP_TESTS[section];
+  if (examples === undefined || !examples.includes(example)) return null;
+  return 'serialization differs from remark';
 }
 
 // Escape string for MoonBit string literal
