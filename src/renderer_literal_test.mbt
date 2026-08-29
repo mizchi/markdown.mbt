@@ -389,6 +389,13 @@ test "invariant: gfm table center align" {
 }
 
 ///|
+test "invariant: gfm table with escaped pipes inside inline elements" {
+  assert_overlay_invariant(
+    "| f\\|oo |\n| --- |\n| b `\\|` az |\n| b **\\|** im |\n| [a \\| b](x) |\n",
+  )
+}
+
+///|
 test "invariant: html block" {
   assert_overlay_invariant("<div>raw html</div>\n")
 }

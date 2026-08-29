@@ -761,13 +761,55 @@ fn write_table_row_literal(
     buf.write_string(style_attr)
     buf.write_char('>')
     write_marker(buf, " ")
-    render_inlines_literal(cell.children, buf, opts)
+    write_table_cell_inlines_literal(cell.children, buf, opts)
     write_marker(buf, " ")
     buf.write_string("</span>")
     write_marker(buf, "|")
   }
   buf.write_char('\n')
   buf.write_string("</div>")
+}
+
+///|
+/// Render a cell's inline content, mirroring the serializer's cell-level
+/// pipe escaping so the visible-text invariant keeps holding for tables.
+/// The content is rendered into a scratch buffer and every pipe that ends
+/// up in the *visible* text — inside a code span, a link label or a plain
+/// run alike — gets a `\` marker in front of it, exactly like
+/// `serialize_table_cell_inlines` does.
+fn write_table_cell_inlines_literal(
+  children : Array[Inline],
+  buf : StringBuilder,
+  opts : LiteralOpts,
+) -> Unit {
+  let cell = StringBuilder::new()
+  render_inlines_literal(children, cell, opts)
+  write_pipe_escaped_literal(cell.to_string(), buf)
+}
+
+///|
+/// Copy rendered cell HTML into `buf`, prefixing every unescaped pipe in
+/// its visible text with a `\` marker. Tags are copied verbatim and
+/// contribute no visible text; since all character data is HTML-escaped, a
+/// bare `<` can only start a tag.
+fn write_pipe_escaped_literal(html : String, buf : StringBuilder) -> Unit {
+  let mut in_tag = false
+  let mut backslashes = 0
+  for c in html {
+    if in_tag {
+      if c == '>' {
+        in_tag = false
+      }
+    } else if c == '<' {
+      in_tag = true
+    } else {
+      if c == '|' && backslashes % 2 == 0 {
+        write_marker(buf, "\\")
+      }
+      backslashes = if c == '\\' { backslashes + 1 } else { 0 }
+    }
+    buf.write_char(c)
+  }
 }
 
 ///|

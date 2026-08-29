@@ -22,6 +22,15 @@ test "html: table with alignment" {
 }
 
 ///|
+/// GFM example 200: `\|` puts a pipe into a cell, including inside other
+/// inline spans.
+test "html: table cell with escaped pipes inside inline elements" {
+  assert_html_compat(
+    "| f\\|oo  |\n| ------ |\n| b `\\|` az |\n| b **\\|** im |\n", "table escaped pipes",
+  )
+}
+
+///|
 test "html: autolink" {
   assert_html_compat("<https://example.com>\n", "autolink")
 }
