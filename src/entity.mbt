@@ -114,7 +114,9 @@ fn decode_entity(text : String, start : Int) -> (String, Int)? {
     }
     let digits_start = i
     let mut value = 0
-    while i < len && i - digits_start < 7 && is_ascii_digit_unit(text.unsafe_get(i)) {
+    while i < len &&
+          i - digits_start < 7 &&
+          is_ascii_digit_unit(text.unsafe_get(i)) {
       value = value * 10 + (text.unsafe_get(i).to_int() - '0'.to_int())
       i = i + 1
     }

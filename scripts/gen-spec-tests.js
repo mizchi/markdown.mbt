@@ -28,23 +28,14 @@ const OUTPUT_DIR = path.join(__dirname, '../src/spec_tests');
 // a known gap in the parser, not an intentional deviation: the goal is for this
 // table to stay empty.
 const SKIP_TESTS = {
-  "Tabs": [1, 2, 4, 5, 6, 7, 8, 9],
-  "Backslash escapes": [21, 23],
-  "Entity and numeric character references": [31, 33],
-  "Thematic breaks": [48, 49, 60, 61],
-  "ATX headings": [63, 64, 69, 70],
-  "Setext headings": [81, 82, 87, 93, 95, 96, 98],
-  "Indented code blocks": [108, 109, 112],
-  "Fenced code blocks": [138, 145],
-  "HTML blocks": [148, 150, 162, 163, 164, 165, 166, 167, 169, 170, 171, 172, 173, 175, 176, 178, 180, 181, 182, 183, 184, 185, 191],
-  "Link reference definitions": [193, 194, 195, 197, 199, 201, 202, 208, 209, 210, 214, 215, 216, 217],
-  "Block quotes": [231, 232, 233, 238, 247, 250, 251],
-  "List items": [254, 256, 258, 259, 262, 263, 264, 270, 271, 273, 274, 277, 278, 279, 283, 285, 286, 287, 288, 289, 290, 291, 292, 293, 294, 296, 297, 298, 299, 300],
-  "Lists": [304, 307, 309, 312, 313, 315, 316, 317, 318, 319, 320, 321, 323, 324, 325, 326],
-  "Code spans": [347],
-  "Emphasis and strong emphasis": [353, 354, 367],
-  "Links": [526, 538, 540, 541, 546, 551, 565, 570],
-  "Autolinks": [599, 603],
+  "Tabs": [7, 9],
+  "Thematic breaks": [61],
+  "Setext headings": [96, 98],
+  "HTML blocks": [175],
+  "Link reference definitions": [215],
+  "List items": [278, 292, 293, 294, 296, 298, 299, 300],
+  "Lists": [307, 315, 318, 319, 320, 321, 323],
+  "Links": [540, 552],
 };
 
 function shouldSkip(section, example) {

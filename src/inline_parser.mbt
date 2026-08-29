@@ -144,7 +144,11 @@ fn new_inline_slot(inline : Inline, start : Int) -> Slot {
 }
 
 ///|
-fn InlineCtx::push_inline(self : InlineCtx, inline : Inline, start : Int) -> Int {
+fn InlineCtx::push_inline(
+  self : InlineCtx,
+  inline : Inline,
+  start : Int,
+) -> Int {
   self.append(new_inline_slot(inline, start))
 }
 
@@ -178,7 +182,6 @@ fn InlineCtx::push_text(
     Inline::Text(content~, span=Span::new(start, end)),
     start,
   )
-
 }
 
 ///|
@@ -198,13 +201,20 @@ fn InlineCtx::slot_inline(self : InlineCtx, idx : Int) -> Inline {
 ///|
 /// Collect slots `[from, to)` (following `next` links) into an inline array,
 /// merging adjacent text nodes.
-fn InlineCtx::materialize(self : InlineCtx, from : Int, to : Int) -> Array[Inline] {
+fn InlineCtx::materialize(
+  self : InlineCtx,
+  from : Int,
+  to : Int,
+) -> Array[Inline] {
   let result : Array[Inline] = []
   let mut i = from
   while i >= 0 && i != to {
     let inline = self.slot_inline(i)
     match (result.last(), inline) {
-      (Some(Inline::Text(content=prev, span=prev_span)), Inline::Text(content~, span~)) => {
+      (
+        Some(Inline::Text(content=prev, span=prev_span)),
+        Inline::Text(content~, span~),
+      ) => {
         let _ = result.pop()
         result.push(
           Inline::Text(
@@ -285,7 +295,8 @@ fn InlineCtx::scan(self : InlineCtx) -> Unit {
         trim_trailing_spaces(buf)
         flush(sp)
         let mut j = i + 1
-        while j < len && (text.unsafe_get(j) == ' ' || text.unsafe_get(j) == '\t') {
+        while j < len &&
+              (text.unsafe_get(j) == ' ' || text.unsafe_get(j) == '\t') {
           j = j + 1
         }
         let span = Span::new(sp, j)
@@ -294,10 +305,8 @@ fn InlineCtx::scan(self : InlineCtx) -> Unit {
             Inline::HardBreak(style=HardBreakStyle::TwoSpaces, span~),
             sp,
           )
-
         } else {
           let _ = self.push_inline(Inline::SoftBreak(span~), sp)
-
         }
         i = j
         run_start = j
@@ -307,7 +316,8 @@ fn InlineCtx::scan(self : InlineCtx) -> Unit {
           trim_trailing_spaces(buf)
           flush(i)
           let mut j = i + 2
-          while j < len && (text.unsafe_get(j) == ' ' || text.unsafe_get(j) == '\t') {
+          while j < len &&
+                (text.unsafe_get(j) == ' ' || text.unsafe_get(j) == '\t') {
             j = j + 1
           }
           let _ = self.push_inline(
@@ -478,7 +488,8 @@ fn trim_trailing_spaces(buf : StringBuilder) -> Unit {
   }
   let s = buf.to_string()
   let mut end = s.length()
-  while end > 0 && (s.unsafe_get(end - 1) == ' ' || s.unsafe_get(end - 1) == '\t') {
+  while end > 0 &&
+        (s.unsafe_get(end - 1) == ' ' || s.unsafe_get(end - 1) == '\t') {
     end = end - 1
   }
   if end == s.length() {
@@ -544,7 +555,8 @@ fn strip_code_span_padding(raw : String) -> String {
   if n < 2 {
     return raw
   }
-  if !is_code_span_pad(raw.unsafe_get(0)) || !is_code_span_pad(raw.unsafe_get(n - 1)) {
+  if !is_code_span_pad(raw.unsafe_get(0)) ||
+    !is_code_span_pad(raw.unsafe_get(n - 1)) {
     return raw
   }
   for i = 0; i < n; i = i + 1 {
@@ -681,7 +693,8 @@ fn is_email_address(s : String) -> Bool {
   while i < len {
     let label_start = i
     guard is_ascii_alnum_unit(s.unsafe_get(i)) else { return false }
-    while i < len && (is_ascii_alnum_unit(s.unsafe_get(i)) || s.unsafe_get(i) == '-') {
+    while i < len &&
+          (is_ascii_alnum_unit(s.unsafe_get(i)) || s.unsafe_get(i) == '-') {
       i = i + 1
     }
     if i - label_start > 63 || s.unsafe_get(i - 1) == '-' {
@@ -884,4 +897,3 @@ fn is_unquoted_value_end(c : UInt16) -> Bool {
   c == '>' ||
   c == '`'
 }
-

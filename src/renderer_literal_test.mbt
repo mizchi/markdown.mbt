@@ -355,7 +355,7 @@ test "invariant: task list" {
 ///|
 test "invariant: nested ordered in bullet" {
   let html = md_to_html_literal("- outer\n  1. inner ordered\n  2. another\n")
-  assert_eq(strip_html(html), "- outer\n1. inner ordered\n2. another\n")
+  assert_eq(strip_html(html), "- outer\n  1. inner ordered\n  2. another\n")
 }
 
 ///|

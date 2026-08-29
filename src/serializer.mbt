@@ -54,6 +54,22 @@ fn serialize_frontmatter(fm : Frontmatter, buf : StringBuilder) -> Unit {
 }
 
 ///|
+/// Width of the last line of `text`, used to size a setext underline.
+fn last_line_width(text : String) -> Int {
+  let len = text.length()
+  let mut start = len
+  while start > 0 && text.unsafe_get(start - 1) != '\n' {
+    start = start - 1
+  }
+  let width = len - start
+  if width < 1 {
+    1
+  } else {
+    width
+  }
+}
+
+///|
 /// Write n copies of a character
 fn write_chars(buf : StringBuilder, c : Char, n : Int) -> Unit {
   for i = 0; i < n; i = i + 1 {
@@ -147,10 +163,13 @@ fn serialize_block(block : Block, buf : StringBuilder) -> Unit {
           buf.write_char('\n')
         }
         HeadingStyle::Setext => {
-          serialize_inlines(children, buf)
+          let content = StringBuilder::new()
+          serialize_inlines(children, content)
+          let text = content.to_string()
+          buf.write_string(text)
           buf.write_char('\n')
           let underline_char = if level == 1 { '=' } else { '-' }
-          write_chars(buf, underline_char, 3)
+          write_chars(buf, underline_char, last_line_width(text))
           buf.write_char('\n')
         }
       }
@@ -201,12 +220,12 @@ fn serialize_block(block : Block, buf : StringBuilder) -> Unit {
           }
         }
       }
-    Block::BulletList(items~, ..) =>
+    Block::BulletList(items~, tight~, ..) =>
       // Stable editor/source style: always use -, no marker_offset.
-      serialize_bullet_list_items(items, buf, 0)
-    Block::OrderedList(start~, items~, ..) =>
+      serialize_bullet_list_items(items, tight, buf)
+    Block::OrderedList(start~, items~, tight~, ..) =>
       // GFM style: always use ., no marker_offset
-      serialize_ordered_list_items(items, buf, 0, start)
+      serialize_ordered_list_items(items, start, tight, buf)
     Block::HtmlBlock(html~, ..) => {
       buf.write_string(html)
       if !html.has_suffix("\n") {
@@ -306,119 +325,92 @@ pub fn serialize_definitions(defs : Array[LinkDefinition]) -> String {
 }
 
 ///|
-/// Serialize bullet list items with indentation
-fn serialize_bullet_list_items(
-  items : Array[ListItem],
-  buf : StringBuilder,
+/// Write `text` so that every line after the first is indented, leaving room
+/// for the list marker on the first one.
+fn write_with_continuation_indent(
+  text : String,
   indent : Int,
+  buf : StringBuilder,
 ) -> Unit {
-  for item in items {
-    // Write indentation
-    write_chars(buf, ' ', indent)
-    buf.write_char('-')
-    // An empty item is just the marker; anything else needs a space after it.
-    if !item.children.is_empty() || !(item.checked is None) {
-      buf.write_char(' ')
+  let len = text.length()
+  let mut at_line_start = false
+  for i = 0; i < len; i = i + 1 {
+    let c = text.unsafe_get(i)
+    if at_line_start && c != '\n' {
+      write_chars(buf, ' ', indent)
     }
-
-    // Task list checkbox
-    match item.checked {
-      Some(true) => buf.write_string("[x] ")
-      Some(false) => buf.write_string("[ ] ")
-      None => ()
-    }
-
-    // Serialize item content
-    let mut first_block = true
-    for child in item.children {
-      match child {
-        Block::Paragraph(children=para_children, ..) => {
-          serialize_inlines(para_children, buf)
-          buf.write_char('\n')
-          first_block = false
-        }
-        Block::BulletList(items=nested_items, ..) => {
-          // Nested list - serialize with increased indentation
-          if first_block {
-            buf.write_char('\n')
-          }
-          serialize_bullet_list_items(nested_items, buf, indent + 2)
-        }
-        _ => {
-          serialize_block(child, buf)
-          first_block = false
-        }
-      }
-    }
-
-    // If no content was written, add newline
-    if first_block {
-      buf.write_char('\n')
-    }
+    buf.write_string(text.unsafe_substring(start=i, end=i + 1))
+    at_line_start = c == '\n'
   }
 }
 
 ///|
-/// Serialize ordered list items with indentation
+/// Serialize one list item's content, without the marker. Loose lists put a
+/// blank line between the blocks of an item.
+fn serialize_list_item_content(
+  item : ListItem,
+  tight : Bool,
+  buf : StringBuilder,
+) -> Unit {
+  match item.checked {
+    Some(true) => buf.write_string("[x] ")
+    Some(false) => buf.write_string("[ ] ")
+    None => ()
+  }
+  let mut first = true
+  for child in item.children {
+    if !first && !tight {
+      buf.write_char('\n')
+    }
+    serialize_block(child, buf)
+    first = false
+  }
+}
+
+///|
+/// Write a list item: its marker, then its content with every following line
+/// indented to line up under it.
+fn serialize_list_item(
+  item : ListItem,
+  marker : String,
+  tight : Bool,
+  buf : StringBuilder,
+) -> Unit {
+  let inner = StringBuilder::new()
+  serialize_list_item_content(item, tight, inner)
+  let text = inner.to_string()
+  buf.write_string(marker)
+  if text.is_empty() {
+    buf.write_char('\n')
+    return
+  }
+  buf.write_char(' ')
+  write_with_continuation_indent(text, marker.length() + 1, buf)
+}
+
+///|
+/// Serialize bullet list items
+fn serialize_bullet_list_items(
+  items : Array[ListItem],
+  tight : Bool,
+  buf : StringBuilder,
+) -> Unit {
+  for item in items {
+    serialize_list_item(item, "-", tight, buf)
+  }
+}
+
+///|
+/// Serialize ordered list items
 fn serialize_ordered_list_items(
   items : Array[ListItem],
-  buf : StringBuilder,
-  indent : Int,
   start : Int,
+  tight : Bool,
+  buf : StringBuilder,
 ) -> Unit {
   let mut num = start
   for item in items {
-    // Write indentation
-    write_chars(buf, ' ', indent)
-    buf.write_string(num.to_string())
-    buf.write_string(". ")
-
-    // Task list checkbox (rare for ordered lists but supported)
-    match item.checked {
-      Some(true) => buf.write_string("[x] ")
-      Some(false) => buf.write_string("[ ] ")
-      None => ()
-    }
-
-    // Serialize item content
-    let mut first_block = true
-    for child in item.children {
-      match child {
-        Block::Paragraph(children=para_children, ..) => {
-          serialize_inlines(para_children, buf)
-          buf.write_char('\n')
-          first_block = false
-        }
-        Block::BulletList(items=nested_items, ..) => {
-          // Nested bullet list - serialize with increased indentation
-          if first_block {
-            buf.write_char('\n')
-          }
-          serialize_bullet_list_items(nested_items, buf, indent + 3)
-        }
-        Block::OrderedList(items=nested_items, start=nested_start, ..) => {
-          // Nested ordered list
-          if first_block {
-            buf.write_char('\n')
-          }
-          serialize_ordered_list_items(
-            nested_items,
-            buf,
-            indent + 3,
-            nested_start,
-          )
-        }
-        _ => {
-          serialize_block(child, buf)
-          first_block = false
-        }
-      }
-    }
-
-    // If no content was written, add newline
-    if first_block {
-      buf.write_char('\n')
-    }
-    num += 1
+    serialize_list_item(item, num.to_string() + ".", tight, buf)
+    num = num + 1
   }
 }

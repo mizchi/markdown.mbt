@@ -277,7 +277,7 @@ test "parse indented code" {
       @debug.debug_inspect(
         code,
         content=(
-          #|"code line\nmore code"
+          #|"code line\nmore code\n"
         ),
       )
     _ => fail("Expected indented code")

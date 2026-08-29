@@ -19,7 +19,8 @@ fn write_escaped_markdown_text(content : String, buf : StringBuilder) -> Unit {
     match c {
       '\\' =>
         // Only a backslash that would start an escape sequence needs doubling.
-        if i + 1 < len && is_punctuation(content.unsafe_get(i + 1).unsafe_to_char()) {
+        if i + 1 < len &&
+          is_punctuation(content.unsafe_get(i + 1).unsafe_to_char()) {
           buf.write_string("\\\\")
         } else {
           buf.write_char('\\')

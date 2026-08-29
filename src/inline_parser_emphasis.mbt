@@ -42,13 +42,13 @@ fn InlineCtx::push_delimiter_run(
   }
   let count = end - start
   let before_ws = start == 0 || is_unicode_whitespace(char_before(text, start))
-  let before_punct = start > 0 && is_unicode_punctuation(char_before(text, start))
+  let before_punct = start > 0 &&
+    is_unicode_punctuation(char_before(text, start))
   let after_ws = end >= len || is_unicode_whitespace(char_at_index(text, end))
-  let after_punct = end < len && is_unicode_punctuation(char_at_index(text, end))
-  let left_flanking = !after_ws &&
-    (!after_punct || before_ws || before_punct)
-  let right_flanking = !before_ws &&
-    (!before_punct || after_ws || after_punct)
+  let after_punct = end < len &&
+    is_unicode_punctuation(char_at_index(text, end))
+  let left_flanking = !after_ws && (!after_punct || before_ws || before_punct)
+  let right_flanking = !before_ws && (!before_punct || after_ws || after_punct)
   let (can_open, can_close) = if ch == '_' {
     (
       left_flanking && (!right_flanking || before_punct),
@@ -158,7 +158,6 @@ fn InlineCtx::process_emphasis(self : InlineCtx, bottom : Int) -> Unit {
   }
   while self.delims.length() > bottom {
     let _ = self.delims.pop()
-
   }
 }
 

@@ -9,7 +9,9 @@ fn InlineCtx::open_bracket(self : InlineCtx, pos : Int, image : Bool) -> Unit {
   let width = if image { 2 } else { 1 }
   let literal = if image { "![" } else { "[" }
   let slot = self.append({
-    inline: Some(Inline::Text(content=literal, span=Span::new(pos, pos + width))),
+    inline: Some(
+      Inline::Text(content=literal, span=Span::new(pos, pos + width)),
+    ),
     mergeable: false,
     ch: ' ',
     count: 0,
@@ -66,7 +68,11 @@ fn InlineCtx::close_bracket(self : InlineCtx, pos : Int) -> Int {
     // Reference forms: full `][label]`, collapsed `][]`, or shortcut.
     let (label, after) = match read_reference_label(text, pos + 1) {
       Some((label, after)) =>
-        if label.is_empty() { (label_src, after) } else { (label, after) }
+        if label.is_empty() {
+          (label_src, after)
+        } else {
+          (label, after)
+        }
       None => (label_src, pos + 1)
     }
     match self.defs.get(normalize_label(label)) {
@@ -94,7 +100,10 @@ fn InlineCtx::close_bracket(self : InlineCtx, pos : Int) -> Int {
     cur = next
   }
   self.unlink(bracket.slot)
-  let span = Span::new(bracket.content_start - (if bracket.image { 2 } else { 1 }), end)
+  let span = Span::new(
+    bracket.content_start - (if bracket.image { 2 } else { 1 }),
+    end,
+  )
   let node = if bracket.image {
     match ref_label {
       Some(label) => Inline::RefImage(alt=label_src, label~, span~)
@@ -182,7 +191,9 @@ fn parse_link_destination(text : String, start : Int) -> (String, Int)? {
   let mut depth = 0
   while i < len {
     let c = text.unsafe_get(i)
-    if c == '\\' && i + 1 < len && is_punctuation(text.unsafe_get(i + 1).unsafe_to_char()) {
+    if c == '\\' &&
+      i + 1 < len &&
+      is_punctuation(text.unsafe_get(i + 1).unsafe_to_char()) {
       i = i + 2
       continue
     }
@@ -352,7 +363,9 @@ fn unescape_string(s : String) -> String {
   let mut i = 0
   while i < len {
     let c = s.unsafe_get(i)
-    if c == '\\' && i + 1 < len && is_punctuation(s.unsafe_get(i + 1).unsafe_to_char()) {
+    if c == '\\' &&
+      i + 1 < len &&
+      is_punctuation(s.unsafe_get(i + 1).unsafe_to_char()) {
       buf.write_string(s.unsafe_substring(start=i + 1, end=i + 2))
       i = i + 2
     } else if c == '&' {
@@ -389,7 +402,9 @@ fn split_wikilink_destination(destination : String) -> (String, String) {
 /// `[[target]]` or `[[target|label]]` (opt-in extension).
 fn parse_wikilink(text : String, start : Int) -> (Inline, Int)? {
   let len = text.length()
-  guard start + 1 < len && text.unsafe_get(start + 1) == '[' else { return None }
+  guard start + 1 < len && text.unsafe_get(start + 1) == '[' else {
+    return None
+  }
   let target_buf = StringBuilder::new()
   let label_buf = StringBuilder::new()
   let mut in_label = false
@@ -452,7 +467,9 @@ fn parse_wikilink(text : String, start : Int) -> (Inline, Int)? {
 /// `[^label]` footnote reference (GFM).
 fn parse_footnote_reference(text : String, start : Int) -> (Inline, Int)? {
   let len = text.length()
-  guard start + 1 < len && text.unsafe_get(start + 1) == '^' else { return None }
+  guard start + 1 < len && text.unsafe_get(start + 1) == '^' else {
+    return None
+  }
   let mut i = start + 2
   while i < len {
     let c = text.unsafe_get(i)

@@ -1,503 +1,173 @@
 ///| Bullet and ordered list parsing (split from block_parser.mbt).
 
 ///|
-/// Try to parse list
-fn BlockParser::try_parse_list(self : BlockParser, start : Int) -> Block? {
-  let leading = self.read_leading_trivia()
-
-  // Check for bullet or ordered list marker
-  match self.detect_list_marker() {
-    Some((marker_kind, marker_width)) =>
-      match marker_kind {
-        ListMarkerKind::Bullet(marker) =>
-          self.parse_bullet_list(start, leading, marker, marker_width)
-        ListMarkerKind::Ordered(start_num, delim) =>
-          self.parse_ordered_list(
-            start, leading, start_num, delim, marker_width,
-          )
-      }
-    None => None
-  }
+/// A parsed list marker: its width in characters and the list it starts.
+priv struct ListMarker {
+  width : Int
+  ordered : Bool
+  bullet : Char
+  start : Int
+  delim : Char
 }
 
 ///|
-/// List marker kind
-priv enum ListMarkerKind {
-  Bullet(BulletMarker)
-  Ordered(Int, OrderedDelimiter)
-}
-
-///|
-/// Detect list marker at current position
-fn BlockParser::detect_list_marker(
+/// Read the list marker at `pos`, if there is one.
+///
+/// `interrupts_paragraph` applies the extra restrictions the spec puts on a
+/// list that starts in the middle of a paragraph: it must be numbered 1 and
+/// may not be empty.
+fn BlockParser::parse_list_marker(
   self : BlockParser,
-) -> (ListMarkerKind, Int)? {
-  let saved = self.scanner.pos
-
-  // Check for bullet marker
-  match self.scanner.peek() {
-    Some('-') => {
-      self.scanner.advance(1)
-      match self.scanner.peek() {
-        Some(' ') | Some('\t') => {
-          self.scanner.restore(saved)
-          return Some((ListMarkerKind::Bullet(BulletMarker::Dash), 2))
-        }
-        // A marker alone on its line starts a list with an empty item.
-        Some('\n') | None => {
-          self.scanner.restore(saved)
-          return Some((ListMarkerKind::Bullet(BulletMarker::Dash), 1))
-        }
-        _ => ()
-      }
-    }
-    Some('*') => {
-      self.scanner.advance(1)
-      match self.scanner.peek() {
-        Some(' ') | Some('\t') => {
-          self.scanner.restore(saved)
-          return Some((ListMarkerKind::Bullet(BulletMarker::Asterisk), 2))
-        }
-        // A marker alone on its line starts a list with an empty item.
-        Some('\n') | None => {
-          self.scanner.restore(saved)
-          return Some((ListMarkerKind::Bullet(BulletMarker::Asterisk), 1))
-        }
-        _ => ()
-      }
-    }
-    Some('+') => {
-      self.scanner.advance(1)
-      match self.scanner.peek() {
-        Some(' ') | Some('\t') => {
-          self.scanner.restore(saved)
-          return Some((ListMarkerKind::Bullet(BulletMarker::Plus), 2))
-        }
-        // A marker alone on its line starts a list with an empty item.
-        Some('\n') | None => {
-          self.scanner.restore(saved)
-          return Some((ListMarkerKind::Bullet(BulletMarker::Plus), 1))
-        }
-        _ => ()
-      }
-    }
-    _ => ()
-  }
-  self.scanner.restore(saved)
-
-  // Check for ordered list marker (1. or 1))
-  if char_is_digit(self.scanner.peek()) {
-    let mut num = 0
+  pos : Int,
+  interrupts_paragraph : Bool,
+) -> ListMarker? {
+  let line = self.line
+  let len = self.line_len
+  guard pos < len else { return None }
+  let c = line.unsafe_get(pos)
+  let mut i = pos
+  let mut ordered = false
+  let mut bullet = '-'
+  let mut number = 1
+  let mut delim = '.'
+  if c == '*' || c == '-' || c == '+' {
+    bullet = c.unsafe_to_char()
+    i = i + 1
+  } else if c >= '0' && c <= '9' {
+    ordered = true
     let mut digits = 0
-    while char_is_digit(self.scanner.peek()) {
-      match self.scanner.peek() {
-        Some(c) => {
-          num = num * 10 + (c.to_int() - '0'.to_int())
-          self.scanner.advance(1)
-          digits += 1
-          if digits > 9 {
-            self.scanner.restore(saved)
-            return None
-          }
-        }
-        None => break
-      }
+    number = 0
+    while i < len && line.unsafe_get(i) >= '0' && line.unsafe_get(i) <= '9' {
+      number = number * 10 + (line.unsafe_get(i).to_int() - '0'.to_int())
+      digits = digits + 1
+      i = i + 1
     }
-    match self.scanner.peek() {
-      Some('.') => {
-        self.scanner.advance(1)
-        match self.scanner.peek() {
-          Some(' ') | Some('\t') => {
-            self.scanner.restore(saved)
-            return Some(
-              (ListMarkerKind::Ordered(num, OrderedDelimiter::Dot), digits + 2),
-            )
-          }
-          _ => ()
-        }
-      }
-      Some(')') => {
-        self.scanner.advance(1)
-        match self.scanner.peek() {
-          Some(' ') | Some('\t') => {
-            self.scanner.restore(saved)
-            return Some(
-              (
-                ListMarkerKind::Ordered(num, OrderedDelimiter::Paren),
-                digits + 2,
-              ),
-            )
-          }
-          _ => ()
-        }
-      }
-      _ => ()
-    }
-  }
-  self.scanner.restore(saved)
-  None
-}
-
-///|
-fn BlockParser::current_bullet_item_matches(
-  self : BlockParser,
-  marker : BulletMarker,
-) -> Bool {
-  match self.detect_list_marker() {
-    Some((ListMarkerKind::Bullet(current), _)) => current == marker
-    _ => false
-  }
-}
-
-///|
-/// Parse bullet list
-fn BlockParser::parse_bullet_list(
-  self : BlockParser,
-  start : Int,
-  leading : Trivia,
-  marker : BulletMarker,
-  _marker_width : Int,
-) -> Block? {
-  let items : Array[ListItem] = []
-  let mut tight = true
-  while !self.scanner.is_eof() {
-    let item_start = self.scanner.pos
-    let marker_offset = self.scanner.skip_spaces()
-
-    // Check marker matches and is followed by required whitespace.
-    if !self.current_bullet_item_matches(marker) {
-      self.scanner.restore(item_start)
-      break
-    }
-    self.scanner.advance(1) // Skip marker
-    let content_offset = self.scanner.skip_spaces()
-    let actual_offset = if content_offset == 0 { 1 } else { content_offset }
-
-    // Parse item content
-    let item = self.parse_list_item(item_start, marker_offset, actual_offset)
-    items.push(item)
-
-    // Check for blank lines (affects tight/loose)
-    if !self.scanner.is_eof() && self.scanner.is_blank_line() {
-      let blank_start = self.scanner.pos
-      while !self.scanner.is_eof() && self.scanner.is_blank_line() {
-        self.scanner.skip_line()
-      }
-      if self.next_bullet_item_matches(marker) {
-        tight = false
-      } else {
-        self.scanner.restore(blank_start)
-        break
-      }
-    }
-  }
-  if items.is_empty() {
+    guard digits <= 9 else { return None }
+    guard i < len else { return None }
+    let d = line.unsafe_get(i)
+    guard d == '.' || d == ')' else { return None }
+    delim = d.unsafe_to_char()
+    i = i + 1
+  } else {
     return None
   }
-  Some(
-    Block::BulletList(
-      marker~,
-      tight~,
-      items~,
-      span=Span::new(start, self.scanner.pos),
-      leading_trivia=leading,
-      trailing_trivia=Trivia::empty(),
-    ),
-  )
+  guard i >= len || is_space_or_tab(line.unsafe_get(i)) else { return None }
+  if interrupts_paragraph {
+    if ordered && number != 1 {
+      return None
+    }
+    // An empty list item cannot interrupt a paragraph.
+    let mut j = i
+    while j < len && is_space_or_tab(line.unsafe_get(j)) {
+      j = j + 1
+    }
+    if j >= len {
+      return None
+    }
+  }
+  Some({ width: i - pos, ordered, bullet, start: number, delim })
 }
 
 ///|
-/// Parse ordered list
-fn BlockParser::parse_ordered_list(
-  self : BlockParser,
-  start : Int,
-  leading : Trivia,
-  start_num : Int,
-  delimiter : OrderedDelimiter,
-  _marker_width : Int,
-) -> Block? {
-  let items : Array[ListItem] = []
-  let mut tight = true
-  while !self.scanner.is_eof() {
-    let item_start = self.scanner.pos
-    let marker_offset = self.scanner.skip_spaces()
+fn lists_match(list : Node, marker : ListMarker) -> Bool {
+  list.ordered == marker.ordered &&
+  (if marker.ordered {
+    list.delim == marker.delim
+  } else {
+    list.marker == marker.bullet
+  })
+}
 
-    // Check for ordered marker with same delimiter
-    match self.detect_list_marker() {
-      Some((ListMarkerKind::Ordered(_, d), _)) if d == delimiter => ()
-      _ => {
-        self.scanner.restore(item_start)
-        break
-      }
-    }
-
-    // Skip number and delimiter
-    while char_is_digit(self.scanner.peek()) {
-      self.scanner.advance(1)
-    }
-    self.scanner.advance(1) // Skip . or )
-    let content_offset = self.scanner.skip_spaces()
-    let actual_offset = if content_offset == 0 { 1 } else { content_offset }
-
-    // Parse item content
-    let item = self.parse_list_item(item_start, marker_offset, actual_offset)
-    items.push(item)
-
-    // Check for blank lines
-    if !self.scanner.is_eof() && self.scanner.is_blank_line() {
-      let blank_start = self.scanner.pos
-      while !self.scanner.is_eof() && self.scanner.is_blank_line() {
-        self.scanner.skip_line()
-      }
-      if self.next_ordered_item_matches(delimiter) {
-        tight = false
-      } else {
-        self.scanner.restore(blank_start)
-        break
-      }
-    }
-  }
-  if items.is_empty() {
+///|
+/// Open a list item, and the list around it when this starts a new one.
+fn BlockParser::try_list_item(self : BlockParser, container : Node) -> Node? {
+  // A `-`, `*` or `_` run that reads as a thematic break wins over a list.
+  if self.would_be_thematic_break() {
     return None
   }
-  Some(
-    Block::OrderedList(
-      start=start_num,
-      delimiter~,
-      tight~,
-      items~,
-      span=Span::new(start, self.scanner.pos),
-      leading_trivia=leading,
-      trailing_trivia=Trivia::empty(),
-    ),
-  )
-}
-
-///|
-fn BlockParser::next_bullet_item_matches(
-  self : BlockParser,
-  marker : BulletMarker,
-) -> Bool {
-  let saved = self.scanner.pos
-  let _ = self.scanner.skip_spaces()
-  let matches = self.current_bullet_item_matches(marker)
-  self.scanner.restore(saved)
-  matches
-}
-
-///|
-fn BlockParser::next_ordered_item_matches(
-  self : BlockParser,
-  delimiter : OrderedDelimiter,
-) -> Bool {
-  let saved = self.scanner.pos
-  let _ = self.scanner.skip_spaces()
-  let matches = match self.detect_list_marker() {
-    Some((ListMarkerKind::Ordered(_, d), _)) => d == delimiter
-    _ => false
-  }
-  self.scanner.restore(saved)
-  matches
-}
-
-///|
-/// Parse list item content
-fn BlockParser::parse_list_item(
-  self : BlockParser,
-  start : Int,
-  marker_offset : Int,
-  content_offset : Int,
-) -> ListItem {
-  // Parse first line content
-  let content_buf = StringBuilder::new()
-  self.scanner.append_line_to(content_buf)
-  if char_is(self.scanner.peek(), '\n') {
-    self.scanner.advance(1)
-  }
-
-  // Parse content as blocks
-  let content = content_buf.to_string()
-  let children : Array[Block] = []
-
-  // Check for task list checkbox: [ ], [x], or [X]
-  let (checked, actual_content) = parse_task_checkbox(content)
-  if !actual_content.is_empty() {
-    let inline_content = self.parse_inline_content(actual_content)
-    children.push(
-      Block::Paragraph(
-        children=inline_content,
-        span=Span::new(start, self.scanner.pos),
-        leading_trivia=Trivia::empty(),
-        trailing_trivia=Trivia::empty(),
-      ),
-    )
-  }
-
-  // Check for nested content (indented continuation)
-  // Nested list requires at least 2 spaces of indentation
-  let min_indent = marker_offset + 1 + content_offset // marker position + marker char + spaces after
-  while !self.scanner.is_eof() && !self.scanner.is_blank_line() {
-    let saved = self.scanner.pos
-    let indent = self.scanner.skip_spaces()
-
-    // Check if indented enough to be continuation
-    if indent < min_indent {
-      self.scanner.restore(saved)
-      break
-    }
-
-    // Check if this is a nested list
-    match self.detect_list_marker() {
-      Some((ListMarkerKind::Bullet(nested_marker), _)) => {
-        self.scanner.restore(saved)
-        match self.parse_nested_bullet_list(nested_marker, min_indent) {
-          Some(nested_list) => children.push(nested_list)
-          None => break
-        }
-      }
-      _ => {
-        // Not a nested list, restore and break
-        self.scanner.restore(saved)
-        break
-      }
-    }
-  }
-  {
-    children,
-    checked,
-    marker_offset,
-    content_offset,
-    span: Span::new(start, self.scanner.pos),
-  }
-}
-
-///|
-/// Parse nested bullet list (indented list)
-fn BlockParser::parse_nested_bullet_list(
-  self : BlockParser,
-  marker : BulletMarker,
-  min_indent : Int,
-) -> Block? {
-  let items : Array[ListItem] = []
-  let mut tight = true
-  while !self.scanner.is_eof() {
-    let item_start = self.scanner.pos
-    let marker_offset = self.scanner.skip_spaces()
-
-    // Must have at least min_indent spaces
-    if marker_offset < min_indent {
-      self.scanner.restore(item_start)
-      break
-    }
-
-    // Check marker matches and is followed by required whitespace.
-    if !self.current_bullet_item_matches(marker) {
-      self.scanner.restore(item_start)
-      break
-    }
-    self.scanner.advance(1) // Skip marker
-    let content_offset = self.scanner.skip_spaces()
-    let actual_offset = if content_offset == 0 { 1 } else { content_offset }
-
-    // Parse item content (non-recursive for now to avoid deep nesting issues)
-    let item = self.parse_nested_list_item(
-      item_start, marker_offset, actual_offset,
-    )
-    items.push(item)
-
-    // Check for blank lines
-    if !self.scanner.is_eof() && self.scanner.is_blank_line() {
-      tight = false
-      while !self.scanner.is_eof() && self.scanner.is_blank_line() {
-        self.scanner.skip_line()
-      }
-    }
-  }
-  if items.is_empty() {
+  let interrupts = container.kind == NodeKind::ParagraphNode
+  guard self.parse_list_marker(self.next_nonspace, interrupts) is Some(marker) else {
     return None
   }
-  Some(
-    Block::BulletList(
-      marker~,
-      tight~,
-      items~,
-      span=Span::new(items[0].span.from, self.scanner.pos),
-      leading_trivia=Trivia::empty(),
-      trailing_trivia=Trivia::empty(),
-    ),
-  )
+  let marker_offset = self.indent
+  let item_start = self.line_start + self.next_nonspace
+  self.advance_offset(self.next_nonspace + marker.width - self.offset, false)
+
+  // Measure the whitespace after the marker: one to four spaces set the
+  // content column; anything else (or nothing) falls back to a single space.
+  let save_offset = self.offset
+  let save_column = self.column
+  let save_tab = self.partially_consumed_tab
+  while self.column - save_column <= 5 &&
+        is_space_or_tab(self.peek_line(self.offset)) {
+    self.advance_offset(1, true)
+  }
+  let spaces = self.column - save_column
+  let padding = if spaces >= 5 || spaces < 1 || self.offset >= self.line_len {
+    self.offset = save_offset
+    self.column = save_column
+    self.partially_consumed_tab = save_tab
+    if is_space_or_tab(self.peek_line(self.offset)) {
+      self.advance_offset(1, true)
+    }
+    marker.width + 1
+  } else {
+    marker.width + spaces
+  }
+  let mut list = container
+  if container.kind != NodeKind::ListNode || !lists_match(container, marker) {
+    list = self.add_child(container, NodeKind::ListNode, item_start)
+    list.ordered = marker.ordered
+    list.marker = marker.bullet
+    list.delim = marker.delim
+    list.list_start = marker.start
+  }
+  list.end = self.line_end
+  let item = self.add_child(list, NodeKind::ItemNode, item_start)
+  item.ordered = marker.ordered
+  item.marker = marker.bullet
+  item.delim = marker.delim
+  item.item_marker_offset = marker_offset
+  item.item_padding = padding
+  item.end = self.line_end
+  self.take_task_checkbox(item)
+  Some(item)
 }
 
 ///|
-/// Parse nested list item (simplified, no recursion)
-fn BlockParser::parse_nested_list_item(
-  self : BlockParser,
-  start : Int,
-  marker_offset : Int,
-  content_offset : Int,
-) -> ListItem {
-  let content_buf = StringBuilder::new()
-  self.scanner.append_line_to(content_buf)
-  if char_is(self.scanner.peek(), '\n') {
-    self.scanner.advance(1)
-  }
-  let content = content_buf.to_string()
-  let children : Array[Block] = []
-  let (checked, actual_content) = parse_task_checkbox(content)
-  if !actual_content.is_empty() {
-    let inline_content = self.parse_inline_content(actual_content)
-    children.push(
-      Block::Paragraph(
-        children=inline_content,
-        span=Span::new(start, self.scanner.pos),
-        leading_trivia=Trivia::empty(),
-        trailing_trivia=Trivia::empty(),
-      ),
-    )
-  }
-  {
-    children,
-    checked,
-    marker_offset,
-    content_offset,
-    span: Span::new(start, self.scanner.pos),
-  }
-}
-
-///| Parse task list checkbox from content
-
-///|
-/// Returns (checked status, remaining content)
-fn parse_task_checkbox(content : String) -> (Bool?, String) {
-  // Check for [ ] (unchecked) or [x]/[X] (checked)
-  if content.length() >= 4 {
-    if content.has_prefix("[ ] ") {
-      return (Some(false), skip_n_chars(content, 4))
+/// Would the current line read as a thematic break? `- - -` is a break, not a
+/// list holding a list.
+fn BlockParser::would_be_thematic_break(self : BlockParser) -> Bool {
+  let c = self.peek_line(self.next_nonspace)
+  guard c == '*' || c == '-' || c == '_' else { return false }
+  let mut i = self.next_nonspace
+  let mut count = 0
+  while i < self.line_len {
+    let ch = self.line.unsafe_get(i)
+    if ch == c {
+      count = count + 1
+    } else if !is_space_or_tab(ch) {
+      return false
     }
-    if content.has_prefix("[x] ") || content.has_prefix("[X] ") {
-      return (Some(true), skip_n_chars(content, 4))
-    }
+    i = i + 1
   }
-  // Handle case without trailing space (end of line)
-  if content == "[ ]" {
-    return (Some(false), "")
-  }
-  if content == "[x]" || content == "[X]" {
-    return (Some(true), "")
-  }
-  (None, content)
+  count >= 3
 }
 
 ///|
-/// Skip first n characters of a string
-fn skip_n_chars(s : String, n : Int) -> String {
-  let buf = StringBuilder::new()
-  let mut i = 0
-  for c in s {
-    if i >= n {
-      buf.write_char(c)
-    }
-    i += 1
+/// GFM task list items: `[ ]`, `[x]` or `[X]` right after the marker.
+fn BlockParser::take_task_checkbox(self : BlockParser, item : Node) -> Unit {
+  let i = self.offset
+  guard self.peek_line(i) == '[' else { return }
+  let mark = self.peek_line(i + 1)
+  guard mark == ' ' || mark == 'x' || mark == 'X' else { return }
+  guard self.peek_line(i + 2) == ']' else { return }
+  guard i + 3 >= self.line_len || is_space_or_tab(self.peek_line(i + 3)) else {
+    return
   }
-  buf.to_string()
+  item.checked = Some(mark != ' ')
+  self.advance_offset(3, false)
+  if is_space_or_tab(self.peek_line(self.offset)) {
+    self.advance_offset(1, true)
+  }
 }
