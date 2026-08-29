@@ -3,8 +3,9 @@ name: CI
 on:
   push:
     branches: [main]
+  # No branch filter: a stacked PR targets the branch below it in the stack,
+  # not main, and would otherwise get no CI at all.
   pull_request:
-    branches: [main]
 
 jobs:
   test:
