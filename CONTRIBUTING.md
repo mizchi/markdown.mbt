@@ -91,6 +91,33 @@ When regenerating tests, skipped tests will automatically get `#skip("reason")` 
 | Code spans | 13 | Backtick counting edge cases |
 | Others | ~67 | Tabs, escapes, headings, code blocks, line breaks |
 
+## CommonMark Spec Conformance Tests
+
+`gen-tests.js` above checks how our *Markdown* serialization lines up with
+remark. The conformance suite is stricter and independent: it renders every
+example in the CommonMark spec and requires byte-identical HTML.
+
+```bash
+# Generate/regenerate the suite (spec.json is cached under node_modules/.cache)
+node scripts/gen-spec-tests.js
+
+# Run it
+moon test src/spec_tests --target js
+```
+
+The generated files live in `src/spec_tests/` and are git-ignored; only
+`scripts/gen-spec-tests.js` is checked in. Examples that the parser does not
+handle yet are listed in its `SKIP_TESTS` table, grouped by spec section — that
+table is meant to stay empty. Use `--no-skip` to run the whole spec regardless:
+
+```bash
+node scripts/gen-spec-tests.js --no-skip
+moon test src/spec_tests --target js
+```
+
+Bare-URL autolinking is a GFM extension, so the suite renders with
+`autolink=false`.
+
 ## Architecture
 
 See [docs/markdown.md](docs/markdown.md) for detailed architecture documentation.
