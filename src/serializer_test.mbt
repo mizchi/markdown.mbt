@@ -137,3 +137,27 @@ test "serialize mixed content" {
   @debug.debug_inspect(output.contains("```js"), content="true")
   @debug.debug_inspect(output.contains("code"), content="true")
 }
+
+///|
+test "serialize link title with a quote" {
+  // Titles are stored unescaped, so serializing has to escape them again.
+  let source = "[x](/u \"a\\\"b\")\n"
+  let output = serialize(parse(source).document)
+  @debug.debug_inspect(
+    output,
+    content=(
+      #|"[x](/u \"a\\\"b\")\n"
+    ),
+  )
+  // And the result parses back to the same title.
+  guard parse(output).document.children[0] is Block::Paragraph(children~, ..) else {
+    fail("Expected Paragraph")
+  }
+  guard children[0] is Inline::Link(title~, ..) else { fail("Expected Link") }
+  @debug.debug_inspect(
+    title,
+    content=(
+      #|"a\"b"
+    ),
+  )
+}

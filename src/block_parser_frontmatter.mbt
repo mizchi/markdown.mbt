@@ -1,101 +1,76 @@
 ///| YAML frontmatter parsing (split from block_parser.mbt).
 
 ///|
-/// Try to parse frontmatter (YAML between --- delimiters)
+/// Try to parse frontmatter (YAML between `---` delimiters) at the very start
+/// of the document.
 fn BlockParser::try_parse_frontmatter(self : BlockParser) -> Frontmatter? {
-  let start = self.scanner.pos
-
-  // Must start at beginning of document
-  if start != 0 {
-    return None
+  guard self.len >= 3 else { return None }
+  guard matches_at(self.source, 0, "---") else { return None }
+  let mut i = skip_spaces_tabs(self.source, 3)
+  guard i >= self.len || self.source.unsafe_get(i) == '\n' else { return None }
+  if i < self.len {
+    i = i + 1
   }
-
-  // Check for opening ---
-  if !self.scanner.matches("---") {
-    return None
-  }
-  self.scanner.advance(3)
-
-  // Skip to end of line
-  let _ = self.scanner.skip_spaces()
-  if !char_is(self.scanner.peek(), '\n') && !self.scanner.is_eof() {
-    self.scanner.restore(start)
-    return None
-  }
-  if char_is(self.scanner.peek(), '\n') {
-    self.scanner.advance(1)
-  }
-
-  // Read YAML content until closing ---
-  let yaml_buf = StringBuilder::new()
+  let yaml = StringBuilder::new()
   let mut found_closing = false
-  while !self.scanner.is_eof() {
-    if self.scanner.matches("---") {
-      self.scanner.advance(3)
-      let _ = self.scanner.skip_spaces()
-      if char_is(self.scanner.peek(), '\n') || self.scanner.is_eof() {
-        if char_is(self.scanner.peek(), '\n') {
-          self.scanner.advance(1)
-        }
-        found_closing = true
-        break
-      }
-      // Not a valid closing, continue reading
-      yaml_buf.write_string("---")
-    } else {
-      let line = self.scanner.read_line()
-      yaml_buf.write_string(line)
-      if char_is(self.scanner.peek(), '\n') {
-        yaml_buf.write_char('\n')
-        self.scanner.advance(1)
-      }
+  let mut end = i
+  while i < self.len {
+    let (line, next) = self.read_line(i)
+    if line.has_prefix("---") &&
+      is_blank_text(line.unsafe_substring(start=3, end=line.length())) {
+      found_closing = true
+      end = next
+      break
     }
+    yaml.write_string(line)
+    yaml.write_char('\n')
+    i = next
   }
-
-  // Must have found closing --- to be valid frontmatter
-  if !found_closing {
-    self.scanner.restore(start)
-    return None
-  }
-  let raw = yaml_buf.to_string()
+  guard found_closing else { return None }
+  let raw = yaml.to_string()
   let entries = parse_simple_yaml(raw)
-  Some({ raw, entries, span: Span::new(start, self.scanner.pos) })
+  // Without any `key: value` line this is a thematic break followed by a
+  // setext heading, not frontmatter.
+  guard !entries.is_empty() else { return None }
+  Some({ raw, entries, span: Span::new(0, end) })
 }
 
 ///|
 /// Parse simple YAML (key: value pairs only)
 fn parse_simple_yaml(yaml : String) -> Array[(String, String)] {
   let entries : Array[(String, String)] = []
-  let lines = yaml.split("\n")
-  for line in lines {
-    let trimmed = line.to_owned().trim(chars=" \t\n\r")
+  for line in yaml.split("\n") {
+    let trimmed = line.trim(chars=" \t\r").to_owned()
     if trimmed.is_empty() || trimmed.has_prefix("#") {
       continue
     }
-    match trimmed.find(":") {
-      Some(colon_idx) => {
-        let key = trimmed
-          .view(end_offset=colon_idx)
-          .to_owned()
-          .trim(chars=" \t\n\r")
-          .to_owned()
-        let value = trimmed
-          .view(start_offset=colon_idx + 1)
-          .to_owned()
-          .trim(chars=" \t\n\r")
-          .to_owned()
-        // Remove quotes if present
-        let clean_value = if value.has_prefix("\"") && value.has_suffix("\"") {
-          value.unsafe_substring(start=1, end=value.length() - 1)
-        } else if value.has_prefix("'") && value.has_suffix("'") {
-          value.unsafe_substring(start=1, end=value.length() - 1)
-        } else {
-          value
-        }
-        entries.push((key, clean_value))
+    let mut colon = -1
+    for i = 0; i < trimmed.length(); i = i + 1 {
+      if trimmed.unsafe_get(i) == ':' {
+        colon = i
+        break
       }
-      None => ()
     }
+    if colon <= 0 {
+      continue
+    }
+    let key = trimmed
+      .unsafe_substring(start=0, end=colon)
+      .trim(chars=" \t")
+      .to_owned()
+    let mut value = trimmed
+      .unsafe_substring(start=colon + 1, end=trimmed.length())
+      .trim(chars=" \t")
+      .to_owned()
+    let vlen = value.length()
+    if vlen >= 2 {
+      let first = value.unsafe_get(0)
+      let last = value.unsafe_get(vlen - 1)
+      if (first == '"' && last == '"') || (first == '\'' && last == '\'') {
+        value = value.unsafe_substring(start=1, end=vlen - 1)
+      }
+    }
+    entries.push((key, value))
   }
   entries
 }

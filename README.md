@@ -6,7 +6,8 @@ A cross-platform (JS/WASM/native) Markdown compiler optimized for real-time edit
 
 ## Features
 
-- **Fast**: Edit-position based incremental updates inspired by [CRDTs Go Brrr](https://josephg.com/blog/crdts-go-brrr/). Optimized for speed over edge-case correctness CommonMark 207/542
+- **Fast**: Edit-position based incremental updates inspired by [CRDTs Go Brrr](https://josephg.com/blog/crdts-go-brrr/)
+- **CommonMark compliant**: passes all 652 examples of the CommonMark 0.31.2 spec
 - **Lossless CST**: Preserves all whitespace, markers, and formatting
 - **Incremental parsing**: Re-parses only changed blocks (up to 42x faster)
 - **GFM**: GitHub Flavored Markdown support (tables, task lists, strikethrough)
@@ -255,9 +256,16 @@ See [docs/markdown.md](./docs/markdown.md) for detailed architecture and design.
 
 ## CommonMark Compatibility
 
-This parser handles most common Markdown syntax correctly and works well for typical use cases like documentation, blog posts, and notes.
+`md_to_html` renders all 652 examples of the [CommonMark 0.31.2
+spec](https://spec.commonmark.org/0.31.2/) byte for byte, which
+`scripts/gen-spec-tests.js` checks on every run of the test suite. Bare-URL
+autolinking, tables, strikethrough, task lists and footnotes are GFM extensions
+on top of that; the spec suite runs with `autolink=false` so it measures plain
+CommonMark.
 
-However, some edge cases (deeply nested structures, unusual delimiter combinations) are not fully CommonMark compliant. If you need strict CommonMark compliance, consider using [cmark.mbt](https://github.com/moonbit-community/cmark.mbt) or other fully compliant parsers.
+Markdown output (`md_to_markdown`) is normalized rather than byte-preserving:
+it is compared against remark in a separate suite, where link reference
+definitions and a few escaping details still differ.
 
 ## Credits
 
