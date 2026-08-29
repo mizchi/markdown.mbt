@@ -133,7 +133,8 @@ test "render image" {
   @debug.debug_inspect(
     html,
     content=(
-      #|"<p><img src=\"image.png\" alt=\"alt\"></p>\n"
+      #|"<p><img src=\"image.png\" alt=\"alt\" /></p>\n"
+
     ),
   )
 }
@@ -177,7 +178,8 @@ test "render thematic break" {
   @debug.debug_inspect(
     html,
     content=(
-      #|"<hr>\n"
+      #|"<hr />\n"
+
     ),
   )
 }

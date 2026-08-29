@@ -34,7 +34,7 @@ fn render_block_html(
       buf.write_string(level.to_string())
       buf.write_string(">\n")
     }
-    Block::ThematicBreak(..) => buf.write_string("<hr>\n")
+    Block::ThematicBreak(..) => buf.write_string("<hr />\n")
     Block::FencedCode(info~, code~, ..) => {
       if info.is_empty() {
         buf.write_string("<pre><code>")
@@ -46,12 +46,12 @@ fn render_block_html(
         buf.write_string(escape_html(lang))
         buf.write_string("\">")
       }
-      buf.write_string(escape_html(code))
+      write_code_content(code, buf)
       buf.write_string("</code></pre>\n")
     }
     Block::IndentedCode(code~, ..) => {
       buf.write_string("<pre><code>")
-      buf.write_string(escape_html(code))
+      write_code_content(code, buf)
       buf.write_string("</code></pre>\n")
     }
     Block::Blockquote(children~, ..) => {
@@ -365,7 +365,7 @@ fn render_inline_html(
         buf.write_string(escape_html_attr(title))
         buf.write_char('"')
       }
-      buf.write_string(">")
+      buf.write_string(" />")
     }
     Inline::RefImage(alt~, label~, ..) => {
       // Reference images should be resolved before rendering
@@ -377,7 +377,7 @@ fn render_inline_html(
     }
     Inline::HtmlInline(html~, ..) => buf.write_string(html)
     Inline::SoftBreak(..) => buf.write_char('\n')
-    Inline::HardBreak(..) => buf.write_string("<br>\n")
+    Inline::HardBreak(..) => buf.write_string("<br />\n")
     Inline::FootnoteReference(label~, ..) => {
       buf.write_string("<sup><a href=\"#fn-")
       buf.write_string(escape_html_attr(label))
@@ -455,4 +455,17 @@ pub fn md_to_html_strict(
 ) -> String {
   let result = parse(source, strict=true, wikilinks~)
   render_html(result.document, autolink~)
+}
+
+///|
+/// Write code-block content, guaranteeing the trailing newline CommonMark
+/// requires inside `<pre><code>`.
+fn write_code_content(code : String, buf : StringBuilder) -> Unit {
+  if code.is_empty() {
+    return
+  }
+  buf.write_string(escape_html(code))
+  if !code.has_suffix("\n") {
+    buf.write_char('\n')
+  }
 }
