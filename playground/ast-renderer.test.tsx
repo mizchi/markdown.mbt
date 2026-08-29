@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { splitBareUrlText } from "./ast-renderer";
+import { highlightCode, splitBareUrlText } from "./ast-renderer";
 
 describe("splitBareUrlText", () => {
   it("keeps bare URL link text identical to href", () => {
@@ -21,5 +21,14 @@ describe("splitBareUrlText", () => {
       { type: "text", value: "Open " },
       { type: "url", value: "https://example.com/?a=1&b=2" },
     ]);
+  });
+});
+
+describe("highlightCode", () => {
+  it("highlights Go code", () => {
+    const html = highlightCode("package main\nfunc main() {}", "go");
+
+    expect(html).toContain('<pre class="highlight');
+    expect(html).toContain('color: #ff7b72');
   });
 });

@@ -1,0 +1,92 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/markdown/x/purify"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn allowed_attributes() -> Array[String]
+
+pub fn allowed_html_tags() -> Array[String]
+
+pub fn allowed_math_tags() -> Array[String]
+
+pub fn allowed_svg_attributes() -> Array[String]
+
+pub fn allowed_svg_tags() -> Array[String]
+
+pub fn event_handler_prefixes() -> Array[String]
+
+pub fn forbidden_attributes() -> Array[String]
+
+pub fn forbidden_tags() -> Array[String]
+
+pub fn is_allowed_attribute(String, String, String, SanitizeConfig) -> Bool
+
+pub fn is_allowed_tag(String, SanitizeConfig) -> Bool
+
+pub fn is_custom_element(String) -> Bool
+
+pub fn is_event_handler(String) -> Bool
+
+pub fn is_forbidden_attribute(String, SanitizeConfig) -> Bool
+
+pub fn is_forbidden_tag(String, SanitizeConfig) -> Bool
+
+pub fn is_safe_html(String, config? : SanitizeConfig) -> Bool
+
+pub fn is_safe_url(String, SanitizeConfig) -> Bool
+
+pub fn sanitize(String, config? : SanitizeConfig) -> SanitizeResult
+
+pub fn sanitize_url(String, config? : SanitizeConfig) -> String?
+
+// Errors
+
+// Types and methods
+pub(all) struct RemovedItem {
+  kind : RemovedKind
+  original : String
+  reason : String
+}
+
+pub(all) enum RemovedKind {
+  Tag
+  Attribute
+  Url
+  Protocol
+} derive(Eq, @debug.Debug)
+pub impl Show for RemovedKind
+
+pub(all) struct SanitizeConfig {
+  allow_html : Bool
+  allow_svg : Bool
+  allow_math : Bool
+  allow_data_attr : Bool
+  allow_aria_attr : Bool
+  allow_link_target : Bool
+  allow_custom_elements : Bool
+  allowed_custom_elements : Array[String]
+  additional_tags : Array[String]
+  forbidden_tags : Array[String]
+  additional_attrs : Array[String]
+  forbidden_attrs : Array[String]
+  allowed_schemes : Array[String]
+  allow_comments : Bool
+}
+pub fn SanitizeConfig::default() -> Self
+pub fn SanitizeConfig::permissive() -> Self
+pub fn SanitizeConfig::strict() -> Self
+pub fn SanitizeConfig::with_custom_elements(Array[String]) -> Self
+
+pub(all) struct SanitizeResult {
+  content : String
+  removed : Array[RemovedItem]
+  was_modified : Bool
+}
+
+// Type aliases
+
+// Traits
+

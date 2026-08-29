@@ -1,0 +1,96 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/markdown/x/tui"
+
+import {
+  "mizchi/markdown",
+}
+
+// Values
+pub let bg_black : String
+
+pub let bg_blue : String
+
+pub let bg_cyan : String
+
+pub let bg_green : String
+
+pub let bg_magenta : String
+
+pub let bg_red : String
+
+pub let bg_white : String
+
+pub let bg_yellow : String
+
+pub let black : String
+
+pub let blue : String
+
+pub let bold : String
+
+pub let bright_black : String
+
+pub let bright_blue : String
+
+pub let bright_cyan : String
+
+pub let bright_green : String
+
+pub let bright_magenta : String
+
+pub let bright_red : String
+
+pub let bright_white : String
+
+pub let bright_yellow : String
+
+pub let cyan : String
+
+pub let dim : String
+
+pub fn from_markdown(String) -> String
+
+pub let green : String
+
+pub let italic : String
+
+pub let magenta : String
+
+pub fn md_to_tui(String) -> String
+
+pub fn md_to_tui_with_options(String, TuiOptions) -> String
+
+pub let red : String
+
+pub fn render(@markdown.Document) -> String
+
+pub fn render_tui(@markdown.Document) -> String
+
+pub fn render_tui_with_options(@markdown.Document, TuiOptions) -> String
+
+pub let reset : String
+
+pub let strikethrough : String
+
+pub fn style(String, Array[String]) -> String
+
+pub let underline : String
+
+pub let white : String
+
+pub let yellow : String
+
+// Errors
+
+// Types and methods
+pub struct TuiOptions {
+  code_highlighter : ((@markdown.CodeBlockInfo, String) -> String)?
+}
+pub fn TuiOptions::default() -> Self
+pub fn TuiOptions::with_highlighter((@markdown.CodeBlockInfo, String) -> String) -> Self
+pub fn TuiOptions::with_simple_highlighter((String, String) -> String) -> Self
+
+// Type aliases
+
+// Traits
+

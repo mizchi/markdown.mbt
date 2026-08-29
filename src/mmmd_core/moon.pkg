@@ -1,0 +1,6 @@
+supported_targets = "js+wasm"
+
+import {
+  "mizchi/markdown",
+  "mizchi/markdown/x/tui",
+}

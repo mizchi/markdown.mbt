@@ -6,6 +6,7 @@ export const highlightLanguages = [
   "css",
   "bash",
   "rust",
+  "go",
 ] as const;
 
 export type HighlightLanguage = (typeof highlightLanguages)[number];
@@ -34,6 +35,8 @@ const languageAliases: Record<string, HighlightLanguage> = {
   zsh: "bash",
   rust: "rust",
   rs: "rust",
+  go: "go",
+  golang: "go",
 };
 
 export function normalizeHighlightLanguage(lang: string): HighlightLanguage | null {

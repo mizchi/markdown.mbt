@@ -11,10 +11,13 @@
     "sourceMap": true
   },
   "include": [
-    "frontend/**/*.ts",
-    "frontend/**/*.tsx"
+    "frontend/editor/**/*.ts",
+    "frontend/editor/**/*.tsx",
+    "frontend/highlight/**/*.ts",
+    "frontend/highlight/**/*.tsx"
   ],
   "exclude": [
-    "frontend/**/*.test.ts"
+    "frontend/**/*.test.ts",
+    "frontend/**/*.test.tsx"
   ]
 }

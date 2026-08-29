@@ -6,6 +6,8 @@ pub fn highlight_bash(String) -> String
 
 pub fn highlight_css(String) -> String
 
+pub fn highlight_go(String) -> String
+
 pub fn highlight_html(String) -> String
 
 pub fn highlight_json(String) -> String

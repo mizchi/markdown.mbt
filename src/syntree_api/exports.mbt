@@ -48,3 +48,10 @@ pub fn highlight_bash(source : String) -> String {
 pub fn highlight_rust(source : String) -> String {
   @highlight.highlight_rust(source, @highlight.github_dark())
 }
+
+///|
+/// Highlight Go code to HTML
+/// Theme: github-dark
+pub fn highlight_go(source : String) -> String {
+  @highlight.highlight_go(source, @highlight.github_dark())
+}

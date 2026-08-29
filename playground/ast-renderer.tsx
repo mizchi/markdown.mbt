@@ -181,15 +181,16 @@ const langMap: Record<string, string> = {
   shell: "bash",
   zsh: "bash",
   rs: "rust",
+  golang: "go",
   xml: "html",
   svg: "html",
   htm: "html",
 };
 
-const supportedLangs = ["typescript", "moonbit", "json", "html", "css", "bash", "rust"];
+const supportedLangs = ["typescript", "moonbit", "json", "html", "css", "bash", "rust", "go"];
 
 // Highlight code using syntree
-function highlightCode(code: string, lang: string): string | null {
+export function highlightCode(code: string, lang: string): string | null {
   const mappedLang = langMap[lang] || lang;
   if (!supportedLangs.includes(mappedLang)) {
     return null;

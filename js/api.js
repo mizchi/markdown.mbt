@@ -14,6 +14,8 @@ import {
   md_to_markdown_with_wikilinks,
   md_to_ast_json,
   md_to_ast_json_with_wikilinks,
+  folddown_parse_includes_to_json,
+  folddown_parse_to_json,
   md_render_html_with_autolink,
   md_render_html_without_autolink,
   md_serialize,
@@ -46,6 +48,24 @@ export function parse(source, options = {}) {
     ? md_to_ast_json_with_wikilinks(source)
     : md_to_ast_json(source);
   return JSON.parse(json);
+}
+
+/**
+ * Parse typed Folddown MDX into a reader manifest.
+ * @param {string} source
+ * @returns {import('./api').FolddownParseResult}
+ */
+export function parseFolddown(source) {
+  return JSON.parse(folddown_parse_to_json(source));
+}
+
+/**
+ * Parse typed Folddown external-document declarations.
+ * @param {string} source
+ * @returns {import('./api').FolddownIncludeParseResult}
+ */
+export function parseFolddownIncludes(source) {
+  return JSON.parse(folddown_parse_includes_to_json(source));
 }
 
 /**

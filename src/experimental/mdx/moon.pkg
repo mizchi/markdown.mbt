@@ -1,5 +1,0 @@
-import {
-  "mizchi/markdown",
-  "moonbitlang/core/bench",
-  "moonbitlang/core/debug" @debug,
-}

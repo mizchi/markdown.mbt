@@ -6,6 +6,7 @@ export const highlightLanguages = [
     "css",
     "bash",
     "rust",
+    "go",
 ];
 const languageAliases = {
     ts: "typescript",
@@ -30,6 +31,8 @@ const languageAliases = {
     zsh: "bash",
     rust: "rust",
     rs: "rust",
+    go: "go",
+    golang: "go",
 };
 export function normalizeHighlightLanguage(lang) {
     const key = lang.trim().toLowerCase();
