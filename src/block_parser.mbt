@@ -65,6 +65,9 @@ priv struct Node {
   children : Array[Node]
   /// Raw content lines, for blocks that accept lines.
   lines : Array[String]
+  /// Source offset each entry of `lines` was taken from, so that positions
+  /// inside the joined content can be mapped back to the document.
+  line_starts : Array[Int]
   start : Int
   mut end : Int
   mut open : Bool
@@ -98,6 +101,7 @@ fn Node::new(kind : NodeKind, start : Int) -> Node {
     parent: None,
     children: [],
     lines: [],
+    line_starts: [],
     start,
     end: start,
     open: true,
@@ -122,6 +126,20 @@ fn Node::new(kind : NodeKind, start : Int) -> Node {
     alignments: [],
     label: "",
   }
+}
+
+///|
+/// Map an offset inside `joined_lines(node)` back to a document offset.
+fn source_offset_in(node : Node, content_offset : Int) -> Int {
+  let mut remaining = content_offset
+  for i, line in node.lines {
+    let len = line.length()
+    if remaining <= len {
+      return node.line_starts[i] + remaining
+    }
+    remaining = remaining - (len + 1)
+  }
+  node.end
 }
 
 ///|
@@ -583,10 +601,7 @@ fn BlockParser::check_open_blocks(self : BlockParser) -> (Node, Bool, Bool) {
         if self.blank && container.html_kind >= 6 {
           all_matched = false
         }
-      NodeKind::ParagraphNode =>
-        if self.blank {
-          all_matched = false
-        }
+      NodeKind::ParagraphNode => if self.blank { all_matched = false }
       NodeKind::TableNode =>
         // Only a line that still looks like a row keeps the table open;
         // anything else has to be reconsidered as ordinary block content.
@@ -667,6 +682,13 @@ fn BlockParser::open_new_blocks(
 }
 
 ///|
+/// Record one content line together with where it came from.
+fn BlockParser::push_line(self : BlockParser, node : Node) -> Unit {
+  node.lines.push(self.rest_of_line())
+  node.line_starts.push(self.line_start + self.offset)
+}
+
+///|
 /// Attach the remainder of the line to the deepest open block.
 fn BlockParser::add_text(
   self : BlockParser,
@@ -708,7 +730,7 @@ fn BlockParser::add_text(
     self.tip.open {
     // Lazy continuation of the paragraph left open by the previous line.
     self.advance_offset(self.next_nonspace - self.offset, false)
-    self.tip.lines.push(self.rest_of_line())
+    self.push_line(self.tip)
     self.tip.end = self.line_end
     return
   }
@@ -721,11 +743,11 @@ fn BlockParser::add_text(
     if container.info_pending {
       container.info_pending = false
     } else {
-      container.lines.push(self.rest_of_line())
+      self.push_line(container)
     }
     container.end = self.line_end
   } else if container.kind == NodeKind::HtmlBlockNode {
-    container.lines.push(self.rest_of_line())
+    self.push_line(container)
     container.end = self.line_end
     if self.html_block_ends(container) {
       current = self.close(container)
@@ -738,9 +760,10 @@ fn BlockParser::add_text(
       container.style == HeadingStyle::Atx {
       let (text, hashes) = chop_trailing_hashes(self.rest_of_line())
       container.lines.push(text)
+      container.line_starts.push(self.line_start + self.offset)
       container.closing_hashes = hashes
     } else {
-      container.lines.push(self.rest_of_line())
+      self.push_line(container)
       if container.kind == NodeKind::ParagraphNode {
         maybe_start_table(container)
       }
@@ -753,7 +776,7 @@ fn BlockParser::add_text(
       self.line_start + self.next_nonspace,
     )
     self.advance_offset(self.next_nonspace - self.offset, false)
-    para.lines.push(self.rest_of_line())
+    self.push_line(para)
     para.end = self.line_end
     current = para
   }
@@ -949,7 +972,7 @@ fn BlockParser::to_block(self : BlockParser, node : Node) -> Block? {
     NodeKind::BlankLinesNode =>
       Some(Block::BlankLines(count=node.marker_count, span~))
     NodeKind::ParagraphNode => {
-      let content = self.strip_link_definitions(joined_lines(node))
+      let content = self.strip_link_definitions(node)
       if is_blank_text(content) {
         return None
       }
@@ -964,7 +987,7 @@ fn BlockParser::to_block(self : BlockParser, node : Node) -> Block? {
     }
     NodeKind::HeadingNode => {
       let content = if node.style == HeadingStyle::Setext {
-        self.strip_link_definitions(joined_lines(node))
+        self.strip_link_definitions(node)
       } else {
         joined_lines(node)
       }

@@ -68,7 +68,7 @@ fn BlockParser::try_setext_heading(
   guard i >= self.line_len else { return false }
   // A paragraph holding nothing but link reference definitions cannot be
   // turned into a heading.
-  guard !is_blank_text(self.strip_link_definitions_dry(joined_lines(container))) else {
+  guard !is_blank_text(self.strip_link_definitions_dry(container)) else {
     return false
   }
   container.kind = NodeKind::HeadingNode

@@ -702,3 +702,18 @@ test "parse multiline html comment block" {
     _ => fail("Expected HtmlBlock for multiline HTML comment")
   }
 }
+
+///|
+test "parse link definition span" {
+  let source = "intro\n\n[id]: /url\n"
+  let defs = parse(source).definitions
+  @debug.debug_inspect(defs.length(), content="1")
+  @debug.debug_inspect(defs[0].span.from, content="7")
+  @debug.debug_inspect(defs[0].span.to, content="17")
+  @debug.debug_inspect(
+    source.unsafe_substring(start=defs[0].span.from, end=defs[0].span.to),
+    content=(
+      #|"[id]: /url"
+    ),
+  )
+}

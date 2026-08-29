@@ -9,9 +9,9 @@
 /// each one, and return what is left of the paragraph.
 fn BlockParser::strip_link_definitions(
   self : BlockParser,
-  content : String,
+  node : Node,
 ) -> String {
-  self.take_link_definitions(content, true)
+  self.take_link_definitions(node, true)
 }
 
 ///|
@@ -19,21 +19,22 @@ fn BlockParser::strip_link_definitions(
 /// would still hold text.
 fn BlockParser::strip_link_definitions_dry(
   self : BlockParser,
-  content : String,
+  node : Node,
 ) -> String {
-  self.take_link_definitions(content, false)
+  self.take_link_definitions(node, false)
 }
 
 ///|
 fn BlockParser::take_link_definitions(
   self : BlockParser,
-  content : String,
+  node : Node,
   register : Bool,
 ) -> String {
+  let content = joined_lines(node)
   let len = content.length()
   let mut pos = 0
   while pos < len && content.unsafe_get(pos) == '[' {
-    match self.parse_link_reference(content, pos, register) {
+    match self.parse_link_reference(node, content, pos, register) {
       Some(next) => pos = next
       None => break
     }
@@ -73,6 +74,7 @@ fn skip_ws_one_newline(text : String, start : Int) -> (Int, Int) {
 /// past it.
 fn BlockParser::parse_link_reference(
   self : BlockParser,
+  node : Node,
   text : String,
   pos : Int,
   register : Bool,
@@ -136,7 +138,7 @@ fn BlockParser::parse_link_reference(
       label,
       url: normalize_destination(raw_dest),
       title,
-      span: Span::new(0, 0),
+      span: Span::new(source_offset_in(node, pos), source_offset_in(node, end)),
     })
   }
   Some(end)
