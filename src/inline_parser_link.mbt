@@ -300,7 +300,12 @@ fn normalize_label(label : String) -> String {
     }
     let ch = char_at_index(label, i)
     let width = if ch.to_int() > 0xFFFF { 2 } else { 1 }
-    buf.write_char(fold_case(ch))
+    // A few characters fold to more than one: ß and ẞ both become "ss".
+    if ch == '\u{df}' || ch == '\u{1e9e}' {
+      buf.write_string("ss")
+    } else {
+      buf.write_char(fold_case(ch))
+    }
     written = true
     i = i + width
   }
