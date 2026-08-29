@@ -32,7 +32,11 @@ pub fn render_html(doc : Document, autolink? : Bool = true) -> String {
 
 ///|
 /// Render a block element to HTML
-fn render_block_html(block : Block, buf : StringBuilder, ctx : RenderCtx) -> Unit {
+fn render_block_html(
+  block : Block,
+  buf : StringBuilder,
+  ctx : RenderCtx,
+) -> Unit {
   match block {
     Block::Paragraph(children~, ..) => {
       buf.write_string("<p>")
@@ -477,7 +481,8 @@ fn write_plain_text(inlines : Array[Inline], buf : StringBuilder) -> Unit {
   for inline in inlines {
     match inline {
       Inline::Text(content~, ..) => buf.write_string(content)
-      Inline::Code(content~, ..) => buf.write_string(normalize_code_span(content))
+      Inline::Code(content~, ..) =>
+        buf.write_string(normalize_code_span(content))
       Inline::HtmlInline(html~, ..) => buf.write_string(html)
       Inline::SoftBreak(..) | Inline::HardBreak(..) => buf.write_char('\n')
       Inline::Emphasis(children~, ..)
@@ -543,8 +548,19 @@ fn is_href_safe(code : Int) -> Bool {
     return false
   }
   match code {
-    0x22 | 0x26 | 0x27 | 0x3C | 0x3E | 0x5C | 0x5E | 0x60 | 0x7B | 0x7C | 0x7D =>
-      false
+    0x22
+    | 0x26
+    | 0x27
+    | 0x3C
+    | 0x3E
+    | 0x5B
+    | 0x5C
+    | 0x5D
+    | 0x5E
+    | 0x60
+    | 0x7B
+    | 0x7C
+    | 0x7D => false
     _ => true
   }
 }
@@ -554,7 +570,10 @@ fn write_hex_byte(byte : Int, buf : StringBuilder) -> Unit {
   let digits = "0123456789ABCDEF"
   buf.write_char('%')
   buf.write_string(
-    digits.unsafe_substring(start=(byte >> 4) & 0xF, end=((byte >> 4) & 0xF) + 1),
+    digits.unsafe_substring(
+      start=(byte >> 4) & 0xF,
+      end=((byte >> 4) & 0xF) + 1,
+    ),
   )
   buf.write_string(
     digits.unsafe_substring(start=byte & 0xF, end=(byte & 0xF) + 1),
