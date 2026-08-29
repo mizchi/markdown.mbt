@@ -28,7 +28,11 @@ fn BlockParser::try_parse_frontmatter(self : BlockParser) -> Frontmatter? {
   }
   guard found_closing else { return None }
   let raw = yaml.to_string()
-  Some({ raw, entries: parse_simple_yaml(raw), span: Span::new(0, end) })
+  let entries = parse_simple_yaml(raw)
+  // Without any `key: value` line this is a thematic break followed by a
+  // setext heading, not frontmatter.
+  guard !entries.is_empty() else { return None }
+  Some({ raw, entries, span: Span::new(0, end) })
 }
 
 ///|
