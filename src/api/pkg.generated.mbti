@@ -8,6 +8,10 @@ import {
 // Values
 pub fn document_to_json(@markdown.Document) -> String
 
+pub fn folddown_parse_includes_to_json(String) -> String
+
+pub fn folddown_parse_to_json(String) -> String
+
 pub fn md_free(Int) -> Unit
 
 pub fn md_free_ast(Int) -> Unit

@@ -1,0 +1,18 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/markdown/x/multipass"
+
+import {
+  "mizchi/markdown",
+}
+
+// Values
+pub fn parse_inlines_multipass(String) -> Array[@markdown.Inline]
+
+// Errors
+
+// Types and methods
+
+// Type aliases
+
+// Traits
+

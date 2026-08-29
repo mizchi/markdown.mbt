@@ -4,8 +4,10 @@ export default defineConfig({
   test: {
     include: ["js/**/*.test.js", "playground/**/*.test.tsx", "frontend/**/*.test.ts"],
   },
-  esbuild: {
-    jsx: "automatic",
-    jsxImportSource: "@luna_ui/luna",
+  oxc: {
+    jsx: {
+      runtime: "automatic",
+      importSource: "@luna_ui/luna",
+    },
   },
 });

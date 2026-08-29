@@ -13,6 +13,7 @@ options(
         "highlight_css",
         "highlight_bash",
         "highlight_rust",
+        "highlight_go",
       ],
     },
   },

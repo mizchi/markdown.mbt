@@ -8,6 +8,7 @@ const highlighterLoaders = {
     css: () => import("./languages/css.js"),
     bash: () => import("./languages/bash.js"),
     rust: () => import("./languages/rust.js"),
+    go: () => import("./languages/go.js"),
 };
 const loadedHighlighters = new Map();
 const loadingHighlighters = new Map();

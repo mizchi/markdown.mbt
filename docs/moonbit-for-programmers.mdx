@@ -1,0 +1,1678 @@
+---
+folddown.readers: first_time,some_knowledge
+folddown.reader.first_time.label.ja: 初めて知った
+folddown.reader.first_time.label.en: First time
+folddown.reader.first_time.collapse: none
+folddown.reader.some_knowledge.label.ja: 多少知ってる
+folddown.reader.some_knowledge.label.en: Know some
+folddown.reader.some_knowledge.collapse: intro
+folddown.content_filters: detail,interesting
+folddown.content_filter.detail.label.ja: 詳しく知りたい
+folddown.content_filter.detail.label.en: Learn in detail
+folddown.content_filter.detail.mode: all
+folddown.content_filter.interesting.label.ja: 面白い機能だけを知りたい
+folddown.content_filter.interesting.label.en: Interesting features only
+folddown.content_filter.interesting.mode: unfamiliar
+---
+
+# MoonBit for TypeScript, Rust, and Go programmers
+
+<Include src="./moonbit-for-programmers/overview.ja.mdx" sync="moonbit-overview" />
+
+<Fold id="moonbit.hello-world.ja" kind="procedure" level="basic" locale="ja" familiarTo={["typescript-programmer", "rust-programmer", "go-programmer"]} requires={["moonbit.overview.ja"]} evidence={["moonbit.build-system"]}>
+
+## Hello World を実行する
+
+`moon` を install 済みなら、まず module を一つ作ります。`moon new` は実行用 package を `cmd/main` に作るため、そこに最小の `main` を置いて実行します。
+
+```text
+moon new hello-moonbit
+cd hello-moonbit
+```
+
+`cmd/main/main.mbt` を次の内容にします。
+
+```moonbit
+///|
+fn main {
+  println("Hello, world!")
+}
+```
+
+```text
+moon run cmd/main
+# Hello, world!
+```
+
+この一連が、module 作成、main package、実行という最小の開発ループです。生成される directory 構成と package の役割は、[Moon ビルドシステムのチュートリアル](https://docs.moonbitlang.com/ja/latest/toolchain/moon/tutorial.html)で確認できます。
+
+</Fold>
+
+<Fold id="moonbit.packages.ja" kind="procedure" level="basic" locale="ja" familiarTo={["typescript-programmer", "rust-programmer", "go-programmer"]} requires={["moonbit.hello-world.ja"]} evidence={["moonbit.packages"]}>
+
+## moon.mod と moon.pkg で module と package の境界を置く
+
+`moon.mod` は module 全体の名前、依存、source directory、target などを定めます。各 source directory の `moon.pkg` は、package が import する他 package と `is-main` などの package 固有の設定を定めます。JSON 形式の `moon.mod.json` / `moon.pkg.json` も使えますが、ここでは MoonBit の設定形式を使います。
+
+```moonbit
+// moon.mod
+name = "your-name/hello-moonbit"
+
+// cmd/main/moon.pkg
+options(
+  "is-main": true,
+)
+```
+
+[mooncakes.io](https://mooncakes.io/) で module を探し、必要な module は `moon add` で module dependency として追加します。その後、利用する package を `moon.pkg` の `import` へ追加します。
+
+```text
+moon add moonbit-community/starter
+```
+
+```moonbit
+// cmd/main/moon.pkg
+import {
+  "moonbit-community/starter/rabbit" @rabbit,
+}
+
+options(
+  "is-main": true,
+)
+```
+
+`moon add` は `moon.mod` の dependency を管理し、`moon.pkg` の import は実際に使う package を局所化します。[module 設定](https://docs.moonbitlang.com/en/latest/toolchain/moon/module.html)、[package の追加と利用](https://docs.moonbitlang.com/en/latest/toolchain/moon/package-manage-tour.html)を正本として参照します。
+
+</Fold>
+
+<Fold id="moonbit.cli.ja" kind="procedure" level="basic" locale="ja" requires={["moonbit.packages.ja"]} evidence={["moonbit.commands"]}>
+
+## moon CLI で new / run / test の短いループを作る
+
+MoonBit の開発操作は `moon` CLI に集約されています。まず `moon new` でモジュールを作り、`moon run` で main package を実行し、`moon test` で同じパッケージのテストを実行します。`moon check` はオブジェクトを生成せずに型とパッケージ境界を確認するため、編集時の短いフィードバックループに向きます。
+
+```text
+moon new hello-moonbit
+cd hello-moonbit
+moon check
+moon run cmd/main
+moon test
+```
+
+`moon run` は package または `.mbt` ファイルと引数を受け取れます。利用可能な target は `wasm`、`wasm-gc`、`js`、`native`、`llvm`、`all` です。[Moon CLI の公式リファレンス](https://docs.moonbitlang.com/en/latest/toolchain/moon/commands.html)を、コマンドとオプションの正本として参照します。
+
+</Fold>
+
+<Fold id="moonbit.toolchain.typescript.ja" kind="reference" level="basic" locale="ja" roles={["typescript-programmer"]} familiarTo={["typescript-programmer"]} requires={["moonbit.cli.ja"]} evidence={["moonbit.commands", "moonbit.benchmarks"]}>
+
+## TypeScript の開発ループを MoonBit で回す
+
+TypeScript では、package script と Vitest をこのように回します。
+
+```sh
+pnpm create vite hello-web
+cd hello-web
+pnpm run dev
+pnpm test
+pnpm exec vitest bench
+```
+
+MoonBit では、同じ開始・実行・テスト・benchmark を `moon` CLI に集約します。
+
+```sh
+moon new hello-moonbit
+cd hello-moonbit
+moon run cmd/main
+moon test
+moon bench
+```
+
+`moon new` は `npm create` の開始点、`moon add` は `pnpm add` の dependency 追加、`moon run cmd/main` は package script の実行に相当します。`moon test` は別の test runner 設定なしで回帰を固定し、`moon bench` と `@bench.T` は同じ package に置けます。Node/browser の E2E、bundler、DOM test は JavaScript 側の toolchain に残します。
+
+</Fold>
+
+<Fold id="moonbit.toolchain.rust.ja" kind="reference" level="basic" locale="ja" roles={["rust-programmer"]} familiarTo={["rust-programmer"]} requires={["moonbit.cli.ja"]} evidence={["moonbit.commands", "moonbit.benchmarks"]}>
+
+## Rust の開発ループを MoonBit で回す
+
+Rust では、Cargo をこのように回します。
+
+```sh
+cargo new hello-rust
+cd hello-rust
+cargo run
+cargo test
+cargo bench
+```
+
+MoonBit では、同じ操作を次のように書きます。
+
+```sh
+moon new hello-moonbit
+cd hello-moonbit
+moon run cmd/main
+moon test
+moon bench
+```
+
+Cargo.toml が crate 全体を定義するのに対し、MoonBit では `moon.mod` が module、`moon.pkg` が source directory ごとの package 境界を定めます。`moon bench` と `@bench.T` は Criterion のように実装差を測る入口ですが、分布分析や可視化の代替ではないため、比較の粒度と regression の判断基準は CI 側で決めます。
+
+</Fold>
+
+<Fold id="moonbit.toolchain.go.ja" kind="reference" level="basic" locale="ja" roles={["go-programmer"]} familiarTo={["go-programmer"]} requires={["moonbit.cli.ja"]} evidence={["moonbit.commands", "moonbit.benchmarks"]}>
+
+## Go の開発ループを MoonBit で回す
+
+Go では、module の初期化から benchmark までをこのように回します。
+
+```sh
+go mod init example.com/hello
+go run .
+go test ./...
+go test -bench=. ./...
+```
+
+MoonBit では、同じ操作を次のように書きます。
+
+```sh
+moon new hello-moonbit
+cd hello-moonbit
+moon run cmd/main
+moon test
+moon bench
+```
+
+`moon.mod` と `moon add` は `go.mod` と `go get` の位置で module dependency を管理し、`moon.pkg` は source directory ごとの package 境界を明示します。`moon bench` と `@bench.T` は `go test -bench` と同じく小さな処理を測る入口です。MoonBit では target 選択と Wasm/JavaScript/native の境界も metadata に書きます。
+
+</Fold>
+
+<Fold id="moonbit.script-mode.ja" kind="procedure" level="basic" locale="ja" requires={["moonbit.cli.ja"]} evidence={["moonbit.script-mode"]}>
+
+## .mbtx を moon run でそのまま実行する
+
+小さな自動化、検証用の一回限りのプログラム、またはサンプルには、module や package の設定ファイルを作らない `.mbtx` script を使えます。ファイルの先頭で package import を宣言し、`moon run script.mbtx` で直接実行します。
+
+```moonbit
+///|
+import {
+  "moonbitlang/core/list" @ls
+}
+
+///|
+async fn main {
+  let xs = @ls.from_array(["1", "2", "3"])
+  debug(xs)
+}
+```
+
+```text
+moon run script.mbtx
+```
+
+import path には module 名の後に version を指定でき、同じ module から import する package には同じ version を使います。標準入力なら `moon run -`、短い断片なら `moon run -c` も使えます。[`.mbtx` スクリプトの公式ドキュメント](https://docs.moonbitlang.com/ja/latest/toolchain/moon/script-mode.html)を正本として参照します。
+
+</Fold>
+
+<Fold id="moonbit.async.ja" kind="procedure" level="advanced" locale="ja" requires={["moonbit.packages.ja"]} evidence={["moonbit.async"]}>
+
+## async fn と noraise で待機と失敗を別々に契約する
+
+MoonBit の async は coroutine ベースで、compiler が asyncness を追跡します。`async fn` は暗黙に error を `raise` し得るため、raise しない非同期処理には `noraise` を明示します。`noraise` は「待機しない」意味ではなく、MoonBit の error を raise しない契約です。
+
+```moonbit
+async fn healthcheck() -> String noraise {
+  "ok"
+}
+```
+
+async function は async context からだけ通常の関数呼び出しとして呼べ、呼び出し側は完了まで待機します。runtime API を使うには `moonbitlang/async` を dependency として追加し、package から import します。
+
+```text
+moon add moonbitlang/async
+```
+
+`moonbitlang/async` は native backend を最もよく支援し、JavaScript backend は機能が限定されています。API は experimental のため、target と version を固定して導入します。[Async programming support](https://docs.moonbitlang.com/en/latest/language/async-experimental.html)を正本として参照します。
+
+</Fold>
+
+<Fold id="moonbit.async.typescript.ja" kind="concept" level="advanced" locale="ja" roles={["typescript-programmer"]} requires={["moonbit.async.ja"]} evidence={["moonbit.async"]}>
+
+## TypeScript の非同期コードを MoonBit で書く
+
+health check の結果を待って出力するなら、TypeScript では `Promise` を返し、呼び出し側で `await` します。
+
+```typescript
+async function healthcheck(): Promise<string> {
+  return "ok";
+}
+
+async function report(): Promise<void> {
+  const status = await healthcheck();
+  console.log(status);
+}
+```
+
+MoonBit では、同じ処理を async function の通常呼び出しとして書きます。
+
+```moonbit
+async fn healthcheck() -> String noraise {
+  "ok"
+}
+
+async fn report() noraise {
+  let status = healthcheck()
+  println(status)
+}
+```
+
+asyncness は function の型に追跡されるため、async context 内の `healthcheck()` が待機点になり、`await` keyword は書きません。async context の外からは呼べません。Promise rejection や `catch (error)` の値は通常 `unknown` ですが、MoonBit の error は `raise` 契約で追跡します。`noraise` は非同期でない意味ではなく、MoonBit error を raise しない契約です。JavaScript Promise との相互運用は `moonbitlang/async/js_async` の adapter 境界に閉じます。
+
+</Fold>
+
+<Fold id="moonbit.async.rust.ja" kind="concept" level="advanced" locale="ja" roles={["rust-programmer"]} requires={["moonbit.async.ja"]} evidence={["moonbit.async"]}>
+
+## Rust の async/await を MoonBit で書く
+
+Rust では `Future` を `.await` し、失敗を `Result` の値として伝播します。
+
+```rust
+async fn healthcheck() -> Result<String, DivError> {
+    Ok("ok".to_owned())
+}
+
+async fn report() -> Result<(), DivError> {
+  let status = healthcheck().await?;
+  println!("{status}");
+  Ok(())
+}
+```
+
+MoonBit では、async context 内で通常の関数呼び出しを書き、失敗させない関数には `noraise` を付けます。
+
+```moonbit
+async fn healthcheck() -> String noraise {
+  "ok"
+}
+
+async fn report() noraise {
+  let status = healthcheck()
+  println(status)
+}
+```
+
+MoonBit は coroutine runtime と compiler による asyncness tracking を使うため、通常呼び出しが待機点です。failure を `Future<Output = Result<T, E>>` のような値として運ぶ Rust と異なり、MoonBit の async function は `raise` を暗黙に許します。`noraise` は asyncness ではなく error effect を閉じる指定です。並行 task は structured concurrency の task group に閉じ、child task の cancellation と終了待機を親子関係で管理します。
+
+</Fold>
+
+<Fold id="moonbit.async.go.ja" kind="concept" level="advanced" locale="ja" roles={["go-programmer"]} requires={["moonbit.async.ja"]} evidence={["moonbit.async"]}>
+
+## Go の goroutine / channel を MoonBit で書く
+
+Go では goroutine と channel を使い、channel receive で結果を待ちます。
+
+```go
+import (
+    "context"
+    "fmt"
+)
+
+func healthcheck(ctx context.Context) <-chan string {
+    results := make(chan string, 1)
+    go func() {
+        defer close(results)
+        if ctx.Err() == nil {
+            results <- "ok"
+        }
+    }()
+    return results
+}
+
+func report(ctx context.Context) {
+  status := <-healthcheck(ctx)
+  fmt.Println(status)
+}
+```
+
+MoonBit では、同じ待機を async function 内の通常呼び出しとして書きます。
+
+```moonbit
+async fn healthcheck() -> String noraise {
+  "ok"
+}
+
+async fn report() noraise {
+  let status = healthcheck()
+  println(status)
+}
+```
+
+`async fn` は await 相当の待機を compiler が追跡します。並行 task の起動は task group 内に閉じ、task group は child task の終了を待ち、失敗時には cancellation を伝播します。`noraise` は Go の error return を省略するものではなく、MoonBit error を raise しない型契約です。Go の `(T, error)` と同じように値として失敗を返したい境界は `Result[T, E]` に変換し、局所的な cancellation と cleanup は `raise` / `defer` と task group に任せます。
+
+</Fold>
+
+<Fold id="moonbit.bindings.typescript.ja" kind="concept" level="basic" locale="ja" roles={["typescript-programmer"]} familiarTo={["typescript-programmer"]} requires={["moonbit.overview.ja"]}>
+
+## TypeScript の束縛を MoonBit で書く
+
+TypeScript では、更新しない束縛に `const`、再代入する局所変数に `let` を使います。MoonBit では、更新しない値を `let`、更新する局所状態だけを `let mut` と書きます。
+
+- TypeScript: `const greeting = "MoonBit"` -> MoonBit: `let greeting = "MoonBit"`
+- TypeScript: `let retries = 0; retries += 1` -> MoonBit: `let mut retries = 0; retries = retries + 1`
+
+この対応は束縛の可変性についてのものです。JavaScript のオブジェクトを介した更新や実行時の型検査までをそのまま移すのではなく、更新が必要な局所状態を `let mut` として明示します。
+
+```typescript
+const greeting = "MoonBit";
+let retries = 0;
+retries += 1;
+```
+
+```moonbit
+let greeting = "MoonBit"
+let mut retries = 0
+retries = retries + 1
+```
+
+</Fold>
+
+<Fold id="moonbit.data.typescript.ja" kind="concept" level="basic" locale="ja" roles={["typescript-programmer"]} familiarTo={["typescript-programmer"]} requires={["moonbit.bindings.typescript.ja"]}>
+
+## TypeScript の tagged union を MoonBit で書く
+
+TypeScript では、タグと payload を持つ有限個の状態を判別可能な union と `switch` で書きます。MoonBit では、同じ状態を enum variant と `match` で書きます。
+
+MoonBit の enum は閉じており、`match` は全 variant を扱うことを compiler が確認します。`default` に抜け道を作らず、新しい variant を足した時点で不足する branch が分かります。さらに `match` は式なので、別の `result` 変数へ代入せず branch 自体を戻り値にでき、constructor pattern が payload の型を branch ごとに直接束縛します。
+
+```typescript
+type LoadState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "failed"; message: string };
+
+function statusText(state: LoadState): string {
+  switch (state.kind) {
+    case "idle": return "idle";
+    case "loading": return "loading";
+    case "failed": return `failed: ${state.message}`;
+  }
+}
+```
+
+```moonbit
+enum LoadState {
+  Idle
+  Loading
+  Failed(String)
+}
+
+fn status_text(state : LoadState) -> String {
+  match state {
+    Idle => "idle"
+    Loading => "loading"
+    Failed(message) => "failed: \{message}"
+  }
+}
+```
+
+</Fold>
+
+<Fold id="moonbit.bindings.rust.ja" kind="concept" level="basic" locale="ja" roles={["rust-programmer"]} familiarTo={["rust-programmer"]} requires={["moonbit.overview.ja"]}>
+
+## Rust の束縛を MoonBit で書く
+
+束縛の形は Rust と直接対応します。Rust の `let` は MoonBit の `let`、Rust の `let mut` は MoonBit の `let mut` です。まずは「更新する局所変数だけを明示する」という同じ読み方でコードを追えます。
+
+- Rust: `let greeting = "MoonBit";` -> MoonBit: `let greeting = "MoonBit"`
+- Rust: `let mut retries = 0; retries += 1;` -> MoonBit: `let mut retries = 0; retries = retries + 1`
+
+この類似は束縛と可変性の構造です。所有権、借用、ライフタイムの規則までが MoonBit に移るわけではないため、値の共有や境界設計は MoonBit の型と API で改めて決めます。
+
+```rust
+let greeting = "MoonBit";
+let mut retries = 0;
+retries += 1;
+```
+
+```moonbit
+let greeting = "MoonBit"
+let mut retries = 0
+retries = retries + 1
+```
+
+</Fold>
+
+<Fold id="moonbit.data.rust.ja" kind="concept" level="basic" locale="ja" roles={["rust-programmer"]} familiarTo={["rust-programmer"]} requires={["moonbit.bindings.rust.ja"]}>
+
+## Rust の enum を MoonBit で書く
+
+データの形も Rust と直接対応します。Rust の `enum LoadState { Idle, Loading, Failed(String) }` は、MoonBit の同名の `enum` と同じく variant ごとに payload の形を定めます。Rust の `match state` と MoonBit の `match state` は、variant ごとに処理を並べるための同じ足場になります。
+
+この対応を使って、境界を越えるデータを小さな variant と payload に分けられます。ただし Rust の参照・所有権の振る舞いまでは含まれないため、境界では値の形と失敗の表現を MoonBit の契約として固定します。
+
+```rust
+enum LoadState {
+    Idle,
+    Loading,
+    Failed(String),
+}
+
+fn status_text(state: LoadState) -> String {
+    match state {
+        LoadState::Idle => "idle".to_owned(),
+        LoadState::Loading => "loading".to_owned(),
+        LoadState::Failed(message) => format!("failed: {message}"),
+    }
+}
+```
+
+```moonbit
+enum LoadState {
+  Idle
+  Loading
+  Failed(String)
+}
+```
+
+</Fold>
+
+<Fold id="moonbit.bindings.go.ja" kind="concept" level="basic" locale="ja" roles={["go-programmer"]} familiarTo={["go-programmer"]} requires={["moonbit.overview.ja"]}>
+
+## Go の局所変数を MoonBit で書く
+
+Go の `var` と短縮宣言 `:=` は、束縛した local variable を後から代入できます。MoonBit の `let` は既定で不変で、更新する local state だけを `let mut` として区別します。Go の `const` と完全に同じではありませんが、「更新しない値」と「更新する状態」が構文上分かれる点が利点です。
+
+```go
+func prepare() {
+    greeting := "MoonBit"
+    retries := 0
+    retries++
+    _ = greeting
+    _ = retries
+}
+```
+
+```moonbit
+let greeting = "MoonBit"
+let mut retries = 0
+retries = retries + 1
+```
+
+</Fold>
+
+<Fold id="moonbit.data.go.ja" kind="concept" level="basic" locale="ja" roles={["go-programmer"]} familiarTo={["go-programmer"]} requires={["moonbit.bindings.go.ja"]}>
+
+## Go の type switch を MoonBit で書く
+
+Go では interface と type switch、または tag field を持つ struct で variant を表すことが多く、追加された実装を compiler が完全には列挙できません。MoonBit の `enum` は variant を閉じ、`match` は全 variant を扱うことを確認します。payload は constructor pattern で branch ごとに直接取り出せます。
+
+```go
+type LoadState interface{ isLoadState() }
+type Idle struct{}
+type Loading struct{}
+type Failed struct{ Message string }
+
+func (Idle) isLoadState() {}
+func (Loading) isLoadState() {}
+func (Failed) isLoadState() {}
+
+func statusText(state LoadState) string {
+    switch value := state.(type) {
+    case Idle: return "idle"
+    case Loading: return "loading"
+    case Failed: return "failed: " + value.Message
+    default: return "unknown"
+    }
+}
+```
+
+```moonbit
+enum LoadState {
+  Idle
+  Loading
+  Failed(String)
+}
+
+fn status_text(state : LoadState) -> String {
+  match state {
+    Idle => "idle"
+    Loading => "loading"
+    Failed(message) => "failed: \{message}"
+  }
+}
+```
+
+</Fold>
+
+<Fold id="moonbit.expressions.ja" kind="procedure" level="basic" locale="ja" familiarTo={["rust-programmer"]} requires={["moonbit.overview.ja"]}>
+
+## 式を返す if と、全ケースを書く match
+
+MoonBit の `if` と `match` は値を返す式です。途中で変数へ代入してから返す代わりに、分岐そのものを関数の戻り値として書けます。
+
+```moonbit
+fn status_label(ready : Bool) -> String {
+  if ready {
+    "ready"
+  } else {
+    "waiting"
+  }
+}
+```
+
+</Fold>
+
+<Fold id="moonbit.errors.ja" kind="procedure" level="advanced" locale="ja" requires={["moonbit.expressions.ja"]} evidence={["moonbit.error-handling"]}>
+
+## raise とパターンマッチする catch で失敗を型と関数シグネチャへ出す
+
+回復可能な失敗は具体的な `suberror` と `raise` を使って関数シグネチャに出します。呼び出し側は伝播するか `try` / `catch` で処理するかを選べるため、例外的な経路が API 契約から消えません。`catch` の各 arm は error constructor を分解するパターンであり、通常の `match` と同じく payload を束縛して error の種類ごとに処理します。値として扱いたい境界では、`catch` で `Result` に変換します。
+
+```moonbit
+suberror DivError { DivError(String) } derive(Debug)
+
+fn divide(x : Int, y : Int) -> Int raise DivError {
+  if y == 0 {
+    raise DivError("division by zero")
+  }
+  x / y
+}
+```
+
+```moonbit
+fn divide_or_zero(x : Int, y : Int) -> Int {
+  divide(x, y) catch {
+    DivError(message) => {
+      println(message)
+      0
+    }
+  }
+}
+```
+
+```moonbit
+fn divide_result(x : Int, y : Int) -> Result[Int, DivError] {
+  Ok(divide(x, y)) catch {
+    error => Err(error)
+  }
+}
+```
+
+[Error handling](https://docs.moonbitlang.com/en/latest/language/error-handling.html) を、`raise` の伝播、`try` / `catch`、`Result` 変換の正本として参照します。
+
+</Fold>
+
+<Fold id="moonbit.errors.typescript.ja" kind="concept" level="advanced" locale="ja" roles={["typescript-programmer"]} requires={["moonbit.errors.ja"]} evidence={["moonbit.error-handling"]}>
+
+## TypeScript の型付きエラーを MoonBit で書く
+
+neverthrow の `Result<T, E>` / `ResultAsync<T, E>` は失敗を戻り値へ置き、Effect の `Effect<A, E, R>` は error channel `E` を型に持ちます。MoonBit の `fn f() -> T raise E` も失敗型を API に出しますが、成功値は直接返し、呼び出し側は `raise E` を伝播する関数に置くか `try` / `catch` で処理します。
+
+`catch { DivError(message) => ... }` は JavaScript の動的な `catch (error)` ではなく、discriminated union を `switch` するのと同じ constructor pattern です。値として pipeline に流したい場所では、`Ok(f()) catch { error => Err(error) }` で `Result[T, E]` に変換できます。Effect と異なり、MoonBit の `raise` は依存環境 `R` や実行 runtime を表すものではありません。型付きの失敗経路を明示するという共通点だけを足場にします。[neverthrow](https://github.com/supermacro/neverthrow) と [Effect の expected errors](https://effect.website/docs/error-management/expected-errors/)を比較の正本として参照します。
+
+```typescript
+import { err, ok, type Result } from "neverthrow";
+
+type DivError = { kind: "DivError"; message: string };
+
+function divide(x: number, y: number): Result<number, DivError> {
+  return y === 0
+    ? err({ kind: "DivError", message: "division by zero" })
+    : ok(x / y);
+}
+```
+
+MoonBit では、成功値を直接返し、失敗する可能性を `raise` に宣言します。
+
+```moonbit
+suberror DivError { DivError(String) } derive(Debug)
+
+fn divide(x : Int, y : Int) -> Int raise DivError {
+  if y == 0 {
+    raise DivError("division by zero")
+  }
+  x / y
+}
+```
+
+</Fold>
+
+<Fold id="moonbit.errors.rust.ja" kind="concept" level="advanced" locale="ja" roles={["rust-programmer"]} requires={["moonbit.errors.ja"]} evidence={["moonbit.error-handling"]}>
+
+## Rust の Result を MoonBit で書く
+
+Rust の `Result<T, E>` は成功と失敗を値として返し、`?` は `Err` を呼び出し元の `Result` へ伝播します。MoonBit の `fn f() -> T raise E` は成功値を直接返しますが、失敗型 `E` を signature に宣言します。raising function を通常呼び出しすると、呼び出し元も同じ失敗を許可する契約になります。
+
+`catch { DivError(message) => ... }` は Rust の `match result { Err(DivError(message)) => ... }` に対応する constructor pattern です。`Ok(f()) catch { error => Err(error) }` は `Result[T, E]` として合成したい地点に対応します。外部へ返すデータや collection 操作では `Result`、局所的な制御フローでは `raise` と使い分けると境界が明確になります。
+
+```rust
+#[derive(Debug)]
+struct DivError(String);
+
+fn divide(x: i32, y: i32) -> Result<i32, DivError> {
+    if y == 0 {
+        Err(DivError("division by zero".to_owned()))
+    } else {
+        Ok(x / y)
+    }
+}
+```
+
+MoonBit では、同じ失敗型を関数シグネチャの `raise` に書き、必要な場所だけ `catch` します。
+
+```moonbit
+suberror DivError { DivError(String) } derive(Debug)
+
+fn divide(x : Int, y : Int) -> Int raise DivError {
+  if y == 0 {
+    raise DivError("division by zero")
+  }
+  x / y
+}
+```
+
+</Fold>
+
+<Fold id="moonbit.errors.go.ja" kind="concept" level="advanced" locale="ja" roles={["go-programmer"]} requires={["moonbit.errors.ja"]} evidence={["moonbit.error-handling"]}>
+
+## Go の error return を MoonBit で書く
+
+Go は `(T, error)` を戻り値に置き、呼び出し側が `if err != nil` で処理する契約です。MoonBit の `fn f() -> T raise E` は成功値を直接返しつつ、失敗型を signature に出します。raising function の通常呼び出しは caller へその契約を伝播します。
+
+`catch { DivError(message) => ... }` は Go の error type assertion や `errors.As` で具体型を分ける地点に近い一方、constructor pattern を compiler が型付けします。外部 API や複数値の合成で失敗を値として持ちたいときは `Result[T, E]` へ変換し、単発の局所制御では `raise` / `catch` を使います。
+
+```go
+import "errors"
+
+func divide(x, y int) (int, error) {
+    if y == 0 {
+        return 0, errors.New("division by zero")
+    }
+    return x / y, nil
+}
+
+func divideOrZero(x, y int) int {
+    value, err := divide(x, y)
+    if err != nil {
+        return 0
+    }
+    return value
+}
+```
+
+MoonBit では、成功値を直接受け取り、回復する境界で constructor pattern を使って `catch` します。
+
+```moonbit
+suberror DivError { DivError(String) } derive(Debug)
+
+fn divide(x : Int, y : Int) -> Int raise DivError {
+  if y == 0 {
+    raise DivError("division by zero")
+  }
+  x / y
+}
+
+fn divide_or_zero(x : Int, y : Int) -> Int {
+  divide(x, y) catch {
+    DivError(_) => 0
+  }
+}
+```
+
+</Fold>
+
+<Fold id="moonbit.tests.ja" kind="procedure" level="advanced" locale="ja" familiarTo={["typescript-programmer", "rust-programmer", "go-programmer"]} requires={["moonbit.expressions.ja"]} evidence={["moonbit.tests"]}>
+
+## moon run で動かし、moon test で仕様を固定する
+
+`moon run` は main package を実行し、`moon test` は同じ package の `test` block を実行します。`test` block は通常のソースと同じ場所に置けるため、小さな値の例を先に固定して、型と実行時の振る舞いを同時に確認できます。snapshot の期待値は `moon test --update` で更新できます。
+
+```moonbit
+test "status label" {
+  assert_eq(status_label(true), "ready")
+  assert_eq(status_label(false), "waiting")
+}
+```
+
+</Fold>
+
+<Fold id="moonbit.bench.ja" kind="procedure" level="advanced" locale="ja" requires={["moonbit.tests.ja"]} evidence={["moonbit.benchmarks"]}>
+
+## moon bench と @bench.T で実装差を測る
+
+`moon bench` は current package の benchmark を実行します。benchmark 用の `test` block は `@bench.T` を受け取り、`b.bench` が反復回数の調整と統計計測を担当します。純粋な計算は `b.keep` に渡し、コンパイラに計算自体を消去させないようにします。
+
+```moonbit
+fn sum_to(n : Int) -> Int {
+  if n <= 0 { 0 } else { n + sum_to(n - 1) }
+}
+
+test (b : @bench.T) {
+  b.bench(fn() { b.keep(sum_to(100)) })
+}
+```
+
+同じ入力に対する複数実装は `name=` を付けて同じ benchmark block に並べます。[Writing Benchmarks](https://docs.moonbitlang.com/en/latest/language/benchmarks.html)の説明に従い、性能の回帰検出と実装比較を分けずに残せます。
+
+</Fold>
+
+<Fold id="moonbit.json-patterns.ja" kind="concept" level="advanced" locale="ja" requires={["moonbit.expressions.ja"]} evidence={["moonbit.json-patterns"]}>
+
+## Json を構造パターンで検査しながら読む
+
+MoonBit の `match` は `Json` 値の object、array、literal を同じ構造パターンで扱えます。型だけを後から変換する前に、必要な key、version、array の形を一つの分岐で確認できます。入力文字列は `@json.parse` で `Json` に変換し、parse error は通常の失敗経路として処理します。
+
+```moonbit
+fn import_count(json : Json) -> Int {
+  match json {
+    { "version": "1.0.0", "import": [..] as imports, .. } =>
+      imports.length()
+    _ => 0
+  }
+}
+```
+
+これは TypeScript の `unknown` を段階的に絞り込む処理や Rust の `serde_json::Value` に対する match と近い目的を持ちますが、object key と array shape を一つの pattern に書ける点が読みどころです。[パターンマッチ](https://docs.moonbitlang.com/en/latest/language/fundamentals.html#pattern-matching)と[core JSON API](https://mooncakes.io/docs/moonbitlang/core/json)を正本にします。
+
+</Fold>
+
+<Fold id="moonbit.ffi.javascript.ja" kind="reference" level="advanced" locale="ja" requires={["moonbit.packages.ja"]} evidence={["moonbit.ffi"]}>
+
+## extern "js" で JavaScript の値と関数を境界に置く
+
+JavaScript target では、foreign function を module/function 指定または inline JavaScript lambda として宣言できます。MoonBit 側の signature を実行時の JavaScript API と一致させ、動的な値は小さな wrapper に閉じ込めます。
+
+```moonbit
+extern "js" fn cos(d : Double) -> Double =
+  #|(d) => Math.cos(d)
+```
+
+`#external type` は JavaScript target では JavaScript value として扱われます。公開 API には MoonBit の型を残し、foreign value を越境層以外へ広げない設計にします。[FFI の JavaScript backend 節](https://docs.moonbitlang.com/en/latest/language/ffi.html)を参照します。
+
+</Fold>
+
+<Fold id="moonbit.ffi.native.ja" kind="reference" level="expert" locale="ja" requires={["moonbit.ffi.javascript.ja"]} evidence={["moonbit.ffi"]}>
+
+## extern "C" と moon.pkg で native FFI の所有権を明示する
+
+native target の FFI は C function を宣言し、必要なら `moon.pkg` の native link 設定で library を渡します。foreign function の signature は実体と正確に一致させ、`String` や `Bytes` など参照カウントされる値を渡すときは `#borrow` / `#owned` を含む所有権契約を確認します。
+
+```moonbit
+extern "C" fn put_char(ch : UInt) -> Unit = "put_char"
+```
+
+JS backend の値変換をそのまま native へ持ち込まず、ABI・link flag・lifetime を package 境界で決めます。[FFI の native/C backend と lifetime management](https://docs.moonbitlang.com/en/latest/language/ffi.html)を参照します。
+
+</Fold>
+
+<Fold id="moonbit.verification.ja" kind="procedure" level="expert" locale="ja" requires={["moonbit.tests.ja"]} evidence={["moonbit.formal-verification"]}>
+
+## moon prove で実装と論理仕様を分離して検証する
+
+MoonBit の形式検証は experimental です。実行する `.mbt`、predicate や lemma を書く `.mbtp`、package の `proof-enabled` 設定を分け、`moon prove` が SMT solver に渡す proof obligation を検査します。`where` には precondition の `proof_require` と postcondition の `proof_ensure` を書けます。
+
+```moonbit
+pub fn nonnegative(n : Int) -> Int where {
+  proof_require: 0 <= n,
+  proof_ensure: result => 0 <= result,
+} {
+  n
+}
+```
+
+通常の `moon test` は具体例の回帰を防ぎ、`moon prove` は契約がすべての入力で成立するかを別の論理層で検査します。仕様側と実装側を混同しないため、[Formal Verification](https://docs.moonbitlang.com/en/latest/language/verification.html)の `.mbt` / `.mbtp` 分離と trust model を確認してから導入します。
+
+</Fold>
+
+<Fold id="moonbit.skills.ja" kind="reference" level="advanced" locale="ja" requires={["moonbit.script-mode.ja"]} evidence={["moonbit.skills"]}>
+
+## MoonBit Skills で実行可能なツールとエージェントの文脈を配布する
+
+[MoonBit Skills](https://skills.mooncakes.io/) は、MoonBit package として公開された実行可能 entry を探索する場です。entry は sandbox で実行する Wasm binary として配布され、利用側は `moon runwasm` で実行します。package には、用途・入力・出力・制約をエージェントへ渡す `SKILL.md` も置けます。
+
+```text
+moon runwasm <publisher>/<package>@<version>/<entry>
+```
+
+ここは application dependency ではなく、再利用する操作を配布する境界です。実行前に `SKILL.md`、repository、必要な権限と入出力を確認し、信頼できる package と version を固定します。
+
+</Fold>
+
+<Fold id="moonbit.wasm-boundary.ja" kind="reference" level="expert" locale="ja" requires={["moonbit.packages.ja"]} evidence={["moonbit.targets"]}>
+
+## WebAssembly 境界を長期の契約として扱う
+
+公開する関数とデータ形式は小さく保ち、JavaScript や Rust 側との変換を明示します。バックエンドは実装の選択ですが、境界に置く名前・値・失敗の表現は互換性を持つ API 契約です。
+
+最適化や FFI の詳細に入る前に、MoonBit 側の型とテストで境界の期待値を固定します。
+
+</Fold>
+
+<Include src="./moonbit-for-programmers/overview.en.mdx" sync="moonbit-overview" />
+
+<Fold id="moonbit.hello-world.en" kind="procedure" level="basic" locale="en" familiarTo={["typescript-programmer", "rust-programmer", "go-programmer"]} requires={["moonbit.overview.en"]} evidence={["moonbit.build-system"]}>
+
+## Run Hello World
+
+Once `moon` is installed, create one module. `moon new` creates the runnable package at `cmd/main`, so put the smallest `main` there and run it.
+
+```text
+moon new hello-moonbit
+cd hello-moonbit
+```
+
+Set `cmd/main/main.mbt` to:
+
+```moonbit
+///|
+fn main {
+  println("Hello, world!")
+}
+```
+
+```text
+moon run cmd/main
+# Hello, world!
+```
+
+This is the smallest development loop: create a module, write its main package, and run it. See the [Moon build-system tutorial](https://docs.moonbitlang.com/en/latest/toolchain/moon/tutorial.html) for the generated directory structure and package roles.
+
+</Fold>
+
+<Fold id="moonbit.packages.en" kind="procedure" level="basic" locale="en" familiarTo={["typescript-programmer", "rust-programmer", "go-programmer"]} requires={["moonbit.hello-world.en"]} evidence={["moonbit.packages"]}>
+
+## Place module and package boundaries with moon.mod and moon.pkg
+
+`moon.mod` defines module-wide metadata such as its name, dependencies, source directory, and targets. A `moon.pkg` in each source directory defines the packages it imports and package-specific settings such as `is-main`. The JSON forms `moon.mod.json` and `moon.pkg.json` are also supported; this guide uses the MoonBit configuration form.
+
+```moonbit
+// moon.mod
+name = "your-name/hello-moonbit"
+
+// cmd/main/moon.pkg
+options(
+  "is-main": true,
+)
+```
+
+Browse modules on [mooncakes.io](https://mooncakes.io/), then add a required module as a module dependency with `moon add`. Add the specific package you use to `import` in its `moon.pkg` afterwards.
+
+```text
+moon add moonbit-community/starter
+```
+
+```moonbit
+// cmd/main/moon.pkg
+import {
+  "moonbit-community/starter/rabbit" @rabbit,
+}
+
+options(
+  "is-main": true,
+)
+```
+
+`moon add` manages the dependency in `moon.mod`; the import in `moon.pkg` localizes the packages actually used. The authorities are [module configuration](https://docs.moonbitlang.com/en/latest/toolchain/moon/module.html) and [adding and using packages](https://docs.moonbitlang.com/en/latest/toolchain/moon/package-manage-tour.html).
+
+</Fold>
+
+<Fold id="moonbit.cli.en" kind="procedure" level="basic" locale="en" requires={["moonbit.packages.en"]} evidence={["moonbit.commands"]}>
+
+## Use the moon CLI for a new / run / test loop
+
+MoonBit development operations are collected in the `moon` CLI. Start a module with `moon new`, run its main package with `moon run`, and execute package tests with `moon test`. `moon check` checks types and package boundaries without producing object files, so it fits a short edit-time feedback loop.
+
+```text
+moon new hello-moonbit
+cd hello-moonbit
+moon check
+moon run cmd/main
+moon test
+```
+
+`moon run` accepts a package or `.mbt` file plus arguments. The available targets are `wasm`, `wasm-gc`, `js`, `native`, `llvm`, and `all`. Use the [Moon CLI reference](https://docs.moonbitlang.com/en/latest/toolchain/moon/commands.html) as the authority for commands and options.
+
+</Fold>
+
+<Fold id="moonbit.toolchain.typescript.en" kind="reference" level="basic" locale="en" roles={["typescript-programmer"]} familiarTo={["typescript-programmer"]} requires={["moonbit.cli.en"]} evidence={["moonbit.commands", "moonbit.benchmarks"]}>
+
+## Run a TypeScript development loop with MoonBit
+
+In TypeScript, package scripts and Vitest form a loop like this.
+
+```sh
+pnpm create vite hello-web
+cd hello-web
+pnpm run dev
+pnpm test
+pnpm exec vitest bench
+```
+
+In MoonBit, keep the same create, run, test, and benchmark steps in the `moon` CLI.
+
+```sh
+moon new hello-moonbit
+cd hello-moonbit
+moon run cmd/main
+moon test
+moon bench
+```
+
+`moon new` starts a project like `npm create`; `moon add` adds a dependency like `pnpm add`; and `moon run cmd/main` runs a main package like a package script. `moon test` fixes regressions without a separate test-runner configuration, while `moon bench` and `@bench.T` stay in the same package. Keep Node/browser E2E, bundling, and DOM tests on the JavaScript side.
+
+</Fold>
+
+<Fold id="moonbit.toolchain.rust.en" kind="reference" level="basic" locale="en" roles={["rust-programmer"]} familiarTo={["rust-programmer"]} requires={["moonbit.cli.en"]} evidence={["moonbit.commands", "moonbit.benchmarks"]}>
+
+## Run a Rust development loop with MoonBit
+
+In Rust, Cargo supplies a loop like this.
+
+```sh
+cargo new hello-rust
+cd hello-rust
+cargo run
+cargo test
+cargo bench
+```
+
+In MoonBit, write the same operations like this.
+
+```sh
+moon new hello-moonbit
+cd hello-moonbit
+moon run cmd/main
+moon test
+moon bench
+```
+
+Where Cargo.toml defines a crate as a whole, MoonBit uses `moon.mod` for the module and `moon.pkg` for each source-directory package boundary. `moon bench` with `@bench.T` measures implementation differences like Criterion, but it does not replace Criterion's distribution analysis or visualization; decide comparison granularity and regression thresholds separately in CI.
+
+</Fold>
+
+<Fold id="moonbit.toolchain.go.en" kind="reference" level="basic" locale="en" roles={["go-programmer"]} familiarTo={["go-programmer"]} requires={["moonbit.cli.en"]} evidence={["moonbit.commands", "moonbit.benchmarks"]}>
+
+## Run a Go development loop with MoonBit
+
+In Go, initialize a module and run tests and benchmarks like this.
+
+```sh
+go mod init example.com/hello
+go run .
+go test ./...
+go test -bench=. ./...
+```
+
+In MoonBit, write the same operations like this.
+
+```sh
+moon new hello-moonbit
+cd hello-moonbit
+moon run cmd/main
+moon test
+moon bench
+```
+
+`moon.mod` and `moon add` manage module dependencies in the role of `go.mod` and `go get`, while `moon.pkg` makes source-directory package boundaries explicit. `moon bench` with `@bench.T` measures small comparable operations like `go test -bench`. MoonBit also records target selection and Wasm/JavaScript/native boundaries in its metadata.
+
+</Fold>
+
+<Fold id="moonbit.script-mode.en" kind="procedure" level="basic" locale="en" requires={["moonbit.cli.en"]} evidence={["moonbit.script-mode"]}>
+
+## Run a .mbtx script directly with moon run
+
+For a small automation, a one-off verification program, or an example, use a `.mbtx` script without creating module or package configuration files. Declare package imports at the top of the file, then run it directly with `moon run script.mbtx`.
+
+```moonbit
+///|
+import {
+  "moonbitlang/core/list" @ls
+}
+
+///|
+async fn main {
+  let xs = @ls.from_array(["1", "2", "3"])
+  debug(xs)
+}
+```
+
+```text
+moon run script.mbtx
+```
+
+An import path may specify a version after the module name; every package imported from one module must use that version. `moon run -` accepts standard input and `moon run -c` accepts a short inline program. Use the [official .mbtx script documentation](https://docs.moonbitlang.com/en/latest/toolchain/moon/script-mode.html) as the authority.
+
+</Fold>
+
+<Fold id="moonbit.async.en" kind="procedure" level="advanced" locale="en" requires={["moonbit.packages.en"]} evidence={["moonbit.async"]}>
+
+## Separate waiting and failure contracts with async fn and noraise
+
+MoonBit async is coroutine-based and its compiler tracks asyncness. An `async fn` implicitly may `raise` an error, so an asynchronous operation that does not raise must declare `noraise` explicitly. `noraise` does not mean that an operation never suspends; it is a contract that it does not raise a MoonBit error.
+
+```moonbit
+async fn healthcheck() -> String noraise {
+  "ok"
+}
+```
+
+Call an async function as an ordinary function only from an async context; the caller waits for it to complete. To use runtime APIs, add `moonbitlang/async` as a dependency and import it from the package.
+
+```text
+moon add moonbitlang/async
+```
+
+`moonbitlang/async` has its strongest support on the native backend and limited support on the JavaScript backend. Its API is experimental, so introduce it with a pinned target and version. Use [Async programming support](https://docs.moonbitlang.com/en/latest/language/async-experimental.html) as the authority.
+
+</Fold>
+
+<Fold id="moonbit.async.typescript.en" kind="concept" level="advanced" locale="en" roles={["typescript-programmer"]} requires={["moonbit.async.en"]} evidence={["moonbit.async"]}>
+
+## Write TypeScript async code in MoonBit
+
+To wait for a health check and print its result, TypeScript returns a `Promise` and awaits it at the call site.
+
+```typescript
+async function healthcheck(): Promise<string> {
+  return "ok";
+}
+
+async function report(): Promise<void> {
+  const status = await healthcheck();
+  console.log(status);
+}
+```
+
+In MoonBit, write the same operation as an ordinary call from an async function.
+
+```moonbit
+async fn healthcheck() -> String noraise {
+  "ok"
+}
+
+async fn report() noraise {
+  let status = healthcheck()
+  println(status)
+}
+```
+
+The function type tracks asyncness, so `healthcheck()` is the waiting point in an async context and no `await` keyword is written. Code outside an async context cannot call it. Promise rejections and values caught by `catch (error)` are normally `unknown`; MoonBit tracks its error through the `raise` contract. `noraise` does not remove asynchrony or cancellation: it states that the function does not raise a MoonBit error. Keep JavaScript Promise interoperation at the `moonbitlang/async/js_async` adapter boundary.
+
+</Fold>
+
+<Fold id="moonbit.async.rust.en" kind="concept" level="advanced" locale="en" roles={["rust-programmer"]} requires={["moonbit.async.en"]} evidence={["moonbit.async"]}>
+
+## Write Rust async code in MoonBit
+
+Rust awaits a `Future` and commonly propagates failure as a `Result` value.
+
+```rust
+async fn healthcheck() -> Result<String, DivError> {
+    Ok("ok".to_owned())
+}
+
+async fn report() -> Result<(), DivError> {
+  let status = healthcheck().await?;
+  println!("{status}");
+  Ok(())
+}
+```
+
+In MoonBit, use an ordinary call within an async function and mark a non-raising function with `noraise`.
+
+```moonbit
+async fn healthcheck() -> String noraise {
+  "ok"
+}
+
+async fn report() noraise {
+  let status = healthcheck()
+  println(status)
+}
+```
+
+MoonBit uses a coroutine runtime with compiler asyncness tracking, so the ordinary call is the waiting point. Unlike Rust's `Future<Output = Result<T, E>>`, a MoonBit async function implicitly permits `raise`. `noraise` closes the error effect rather than asyncness itself. For concurrency, place tasks in structured-concurrency task groups, which manage child-task cancellation and termination through their parent relationship.
+
+</Fold>
+
+<Fold id="moonbit.async.go.en" kind="concept" level="advanced" locale="en" roles={["go-programmer"]} requires={["moonbit.async.en"]} evidence={["moonbit.async"]}>
+
+## Write Go goroutine and channel code in MoonBit
+
+Go starts a goroutine, then waits for its result with a channel receive.
+
+```go
+import (
+    "context"
+    "fmt"
+)
+
+func healthcheck(ctx context.Context) <-chan string {
+    results := make(chan string, 1)
+    go func() {
+        defer close(results)
+        if ctx.Err() == nil {
+            results <- "ok"
+        }
+    }()
+    return results
+}
+
+func report(ctx context.Context) {
+  status := <-healthcheck(ctx)
+  fmt.Println(status)
+}
+```
+
+In MoonBit, write the same wait as an ordinary call inside an async function.
+
+```moonbit
+async fn healthcheck() -> String noraise {
+  "ok"
+}
+
+async fn report() noraise {
+  let status = healthcheck()
+  println(status)
+}
+```
+
+`async fn` lets the compiler track the await-equivalent wait. Keep concurrent task creation inside a task group: it waits for child termination and propagates cancellation when a task fails. `noraise` does not omit a Go-style error return; it is a type contract that the function does not raise a MoonBit error. At a boundary that needs failures as values, transform to `Result[T, E]`; keep local cancellation and cleanup in `raise` / `defer` and the task group.
+
+</Fold>
+
+<Fold id="moonbit.bindings.typescript.en" kind="concept" level="basic" locale="en" roles={["typescript-programmer"]} familiarTo={["typescript-programmer"]} requires={["moonbit.overview.en"]}>
+
+## Write TypeScript bindings in MoonBit
+
+In TypeScript, use `const` for a binding that does not change and `let` for a local variable that is reassigned. In MoonBit, write a fixed value with `let` and reserve `let mut` for changing local state.
+
+- TypeScript: `const greeting = "MoonBit"` -> MoonBit: `let greeting = "MoonBit"`
+- TypeScript: `let retries = 0; retries += 1` -> MoonBit: `let mut retries = 0; retries = retries + 1`
+
+This is a correspondence of binding mutability. Do not carry over object mutation or runtime type checks unchanged; model the local state that must change explicitly with `let mut`.
+
+```typescript
+const greeting = "MoonBit";
+let retries = 0;
+retries += 1;
+```
+
+```moonbit
+let greeting = "MoonBit"
+let mut retries = 0
+retries = retries + 1
+```
+
+</Fold>
+
+<Fold id="moonbit.data.typescript.en" kind="concept" level="basic" locale="en" roles={["typescript-programmer"]} familiarTo={["typescript-programmer"]} requires={["moonbit.bindings.typescript.en"]}>
+
+## Write TypeScript tagged unions in MoonBit
+
+In TypeScript, write a finite tagged state as a discriminated union and inspect its tag with `switch`. In MoonBit, write the same state as enum variants and inspect the value directly with `match`.
+
+MoonBit closes variants in an `enum` and its `match` checks that every variant is handled. This avoids hiding a missing branch behind `default`: adding a variant reveals every incomplete match. Since `match` is an expression, each branch can be the return value without assigning through a separate `result` variable, while a constructor pattern binds each branch's payload directly.
+
+```typescript
+type LoadState =
+  | { kind: "idle" }
+  | { kind: "loading" }
+  | { kind: "failed"; message: string };
+
+function statusText(state: LoadState): string {
+  switch (state.kind) {
+    case "idle": return "idle";
+    case "loading": return "loading";
+    case "failed": return `failed: ${state.message}`;
+  }
+}
+```
+
+```moonbit
+enum LoadState {
+  Idle
+  Loading
+  Failed(String)
+}
+
+fn status_text(state : LoadState) -> String {
+  match state {
+    Idle => "idle"
+    Loading => "loading"
+    Failed(message) => "failed: \{message}"
+  }
+}
+```
+
+</Fold>
+
+<Fold id="moonbit.bindings.rust.en" kind="concept" level="basic" locale="en" roles={["rust-programmer"]} familiarTo={["rust-programmer"]} requires={["moonbit.overview.en"]}>
+
+## Write Rust bindings in MoonBit
+
+In Rust, use `let` for a fixed binding and `let mut` for a local value that changes. MoonBit uses the same distinction: `let` for a fixed value and `let mut` for changing local state.
+
+- Rust: `let greeting = "MoonBit";` -> MoonBit: `let greeting = "MoonBit"`
+- Rust: `let mut retries = 0; retries += 1;` -> MoonBit: `let mut retries = 0; retries = retries + 1`
+
+The similarity is about bindings and mutability, not ownership, borrowing, or lifetimes. Design sharing and boundaries again through MoonBit types and APIs.
+
+```rust
+let greeting = "MoonBit";
+let mut retries = 0;
+retries += 1;
+```
+
+```moonbit
+let greeting = "MoonBit"
+let mut retries = 0
+retries = retries + 1
+```
+
+</Fold>
+
+<Fold id="moonbit.data.rust.en" kind="concept" level="basic" locale="en" roles={["rust-programmer"]} familiarTo={["rust-programmer"]} requires={["moonbit.bindings.rust.en"]}>
+
+## Write Rust enums in MoonBit
+
+In Rust, an `enum` gives each variant a payload shape and `match` puts each case beside the others. In MoonBit, write the same kind of state with an `enum` and `match`.
+
+Use that correspondence to design boundary data as small variants with focused payloads. It does not transfer Rust reference or ownership behavior, so make values and failures at the boundary explicit MoonBit contracts.
+
+```rust
+enum LoadState {
+    Idle,
+    Loading,
+    Failed(String),
+}
+
+fn status_text(state: LoadState) -> String {
+    match state {
+        LoadState::Idle => "idle".to_owned(),
+        LoadState::Loading => "loading".to_owned(),
+        LoadState::Failed(message) => format!("failed: {message}"),
+    }
+}
+```
+
+```moonbit
+enum LoadState {
+  Idle
+  Loading
+  Failed(String)
+}
+```
+
+</Fold>
+
+<Fold id="moonbit.bindings.go.en" kind="concept" level="basic" locale="en" roles={["go-programmer"]} familiarTo={["go-programmer"]} requires={["moonbit.overview.en"]}>
+
+## Write Go local variables in MoonBit
+
+Go `var` and short declarations with `:=` create local variables that may be assigned later. MoonBit `let` is immutable by default and uses `let mut` only for changing local state. It is not identical to Go `const`, but it makes the distinction between a fixed value and changing state visible in syntax.
+
+```go
+func prepare() {
+    greeting := "MoonBit"
+    retries := 0
+    retries++
+    _ = greeting
+    _ = retries
+}
+```
+
+```moonbit
+let greeting = "MoonBit"
+let mut retries = 0
+retries = retries + 1
+```
+
+</Fold>
+
+<Fold id="moonbit.data.go.en" kind="concept" level="basic" locale="en" roles={["go-programmer"]} familiarTo={["go-programmer"]} requires={["moonbit.bindings.go.en"]}>
+
+## Write Go type switches in MoonBit
+
+Go often models variants with interfaces plus a type switch, or structs with a tag field; the compiler cannot enumerate all later implementations. A MoonBit `enum` closes the variants and `match` checks that each one is handled. A constructor pattern directly binds each branch's payload.
+
+```go
+type LoadState interface{ isLoadState() }
+type Idle struct{}
+type Loading struct{}
+type Failed struct{ Message string }
+
+func (Idle) isLoadState() {}
+func (Loading) isLoadState() {}
+func (Failed) isLoadState() {}
+
+func statusText(state LoadState) string {
+    switch value := state.(type) {
+    case Idle: return "idle"
+    case Loading: return "loading"
+    case Failed: return "failed: " + value.Message
+    default: return "unknown"
+    }
+}
+```
+
+```moonbit
+enum LoadState {
+  Idle
+  Loading
+  Failed(String)
+}
+
+fn status_text(state : LoadState) -> String {
+  match state {
+    Idle => "idle"
+    Loading => "loading"
+    Failed(message) => "failed: \{message}"
+  }
+}
+```
+
+</Fold>
+
+<Fold id="moonbit.expressions.en" kind="procedure" level="basic" locale="en" familiarTo={["rust-programmer"]} requires={["moonbit.overview.en"]}>
+
+## Use value-returning if and exhaustive match
+
+MoonBit `if` and `match` are expressions that return values. Instead of assigning in a branch and returning later, make the branch itself the value returned from the function.
+
+```moonbit
+fn status_label(ready : Bool) -> String {
+  if ready {
+    "ready"
+  } else {
+    "waiting"
+  }
+}
+```
+
+</Fold>
+
+<Fold id="moonbit.errors.en" kind="procedure" level="advanced" locale="en" requires={["moonbit.expressions.en"]} evidence={["moonbit.error-handling"]}>
+
+## Expose failure in types and function signatures with raise and pattern-matching catch
+
+Represent recoverable failures with a concrete `suberror` and `raise` it from the function signature. Callers can propagate it or handle it with `try` / `catch`, so exceptional paths remain part of the API contract. Each `catch` arm is a pattern that destructures an error constructor: like a normal `match`, it binds the payload and handles each error shape. At a boundary that needs a first-class value, transform the failure into `Result` with `catch`.
+
+```moonbit
+suberror DivError { DivError(String) } derive(Debug)
+
+fn divide(x : Int, y : Int) -> Int raise DivError {
+  if y == 0 {
+    raise DivError("division by zero")
+  }
+  x / y
+}
+```
+
+```moonbit
+fn divide_or_zero(x : Int, y : Int) -> Int {
+  divide(x, y) catch {
+    DivError(message) => {
+      println(message)
+      0
+    }
+  }
+}
+```
+
+```moonbit
+fn divide_result(x : Int, y : Int) -> Result[Int, DivError] {
+  Ok(divide(x, y)) catch {
+    error => Err(error)
+  }
+}
+```
+
+Use [Error handling](https://docs.moonbitlang.com/en/latest/language/error-handling.html) as the authority for `raise` propagation, `try` / `catch`, and `Result` transformation.
+
+</Fold>
+
+<Fold id="moonbit.errors.typescript.en" kind="concept" level="advanced" locale="en" roles={["typescript-programmer"]} requires={["moonbit.errors.en"]} evidence={["moonbit.error-handling"]}>
+
+## Write TypeScript typed errors in MoonBit
+
+neverthrow puts failure in `Result<T, E>` or `ResultAsync<T, E>`, while Effect puts an error channel `E` in `Effect<A, E, R>`. MoonBit also exposes the failure type in `fn f() -> T raise E`, but returns success directly: callers either live in a function that propagates `raise E` or handle the error with `try` / `catch`.
+
+`catch { DivError(message) => ... }` is a constructor pattern, like switching on a discriminated union, rather than JavaScript's dynamically typed `catch (error)`. Use `Ok(f()) catch { error => Err(error) }` where a value needs to flow through a pipeline as `Result[T, E]`. Unlike Effect, MoonBit `raise` does not model an environment `R` or an execution runtime; the useful correspondence is making a recoverable failure path explicit in the type. See [neverthrow](https://github.com/supermacro/neverthrow) and [Effect expected errors](https://effect.website/docs/error-management/expected-errors/) for the comparison points.
+
+```typescript
+import { err, ok, type Result } from "neverthrow";
+
+type DivError = { kind: "DivError"; message: string };
+
+function divide(x: number, y: number): Result<number, DivError> {
+  return y === 0
+    ? err({ kind: "DivError", message: "division by zero" })
+    : ok(x / y);
+}
+```
+
+In MoonBit, return the successful value directly and declare the possible failure with `raise`.
+
+```moonbit
+suberror DivError { DivError(String) } derive(Debug)
+
+fn divide(x : Int, y : Int) -> Int raise DivError {
+  if y == 0 {
+    raise DivError("division by zero")
+  }
+  x / y
+}
+```
+
+</Fold>
+
+<Fold id="moonbit.errors.rust.en" kind="concept" level="advanced" locale="en" roles={["rust-programmer"]} requires={["moonbit.errors.en"]} evidence={["moonbit.error-handling"]}>
+
+## Write Rust Result handling in MoonBit
+
+Rust returns `Result<T, E>` as a value and `?` propagates `Err` to the caller's `Result`. MoonBit returns the success value directly in `fn f() -> T raise E`, while declaring the failure type `E` in the signature. Calling a raising function normally makes the caller accept the same failure in its contract.
+
+`catch { DivError(message) => ... }` corresponds to the constructor pattern in Rust `match result { Err(DivError(message)) => ... }`. `Ok(f()) catch { error => Err(error) }` is the point for composing the operation as `Result[T, E]`. Prefer `Result` for externally returned data and collection-oriented composition, and `raise` for local control flow, so the boundary stays visible.
+
+```rust
+#[derive(Debug)]
+struct DivError(String);
+
+fn divide(x: i32, y: i32) -> Result<i32, DivError> {
+    if y == 0 {
+        Err(DivError("division by zero".to_owned()))
+    } else {
+        Ok(x / y)
+    }
+}
+```
+
+In MoonBit, write the same failure type in the function signature with `raise`, then use `catch` only at the recovery boundary.
+
+```moonbit
+suberror DivError { DivError(String) } derive(Debug)
+
+fn divide(x : Int, y : Int) -> Int raise DivError {
+  if y == 0 {
+    raise DivError("division by zero")
+  }
+  x / y
+}
+```
+
+</Fold>
+
+<Fold id="moonbit.errors.go.en" kind="concept" level="advanced" locale="en" roles={["go-programmer"]} requires={["moonbit.errors.en"]} evidence={["moonbit.error-handling"]}>
+
+## Write Go error returns in MoonBit
+
+Go returns `(T, error)` and makes a caller inspect `if err != nil`. MoonBit returns the success value directly in `fn f() -> T raise E` while exposing the failure type in the signature. Calling a raising function normally propagates that contract to the caller.
+
+`catch { DivError(message) => ... }` is close to the point where Go uses an error type assertion or `errors.As`, but the constructor pattern is type checked by the compiler. Transform to `Result[T, E]` when an external API or multi-value composition needs failure as a value; use `raise` / `catch` for one local control-flow boundary.
+
+```go
+import "errors"
+
+func divide(x, y int) (int, error) {
+    if y == 0 {
+        return 0, errors.New("division by zero")
+    }
+    return x / y, nil
+}
+
+func divideOrZero(x, y int) int {
+    value, err := divide(x, y)
+    if err != nil {
+        return 0
+    }
+    return value
+}
+```
+
+In MoonBit, receive the success value directly and use a constructor pattern with `catch` at the recovery boundary.
+
+```moonbit
+suberror DivError { DivError(String) } derive(Debug)
+
+fn divide(x : Int, y : Int) -> Int raise DivError {
+  if y == 0 {
+    raise DivError("division by zero")
+  }
+  x / y
+}
+
+fn divide_or_zero(x : Int, y : Int) -> Int {
+  divide(x, y) catch {
+    DivError(_) => 0
+  }
+}
+```
+
+</Fold>
+
+<Fold id="moonbit.tests.en" kind="procedure" level="advanced" locale="en" familiarTo={["typescript-programmer", "rust-programmer", "go-programmer"]} requires={["moonbit.expressions.en"]} evidence={["moonbit.tests"]}>
+
+## Run with moon run and fix behavior with moon test
+
+`moon run` executes a main package, while `moon test` executes its `test` blocks. A test block lives with ordinary source, so fix small examples first and check types and runtime behavior together. Update snapshot expectations with `moon test --update`.
+
+```moonbit
+test "status label" {
+  assert_eq(status_label(true), "ready")
+  assert_eq(status_label(false), "waiting")
+}
+```
+
+</Fold>
+
+<Fold id="moonbit.bench.en" kind="procedure" level="advanced" locale="en" requires={["moonbit.tests.en"]} evidence={["moonbit.benchmarks"]}>
+
+## Measure implementation differences with moon bench and @bench.T
+
+`moon bench` runs benchmarks in the current package. A benchmark `test` block receives `@bench.T`; `b.bench` controls iterations and reports statistics. Pass pure computations through `b.keep` so that the compiler does not remove the computation being measured.
+
+```moonbit
+fn sum_to(n : Int) -> Int {
+  if n <= 0 { 0 } else { n + sum_to(n - 1) }
+}
+
+test (b : @bench.T) {
+  b.bench(fn() { b.keep(sum_to(100)) })
+}
+```
+
+Put alternatives for the same input in one benchmark block and give each one a `name=`. [Writing Benchmarks](https://docs.moonbitlang.com/en/latest/language/benchmarks.html) keeps comparative measurement and performance-regression tracking close to the implementation.
+
+</Fold>
+
+<Fold id="moonbit.json-patterns.en" kind="concept" level="advanced" locale="en" requires={["moonbit.expressions.en"]} evidence={["moonbit.json-patterns"]}>
+
+## Inspect Json with structural patterns
+
+MoonBit `match` handles `Json` objects, arrays, and literals with the same structural pattern syntax. Check required keys, a version, and an array shape in one branch before converting to a narrower domain type. Convert input text with `@json.parse` and treat parse errors as an ordinary failure path.
+
+```moonbit
+fn import_count(json : Json) -> Int {
+  match json {
+    { "version": "1.0.0", "import": [..] as imports, .. } =>
+      imports.length()
+    _ => 0
+  }
+}
+```
+
+This has a purpose similar to narrowing TypeScript `unknown` or matching on Rust `serde_json::Value`, while writing object keys and array shape in one pattern. The authorities are the [pattern-matching guide](https://docs.moonbitlang.com/en/latest/language/fundamentals.html#pattern-matching) and the [core JSON API](https://mooncakes.io/docs/moonbitlang/core/json).
+
+</Fold>
+
+<Fold id="moonbit.ffi.javascript.en" kind="reference" level="advanced" locale="en" requires={["moonbit.packages.en"]} evidence={["moonbit.ffi"]}>
+
+## Put JavaScript functions and values behind extern "js"
+
+For the JavaScript target, declare a foreign function with a module/function pair or an inline JavaScript lambda. Keep the MoonBit signature aligned with the runtime API, and contain dynamic JavaScript values in small boundary wrappers.
+
+```moonbit
+extern "js" fn cos(d : Double) -> Double =
+  #|(d) => Math.cos(d)
+```
+
+An `#external type` is a JavaScript value on this target. Keep MoonBit types in the public API and do not let a foreign value spread beyond the boundary layer. See the [FFI JavaScript backend documentation](https://docs.moonbitlang.com/en/latest/language/ffi.html).
+
+</Fold>
+
+<Fold id="moonbit.ffi.native.en" kind="reference" level="expert" locale="en" requires={["moonbit.ffi.javascript.en"]} evidence={["moonbit.ffi"]}>
+
+## Declare native FFI with extern "C" and moon.pkg
+
+Native FFI declares a C function and, where required, passes a library through native link settings in `moon.pkg`. Match the foreign function signature exactly. When passing reference-counted values such as `String` or `Bytes`, check the ownership contract including `#borrow` and `#owned`.
+
+```moonbit
+extern "C" fn put_char(ch : UInt) -> Unit = "put_char"
+```
+
+Do not transfer JavaScript value-conversion assumptions to native code. Decide ABI, link flags, and lifetime at the package boundary. See [FFI backend and lifetime-management documentation](https://docs.moonbitlang.com/en/latest/language/ffi.html).
+
+</Fold>
+
+<Fold id="moonbit.verification.en" kind="procedure" level="expert" locale="en" requires={["moonbit.tests.en"]} evidence={["moonbit.formal-verification"]}>
+
+## Separate executable code and logical specifications with moon prove
+
+MoonBit formal verification is experimental. Keep executable code in `.mbt`, predicates and lemmas in `.mbtp`, enable proofs in the package, then let `moon prove` send proof obligations to SMT solvers. A `where` clause holds `proof_require` preconditions and `proof_ensure` postconditions.
+
+```moonbit
+pub fn nonnegative(n : Int) -> Int where {
+  proof_require: 0 <= n,
+  proof_ensure: result => 0 <= result,
+} {
+  n
+}
+```
+
+Ordinary `moon test` prevents regressions in concrete examples; `moon prove` checks the contract in a separate logic layer. Before adopting it, read the [Formal Verification guide](https://docs.moonbitlang.com/en/latest/language/verification.html), especially its `.mbt` / `.mbtp` separation and trust model.
+
+</Fold>
+
+<Fold id="moonbit.skills.en" kind="reference" level="advanced" locale="en" requires={["moonbit.script-mode.en"]} evidence={["moonbit.skills"]}>
+
+## Distribute executable tools and agent context through MoonBit Skills
+
+[MoonBit Skills](https://skills.mooncakes.io/) is a place to discover executable entries published as MoonBit packages. Entries are distributed as Wasm binaries for sandboxed execution and run through `moon runwasm`. A package can also include `SKILL.md`, which supplies an agent with its purpose, inputs, outputs, and constraints.
+
+```text
+moon runwasm <publisher>/<package>@<version>/<entry>
+```
+
+Treat this as a boundary for distributing reusable operations, rather than an application dependency. Before execution, inspect `SKILL.md`, the repository, required permissions, and inputs and outputs; select a trusted package and pin its version.
+
+</Fold>
+
+<Fold id="moonbit.wasm-boundary.en" kind="reference" level="expert" locale="en" requires={["moonbit.packages.en"]} evidence={["moonbit.targets"]}>
+
+## Treat the WebAssembly boundary as a long-lived contract
+
+Keep exported functions and data formats small, and make conversions to JavaScript or Rust explicit. A backend is an implementation choice; the names, values, and failures placed at the boundary are a compatibility contract.
+
+Before optimizing or adding FFI details, fix the boundary expectations in MoonBit types and tests.
+
+</Fold>

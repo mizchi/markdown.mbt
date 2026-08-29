@@ -1,0 +1,60 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/markdown/x/crdt"
+
+import {
+  "moonbitlang/core/debug",
+}
+
+// Values
+
+// Errors
+
+// Types and methods
+pub(all) struct AgentId(Int) derive(Eq, @debug.Debug)
+pub impl Show for AgentId
+
+pub(all) struct CrdtDocument {
+  runs : Array[TextRun]
+  gen : IdGenerator
+}
+pub fn CrdtDocument::active_count(Self) -> Int
+pub fn CrdtDocument::delete(Self, Int) -> Unit
+pub fn CrdtDocument::get_text(Self) -> String
+pub fn CrdtDocument::insert(Self, String) -> LogicalId
+pub fn CrdtDocument::new(AgentId) -> Self
+pub fn CrdtDocument::total_count(Self) -> Int
+
+pub(all) struct CrdtSpan {
+  start_id : LogicalId
+  end_id : LogicalId
+  cached_from : Int
+  cached_to : Int
+}
+pub fn CrdtSpan::new(LogicalId, LogicalId, Int, Int) -> Self
+
+pub(all) struct IdGenerator {
+  agent : AgentId
+  mut next_seq : Int
+}
+pub fn IdGenerator::new(AgentId) -> Self
+pub fn IdGenerator::next(Self) -> LogicalId
+
+pub(all) struct LogicalId {
+  agent : AgentId
+  seq : Int
+} derive(Eq, @debug.Debug)
+pub fn LogicalId::compare(Self, Self) -> Int
+pub fn LogicalId::le(Self, Self) -> Bool
+pub fn LogicalId::lt(Self, Self) -> Bool
+pub impl Show for LogicalId
+
+pub(all) struct TextRun {
+  id : LogicalId
+  content : String
+  deleted : Bool
+}
+
+// Type aliases
+
+// Traits
+

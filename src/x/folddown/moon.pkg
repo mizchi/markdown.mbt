@@ -1,0 +1,8 @@
+import {
+  "mizchi/markdown",
+  "mizchi/markdown/x/mdx",
+}
+
+import {
+  "mizchi/markdown/x/folddown",
+} for "test"

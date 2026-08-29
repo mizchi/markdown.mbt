@@ -147,6 +147,54 @@ let inc_result = @markdown.parse_incremental(doc, old_source, new_source, edit)
 let new_doc = inc_result.document
 ```
 
+### Typed MDX Declarations
+
+`mizchi/markdown/x/mdx` extracts MDX JSX components and validates
+their attributes against a closed, typed schema. It is intended for document
+metadata and domain declarations, rather than evaluating arbitrary MDX code.
+
+Expressions use a deterministic literal-only subset: strings, booleans, and
+arrays of strings. For example, `requires={["auth.mfa"]}` is valid, while
+`requires={loadRequirements()}` is rejected.
+
+```moonbit
+import {
+  "mizchi/markdown",
+  "mizchi/markdown/x/mdx" @mdx,
+}
+
+let schema = @mdx.MdxSchema::closed([
+  @mdx.ComponentSchema::new(
+    "Fold",
+    [
+      @mdx.PropSchema::required("id", @mdx.MdxValueType::Text),
+      @mdx.PropSchema::required(
+        "kind",
+        @mdx.MdxValueType::OneOf(["concept", "procedure"]),
+      ),
+      @mdx.PropSchema::optional("requires", @mdx.MdxValueType::TextList),
+    ],
+  ),
+])
+
+let source = #|<Fold id="auth.mfa" kind="procedure" requires={["auth.login"]} />
+let checked = @mdx.type_check_mdx(@markdown.parse(source).document, schema)
+let is_valid = checked.is_valid()
+```
+
+### Folddown
+
+`mizchi/markdown/x/folddown` defines the typed `Fold` declaration vocabulary
+for structured, reader-adaptive Markdown. It validates declarations and emits a
+canonical manifest that retains each Markdown child source; reader selection and
+rendering consume that manifest. See [Folddown](./docs/folddown.md) for its
+grammar and boundary. Local external documents use typed `<Include>`
+declarations; [Folddown drift review](./docs/folddown-drift.md) defines the
+provider-neutral LLM review packet and response contract. Its two reader
+states and two content filters are generated from the entry document's
+frontmatter DSL. `familiarTo` marks direct source-language correspondences, so
+an interest-focused view can omit material already familiar to its reader.
+
 ----
 
 ## Playground

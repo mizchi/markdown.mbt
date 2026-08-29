@@ -1,0 +1,171 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/markdown/x/mdx"
+
+import {
+  "mizchi/markdown",
+  "moonbitlang/core/debug",
+}
+
+// Values
+pub fn extract_component_names(@markdown.Document) -> Array[String]
+
+pub fn extract_exports(@markdown.Document) -> Array[MdxBlock]
+
+pub fn extract_import_sources(@markdown.Document) -> Array[String]
+
+pub fn extract_imports(@markdown.Document) -> Array[MdxBlock]
+
+pub fn extract_jsx_elements(@markdown.Document) -> Array[MdxBlock]
+
+pub fn extract_mdx_metadata(@markdown.Document) -> MdxMetadata
+
+pub fn is_jsx_component(String) -> Bool
+
+pub fn is_mdx_tag(String) -> Bool
+
+pub fn is_web_component(String) -> Bool
+
+pub fn parse_attributes(String, Int) -> (Array[MdxAttribute], Int)
+
+pub fn parse_mdx_blocks(@markdown.Document) -> Array[MdxBlock]
+
+pub fn parse_mdx_source(String) -> Array[MdxBlock]
+
+pub fn parse_single_attribute(String) -> MdxAttribute?
+
+pub fn strip_exports(@markdown.Document) -> @markdown.Document
+
+pub fn strip_imports(@markdown.Document) -> @markdown.Document
+
+pub fn strip_jsx_elements(@markdown.Document) -> @markdown.Document
+
+pub fn strip_mdx_blocks(@markdown.Document) -> @markdown.Document
+
+pub fn transform_mdx(@markdown.Document, (MdxBlock) -> @markdown.Block?) -> @markdown.Document
+
+pub fn try_parse_mdx_block(@markdown.Block) -> MdxBlock?
+
+pub fn try_parse_mdx_blocks_from_block(@markdown.Block) -> Array[MdxBlock]
+
+pub fn type_check_mdx(@markdown.Document, MdxSchema) -> MdxTypeCheckResult
+
+// Errors
+
+// Types and methods
+pub(all) struct ComponentSchema {
+  tag : String
+  props : Array[PropSchema]
+} derive(Eq, @debug.Debug)
+pub fn ComponentSchema::new(String, Array[PropSchema]) -> Self
+
+pub(all) enum ExportKind {
+  Const
+  Let
+  Function
+  Default
+  Named
+} derive(Eq, @debug.Debug)
+pub impl Show for ExportKind
+
+pub(all) struct ImportSpecifier {
+  name : String
+  local_name : String?
+  is_default : Bool
+  is_star : Bool
+} derive(Eq, @debug.Debug)
+pub fn ImportSpecifier::default_import(String) -> Self
+pub fn ImportSpecifier::named(String) -> Self
+pub fn ImportSpecifier::star(String) -> Self
+pub fn ImportSpecifier::with_local(String, String) -> Self
+pub impl Show for ImportSpecifier
+
+pub(all) enum MdxAttrValue {
+  StringValue(String)
+  ExpressionValue(String)
+  BooleanValue
+} derive(Eq, @debug.Debug)
+pub impl Show for MdxAttrValue
+
+pub(all) struct MdxAttribute {
+  name : String
+  value : MdxAttrValue
+} derive(Eq, @debug.Debug)
+pub fn MdxAttribute::boolean(String) -> Self
+pub fn MdxAttribute::expression(String, String) -> Self
+pub fn MdxAttribute::string(String, String) -> Self
+pub impl Show for MdxAttribute
+
+pub(all) enum MdxBlock {
+  ImportDecl(specifiers~ : Array[ImportSpecifier], source~ : String, span~ : @markdown.Span, raw~ : String)
+  ExportDecl(kind~ : ExportKind, name~ : String?, value~ : String, span~ : @markdown.Span, raw~ : String)
+  JsxElement(tag~ : String, attributes~ : Array[MdxAttribute], children~ : String, self_closing~ : Bool, span~ : @markdown.Span, raw~ : String)
+} derive(Eq, @debug.Debug)
+pub fn MdxBlock::is_export(Self) -> Bool
+pub fn MdxBlock::is_import(Self) -> Bool
+pub fn MdxBlock::is_jsx(Self) -> Bool
+pub fn MdxBlock::span(Self) -> @markdown.Span
+pub fn MdxBlock::tag_name(Self) -> String?
+pub impl Show for MdxBlock
+
+pub(all) struct MdxDiagnostic {
+  code : String
+  message : String
+  span : @markdown.Span
+} derive(Eq, @debug.Debug)
+
+pub(all) enum MdxLiteral {
+  Text(String)
+  Flag(Bool)
+  TextList(Array[String])
+} derive(Eq, @debug.Debug)
+
+pub(all) struct MdxMetadata {
+  imports : Array[MdxBlock]
+  exports : Array[MdxBlock]
+  components : Array[String]
+} derive(Eq, @debug.Debug)
+pub fn MdxMetadata::empty() -> Self
+pub fn MdxMetadata::is_empty(Self) -> Bool
+pub impl Show for MdxMetadata
+
+pub(all) struct MdxSchema {
+  components : Array[ComponentSchema]
+} derive(Eq, @debug.Debug)
+pub fn MdxSchema::closed(Array[ComponentSchema]) -> Self
+
+pub(all) struct MdxTypeCheckResult {
+  elements : Array[TypedMdxElement]
+  diagnostics : Array[MdxDiagnostic]
+} derive(@debug.Debug)
+pub fn MdxTypeCheckResult::is_valid(Self) -> Bool
+
+pub(all) enum MdxValueType {
+  Text
+  Flag
+  TextList
+  OneOf(Array[String])
+} derive(Eq, @debug.Debug)
+
+pub(all) struct PropSchema {
+  name : String
+  value_type : MdxValueType
+  required : Bool
+} derive(Eq, @debug.Debug)
+pub fn PropSchema::optional(String, MdxValueType) -> Self
+pub fn PropSchema::required(String, MdxValueType) -> Self
+
+pub(all) struct TypedMdxAttribute {
+  name : String
+  value : MdxLiteral
+} derive(Eq, @debug.Debug)
+
+pub(all) struct TypedMdxElement {
+  tag : String
+  attributes : Array[TypedMdxAttribute]
+  span : @markdown.Span
+} derive(Eq, @debug.Debug)
+
+// Type aliases
+
+// Traits
+
