@@ -36,6 +36,20 @@ fn write_escaped_markdown_text(content : String, buf : StringBuilder) -> Unit {
 }
 
 ///|
+/// Write a link/image title inside double quotes, escaping what would end it.
+/// Titles are stored unescaped in the CST, so this is what keeps them valid.
+fn write_link_title(title : String, buf : StringBuilder) -> Unit {
+  buf.write_string(" \"")
+  for c in title {
+    if c == '"' || c == '\\' {
+      buf.write_char('\\')
+    }
+    buf.write_char(c)
+  }
+  buf.write_char('"')
+}
+
+///|
 /// Write a link/image destination, escaping parentheses and falling back to
 /// the `<...>` form when the destination contains whitespace.
 fn write_link_destination(url : String, buf : StringBuilder) -> Unit {
@@ -218,9 +232,7 @@ fn serialize_inline(inline : Inline, buf : StringBuilder) -> Unit {
       buf.write_string("](")
       write_link_destination(url, buf)
       if !title.is_empty() {
-        buf.write_string(" \"")
-        buf.write_string(title)
-        buf.write_char('"')
+        write_link_title(title, buf)
       }
       buf.write_char(')')
     }
@@ -242,9 +254,7 @@ fn serialize_inline(inline : Inline, buf : StringBuilder) -> Unit {
       buf.write_string("](")
       write_link_destination(url, buf)
       if !title.is_empty() {
-        buf.write_string(" \"")
-        buf.write_string(title)
-        buf.write_char('"')
+        write_link_title(title, buf)
       }
       buf.write_char(')')
     }

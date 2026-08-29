@@ -313,11 +313,9 @@ pub fn serialize_definitions(defs : Array[LinkDefinition]) -> String {
     buf.write_char('[')
     buf.write_string(def.label)
     buf.write_string("]: ")
-    buf.write_string(def.url)
+    write_link_destination(def.url, buf)
     if !def.title.is_empty() {
-      buf.write_string(" \"")
-      buf.write_string(def.title)
-      buf.write_char('"')
+      write_link_title(def.title, buf)
     }
     buf.write_char('\n')
   }
