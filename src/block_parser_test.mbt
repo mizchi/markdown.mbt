@@ -430,6 +430,18 @@ test "parse link definition" {
 }
 
 ///|
+test "resolve a reference link from a later definition" {
+  let result = parse("Use [later].\n\n[later]: https://example.com\n")
+  guard result.document.children[0] is Block::Paragraph(children~, ..) else {
+    fail("Expected Paragraph")
+  }
+  guard children[1] is Inline::RefLink(label~, ..) else {
+    fail("Expected resolved RefLink")
+  }
+  assert_eq(label, "later")
+}
+
+///|
 test "parse mixed content" {
   let result = parse("# Title\n\nParagraph text.\n\n```js\ncode\n```\n")
   let children = result.document.children

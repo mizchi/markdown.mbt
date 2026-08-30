@@ -23,3 +23,46 @@ test "SIMD line scan matches scalar across chunks and tails" {
     }
   }
 }
+
+///|
+test "inline marker scan matches scalar across ASCII and Unicode input" {
+  let markers = ["\\", "`", "*", "_", "~", ":", "[", "]", "!", "<", "&", "\n"]
+  for marker in markers {
+    for marker_at in [0, 1, 31, 32, 63, 64, 127, 255] {
+      let text = "x".repeat(marker_at) + marker + "tail"
+      assert_eq(find_inline_marker_candidate(text, 0, text.length()), marker_at)
+    }
+  }
+  let plain = "ordinary ASCII text ".repeat(32)
+  assert_eq(
+    find_inline_marker_candidate(plain, 0, plain.length()),
+    plain.length(),
+  )
+  let unicode = "ordinary text 日本語 with * marker"
+  assert_eq(
+    find_inline_marker_candidate(unicode, 0, unicode.length()),
+    find_inline_marker_candidate_scalar(unicode, 0, unicode.length()),
+  )
+  for
+    unicode_text in [
+      "😀日本語" + "x".repeat(80) + "*tail",
+      "*" + "😀日本語" + "x".repeat(80),
+      "日本語" + "x".repeat(80),
+    ] {
+    assert_eq(
+      find_inline_marker_candidate(unicode_text, 0, unicode_text.length()),
+      find_inline_marker_candidate_scalar(
+        unicode_text,
+        0,
+        unicode_text.length(),
+      ),
+    )
+  }
+  let prefixed = "日本語" + "x".repeat(80) + "*tail"
+  let start = "日本語".length()
+  assert_eq(
+    find_inline_marker_candidate(prefixed, start, prefixed.length()),
+    find_inline_marker_candidate_scalar(prefixed, start, prefixed.length()),
+  )
+  assert_eq(find_inline_marker_candidate("xx*yy", 3, 5), 5)
+}

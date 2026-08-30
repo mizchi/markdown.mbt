@@ -178,9 +178,9 @@ priv struct BlockParser {
   len : Int
   wikilinks : Bool
   definitions : Array[LinkDefinition]
-  /// Inline content is parsed only after the whole document has been read, so
-  /// that every link reference definition is already in scope. Each entry pairs
-  /// the (still empty) children array of a block with its raw source.
+  /// Inline content is parsed only after the whole document has been converted,
+  /// because `strip_link_definitions` collects reference definitions during
+  /// that conversion. Entries pair empty block children with their raw source.
   pending_inlines : Array[(Array[Inline], String)]
   doc : Node
   /// The deepest block left open by the previous line.
@@ -228,8 +228,7 @@ fn BlockParser::new(source : String, wikilinks : Bool) -> BlockParser {
 // =============================================================================
 
 ///|
-/// Reserve an inline children array; it is filled in by `resolve_inlines`
-/// once the document's link reference definitions are all known.
+/// Reserve an inline children array; it is filled once all definitions exist.
 fn BlockParser::parse_inline_content(
   self : BlockParser,
   content : String,
@@ -264,9 +263,7 @@ fn BlockParser::resolve_inlines(self : BlockParser) -> Unit {
   let defs = self.definition_map()
   for entry in self.pending_inlines {
     let (children, content) = entry
-    for inline in parse_inlines_with_defs(content, defs, self.wikilinks) {
-      children.push(inline)
-    }
+    parse_inlines_with_defs_into(content, defs, self.wikilinks, children)
   }
 }
 
@@ -1532,6 +1529,33 @@ fn BlockParser::to_block(self : BlockParser, node : Node) -> Block? {
 }
 
 ///|
+fn has_definition_marker_line(content : String) -> Bool {
+  let len = content.length()
+  let mut pos = 0
+  while pos < len {
+    while pos < len && content.unsafe_get(pos) != '\n' {
+      pos = pos + 1
+    }
+    if pos >= len {
+      return false
+    }
+    pos = pos + 1
+    while pos < len {
+      let c = content.unsafe_get(pos)
+      if c == ' ' || c == '\t' || c == '\r' {
+        pos = pos + 1
+      } else {
+        break
+      }
+    }
+    if pos < len && content.unsafe_get(pos) == ':' {
+      return true
+    }
+  }
+  false
+}
+
+///|
 /// Recognize the compact definition-list extension inside one paragraph.
 fn BlockParser::try_definition_list(
   self : BlockParser,
@@ -1540,7 +1564,7 @@ fn BlockParser::try_definition_list(
 ) -> Block? {
   // A definition list requires at least two physical lines. This keeps the
   // common one-line paragraph path allocation-free.
-  guard content.contains("\n") else { return None }
+  guard has_definition_marker_line(content) else { return None }
   let lines : Array[String] = []
   for line in content.split("\n") {
     lines.push(line.to_owned())

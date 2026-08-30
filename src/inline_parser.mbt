@@ -207,6 +207,20 @@ fn InlineCtx::materialize(
   to : Int,
 ) -> Array[Inline] {
   let result : Array[Inline] = []
+  self.materialize_into(from, to, result)
+  result
+}
+
+///|
+/// Materialize slots into a caller-owned array. Block parsing uses this to
+/// avoid creating a temporary inline array and copying it into deferred CST
+/// children after link definitions have been collected.
+fn InlineCtx::materialize_into(
+  self : InlineCtx,
+  from : Int,
+  to : Int,
+  result : Array[Inline],
+) -> Unit {
   let mut i = from
   while i >= 0 && i != to {
     let inline = self.slot_inline(i)
@@ -227,7 +241,6 @@ fn InlineCtx::materialize(
     }
     i = self.slots[i].next
   }
-  result
 }
 
 // =============================================================================
@@ -256,10 +269,36 @@ fn parse_inlines_with_defs(
   defs : Map[String, LinkDefinition],
   wikilinks : Bool,
 ) -> Array[Inline] {
+  let result : Array[Inline] = []
+  parse_inlines_with_defs_into(text, defs, wikilinks, result)
+  result
+}
+
+///|
+fn parse_inlines_with_defs_into(
+  text : String,
+  defs : Map[String, LinkDefinition],
+  wikilinks : Bool,
+  result : Array[Inline],
+) -> Unit {
+  let len = text.length()
+  if find_inline_marker_candidate(text, 0, len) == len {
+    let content = text.trim_end(chars=" \t")
+    if content.is_empty() {
+      return
+    }
+    result.push(
+      Inline::Text(
+        content=if content.length() == len { text } else { content.to_owned() },
+        span=Span::new(0, len),
+      ),
+    )
+    return
+  }
   let ctx = InlineCtx::new(text, defs, wikilinks)
   ctx.scan()
   ctx.process_emphasis(0)
-  ctx.materialize(ctx.head, -1)
+  ctx.materialize_into(ctx.head, -1, result)
 }
 
 // =============================================================================
@@ -480,9 +519,7 @@ fn InlineCtx::scan(self : InlineCtx) -> Unit {
       _ => {
         // Plain run up to the next character that could start markup.
         let start = i
-        while i < len && !is_inline_marker_code_unit(text.unsafe_get(i)) {
-          i = i + 1
-        }
+        i = find_inline_marker_candidate(text, i, len)
         if i == start {
           i = i + 1
         }

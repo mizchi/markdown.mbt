@@ -1,0 +1,9 @@
+supported_targets = "js+native"
+
+import {
+  "mizchi/markdown",
+  "moonbitlang/core/env",
+  "moonbitlang/core/string",
+}
+
+pkgtype(kind: "executable")

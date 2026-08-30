@@ -16,6 +16,20 @@ test "parse inline text" {
 }
 
 ///|
+test "plain inline text trims trailing whitespace but preserves its span" {
+  let inlines = parse_inlines("plain text  ")
+  assert_eq(inlines.length(), 1)
+  match inlines[0] {
+    Inline::Text(content~, span~) => {
+      assert_eq(content, "plain text")
+      assert_eq(span, Span::new(0, 12))
+    }
+    _ => fail("Expected Text")
+  }
+  assert_eq(parse_inlines(" \t").length(), 0)
+}
+
+///|
 test "parse emphasis with asterisk" {
   let inlines = parse_inlines("Hello *world*")
   @debug.debug_inspect(inlines.length(), content="2")

@@ -17,6 +17,17 @@ let autolink_scan_text : String = "ordinary plain text and simple content ".repe
 )
 
 ///|
+let inline_marker_scan_text : String = "ordinary plain text without markup ".repeat(
+  128,
+)
+
+///|
+let inline_marker_scan_text_64 : String = "x".repeat(64)
+
+///|
+let inline_marker_scan_text_256 : String = "x".repeat(256)
+
+///|
 test "scanner: line end scalar 16B" (b : @bench.T) {
   b.bench(fn() {
     b.keep(find_line_end_scalar(scanner_line_16, 0, scanner_line_16.length()))
@@ -75,6 +86,78 @@ test "scanner: autolink candidate SIMD dispatch 4KiB" (b : @bench.T) {
 }
 
 ///|
+test "scanner: inline marker scalar 64B" (b : @bench.T) {
+  b.bench(fn() {
+    let found = find_inline_marker_candidate_scalar(
+      inline_marker_scan_text_64,
+      0,
+      inline_marker_scan_text_64.length(),
+    )
+    b.keep(found)
+  })
+}
+
+///|
+test "scanner: inline marker dispatch 64B" (b : @bench.T) {
+  b.bench(fn() {
+    let found = find_inline_marker_candidate(
+      inline_marker_scan_text_64,
+      0,
+      inline_marker_scan_text_64.length(),
+    )
+    b.keep(found)
+  })
+}
+
+///|
+test "scanner: inline marker scalar 256B" (b : @bench.T) {
+  b.bench(fn() {
+    let found = find_inline_marker_candidate_scalar(
+      inline_marker_scan_text_256,
+      0,
+      inline_marker_scan_text_256.length(),
+    )
+    b.keep(found)
+  })
+}
+
+///|
+test "scanner: inline marker dispatch 256B" (b : @bench.T) {
+  b.bench(fn() {
+    let found = find_inline_marker_candidate(
+      inline_marker_scan_text_256,
+      0,
+      inline_marker_scan_text_256.length(),
+    )
+    b.keep(found)
+  })
+}
+
+///|
+test "scanner: inline marker scalar 4KiB" (b : @bench.T) {
+  b.bench(fn() {
+    let found = find_inline_marker_candidate_scalar(
+      inline_marker_scan_text,
+      0,
+      inline_marker_scan_text.length(),
+    )
+    b.keep(found)
+  })
+}
+
+///|
+test "scanner: inline marker dispatch 4KiB" (b : @bench.T) {
+  b.bench(fn() {
+    let found = find_inline_marker_candidate(
+      inline_marker_scan_text,
+      0,
+      inline_marker_scan_text.length(),
+    )
+    b.keep(found)
+  })
+}
+
+///|
 test "scanner: read_line 100x" (b : @bench.T) {
   let text = "line1\nline2\nline3\nline4\nline5\nline6\nline7\nline8\nline9\nline10\n".repeat(
     10,
@@ -114,9 +197,22 @@ test "scanner: peek/advance intensive" (b : @bench.T) {
 let block_only_doc : String = "# Title\n\nPlain paragraph one.\n\nPlain paragraph two.\n\n```\ncode block\n```\n\n- item 1\n- item 2\n- item 3\n\n> quote here\n"
 
 ///|
+let multiline_blocks_doc : String = "> first ordinary line\n> second ordinary line\n\n".repeat(
+  128,
+)
+
+///|
 test "block: minimal inline content" (b : @bench.T) {
   b.bench(fn() {
     let result = parse(block_only_doc)
+    b.keep(result)
+  })
+}
+
+///|
+test "block: many two-line paragraphs" (b : @bench.T) {
+  b.bench(fn() {
+    let result = parse(multiline_blocks_doc)
     b.keep(result)
   })
 }

@@ -321,6 +321,49 @@ The currently split lazy highlighter entries are `typescript`, `moonbit`,
 | 50 paragraphs | 327.99µs | 8.67µs | 37.8x |
 | 100 paragraphs | 651.14µs | 15.25µs | 42.7x |
 
+### Native CPU profiling
+
+`moon run --profile` can sample the same approximately 1 MiB corpus used by
+the competitor benchmark. On macOS it records an Instruments Time Profiler
+trace; on Linux Moon uses `perf`.
+
+```sh
+just profile-native parse 100
+just profile-native render 200
+just profile-native parse-render 100
+```
+
+`parse` rebuilds the document each iteration, `render` repeatedly renders one
+pre-parsed document, and `parse-render` measures the public combined path.
+Moon prints a demangled hot-function summary and writes `profile.json` plus the
+full trace below `_build/native/release/profile/cmd/profile/`.
+
+The same corpus can be profiled on the JavaScript backend with Node's V8 CPU
+profiler. The resulting `*.cpuprofile` file can be opened in Chrome DevTools:
+
+```sh
+just profile-js parse 50
+```
+
+Profiles are written below `_build/js/release/profile/cmd/profile/`.
+
+### JavaScript inline Wasm SIMD
+
+On the JavaScript target, ASCII inline-text runs of at least 64 UTF-16 code
+units use a synchronous 396-byte embedded Wasm SIMD scanner. `TextEncoder`
+writes directly into reusable Wasm memory; a non-ASCII prefix or a runtime
+without Wasm SIMD falls back to the UTF-16 scalar scanner. This keeps source
+offsets exact and avoids adding an asynchronous `.wasm` asset to the default
+npm entry point.
+
+The WAT source and embedded byte array can be rebuilt and checked separately:
+
+```sh
+just inline-wasm-build
+just inline-wasm-check
+moon bench --target js -p mizchi/markdown -f bench_scanner.mbt -i 6-12
+```
+
 ## Documentation
 
 See [docs/markdown.md](./docs/markdown.md) for detailed architecture and design.

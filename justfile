@@ -20,6 +20,23 @@ bench-simd:
     moon bench --target wasm -p mizchi/markdown -f bench_html.mbt -i 2
     moon bench --target wasm -p mizchi/markdown -f bench_html.mbt -i 3
 
+# Record a native Time Profiler trace for the 1 MiB benchmark corpus.
+profile-native mode="parse" iterations="100":
+    moon run --profile --release --target native src/cmd/profile -- "{{ mode }}" "{{ iterations }}"
+
+# Record a V8 CPU profile for the same 1 MiB workload on the JS backend.
+profile-js mode="parse" iterations="50":
+    mkdir -p _build/js/release/profile/cmd/profile
+    NODE_OPTIONS="--cpu-prof --cpu-prof-dir=_build/js/release/profile/cmd/profile" moon run --release --target js src/cmd/profile -- "{{ mode }}" "{{ iterations }}"
+
+# Rebuild the synchronous inline Wasm SIMD kernel used by the JS backend.
+inline-wasm-build:
+    node scripts/embed-inline-marker-wasm.mjs
+
+# Verify that the embedded Wasm bytes match their WAT source.
+inline-wasm-check:
+    node scripts/embed-inline-marker-wasm.mjs --check
+
 bench-accept:
     moon bench > .bench-baseline
 
