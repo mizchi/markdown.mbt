@@ -117,6 +117,30 @@ test "render bare URL text with escaped attributes" {
 }
 
 ///|
+test "render bare email found from at sign" {
+  let html = md_to_html(
+    "Mail foo.bar+tag@example-domain.com or visit https://example.com.\n",
+  )
+  @debug.debug_inspect(
+    html,
+    content=(
+      #|"<p>Mail <a href=\"mailto:foo.bar+tag@example-domain.com\">foo.bar+tag@example-domain.com</a> or visit <a href=\"https://example.com\">https://example.com</a>.</p>\n"
+    ),
+  )
+}
+
+///|
+test "do not autolink incomplete email" {
+  let html = md_to_html("Keep user@example and ordinary words unchanged.\n")
+  @debug.debug_inspect(
+    html,
+    content=(
+      #|"<p>Keep user@example and ordinary words unchanged.</p>\n"
+    ),
+  )
+}
+
+///|
 test "render markdown link label URL without nested autolink" {
   let html = md_to_html("[https://example.com](https://target.example)\n")
   @debug.debug_inspect(

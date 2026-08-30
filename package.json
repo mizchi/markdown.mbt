@@ -19,12 +19,13 @@
   },
   "scripts": {
     "build:moon": "moon build --target js --release",
+    "build:wasm": "moon build --target wasm-gc --release src/api && node scripts/copy-wasm-package.mjs",
     "build:pages": "pnpm run build:moon && vite build --base=/markdown.mbt/",
     "build:editor": "pnpm run build:moon && tsc -p tsconfig.editor.json && node scripts/prepare-editor-package.mjs",
     "bench:literal": "node --experimental-strip-types e2e/literal-benchmark.ts",
     "bench:literal:core": "moon bench --target js -p mizchi/markdown -f bench_renderer_literal.mbt",
-    "prepack": "pnpm run build:editor",
-    "pretest": "pnpm run build:editor",
+    "prepack": "pnpm run build:editor && pnpm run build:wasm",
+    "pretest": "pnpm run build:editor && pnpm run build:wasm",
     "test": "vitest run"
   },
   "imports": {
@@ -41,6 +42,10 @@
     ".": {
       "import": "./js/api.js",
       "types": "./js/api.d.ts"
+    },
+    "./wasm": {
+      "import": "./wasm/api.js",
+      "types": "./wasm/api.d.ts"
     },
     "./editor": {
       "import": "./dist/frontend/editor/index.js",
@@ -128,6 +133,9 @@
   "files": [
     "js/api.js",
     "js/api.d.ts",
+    "wasm/api.js",
+    "wasm/api.d.ts",
+    "wasm/markdown.wasm",
     "dist/frontend",
     "_build/js/release/build/api/api.js",
     "_build/js/release/build/api/api.d.ts",

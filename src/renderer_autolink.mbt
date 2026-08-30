@@ -19,13 +19,23 @@ fn find_next_autolink(content : String, from : Int) -> BareAutolink? {
   let len = content.length()
   let mut pos = from
   while pos < len {
-    match url_autolink_at(content, pos) {
-      Some(found) => return Some(found)
-      None => ()
+    let c = content.unsafe_get(pos)
+    // GFM's URL forms are lowercase and can only start with h/f/w. Avoid
+    // constructing and comparing four StringViews at every text position.
+    if c == 'h' || c == 'f' || c == 'w' {
+      match url_autolink_at(content, pos) {
+        Some(found) => return Some(found)
+        None => ()
+      }
     }
-    match email_autolink_at(content, pos) {
-      Some(found) => return Some(found)
-      None => ()
+    // An email can be identified from its single mandatory '@'. Scanning the
+    // local part backwards here avoids rescanning every ordinary word as a
+    // possible email address.
+    if c == '@' {
+      match email_autolink_at_sign(content, pos) {
+        Some(found) => return Some(found)
+        None => ()
+      }
     }
     pos = pos + 1
   }
@@ -133,20 +143,18 @@ fn url_host_has_invalid_underscore(
 }
 
 ///|
-/// Match the GFM extended-email form at the start of its local part.
-fn email_autolink_at(content : String, start : Int) -> BareAutolink? {
+/// Match the GFM extended-email form around its mandatory `@`.
+fn email_autolink_at_sign(content : String, at : Int) -> BareAutolink? {
   let len = content.length()
-  guard start < len && is_email_local_char(content.unsafe_get(start)) else {
+  guard at > 0 && at + 1 < len && content.unsafe_get(at) == '@' else {
     return None
   }
+  let mut start = at
+  while start > 0 && is_email_local_char(content.unsafe_get(start - 1)) {
+    start = start - 1
+  }
+  guard start < at else { return None }
   if start > 0 && is_email_local_char(content.unsafe_get(start - 1)) {
-    return None
-  }
-  let mut at = start
-  while at < len && is_email_local_char(content.unsafe_get(at)) {
-    at = at + 1
-  }
-  guard at > start && at < len && content.unsafe_get(at) == '@' else {
     return None
   }
   let domain_start = at + 1
@@ -182,7 +190,13 @@ fn is_email_local_char(c : UInt16) -> Bool {
 ///|
 fn string_has_prefix_at(content : String, pos : Int, prefix : String) -> Bool {
   let end = pos + prefix.length()
-  end <= content.length() && content[pos:end] == prefix[:]
+  guard end <= content.length() else { return false }
+  for i = 0; i < prefix.length(); i = i + 1 {
+    if content.unsafe_get(pos + i) != prefix.unsafe_get(i) {
+      return false
+    }
+  }
+  true
 }
 
 ///|

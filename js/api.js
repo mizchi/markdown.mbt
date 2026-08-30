@@ -14,6 +14,8 @@ import {
   md_to_markdown_with_wikilinks,
   md_to_ast_json,
   md_to_ast_json_with_wikilinks,
+  md_to_ast_object,
+  md_to_ast_object_with_wikilinks,
   md_render_html_with_autolink,
   md_render_html_without_autolink,
   md_serialize,
@@ -42,10 +44,9 @@ function useAutolink(options) {
  * @returns {import('./api').Document} Parsed AST
  */
 export function parse(source, options = {}) {
-  const json = useWikilinks(options)
-    ? md_to_ast_json_with_wikilinks(source)
-    : md_to_ast_json(source);
-  return JSON.parse(json);
+  return useWikilinks(options)
+    ? md_to_ast_object_with_wikilinks(source)
+    : md_to_ast_object(source);
 }
 
 /**

@@ -13,6 +13,7 @@ import {
 describe("parse", () => {
   it("parses heading", () => {
     const ast = parse("# Hello");
+    expect(Object.getPrototypeOf(ast)).toBe(Object.prototype);
     expect(ast.type).toBe("root");
     expect(ast.children[0].type).toBe("heading");
     expect(ast.children[0].depth).toBe(1);

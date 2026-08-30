@@ -14,3 +14,4 @@ test-results/
 .playwright-mcp/
 _build
 dist/
+wasm/markdown.wasm

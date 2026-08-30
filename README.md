@@ -45,6 +45,25 @@ const normalized = toMarkdown("# Hello\n\n\n\nWorld");
 // => "# Hello\n\nWorld\n"
 ```
 
+### WebAssembly API
+
+The same one-shot API is available from a Wasm GC build using JS String
+Builtins. JavaScript strings cross the Wasm boundary directly, without a
+UTF-8 linear-memory copy. The module initializes its Wasm instance once and
+then exposes synchronous functions:
+
+```javascript
+import { parse, toHtml, toMarkdown } from "@mizchi/markdown/wasm";
+
+const ast = parse("# Hello");
+const html = toHtml("See https://example.com/docs\n");
+const markdown = toMarkdown("# Hello\n\n\nWorld");
+```
+
+This subpath requires an ESM runtime with Wasm GC, JS String Builtins, and
+top-level `await` support. The handle-based incremental API remains available
+from the default `@mizchi/markdown` entry point.
+
 ### Optional WikiLinks
 
 WikiLinks are disabled by default to keep CommonMark-compatible behavior.

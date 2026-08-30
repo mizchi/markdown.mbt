@@ -2,7 +2,12 @@ import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   test: {
-    include: ["js/**/*.test.js", "playground/**/*.test.tsx", "frontend/**/*.test.ts"],
+    include: [
+      "js/**/*.test.js",
+      "wasm/**/*.test.js",
+      "playground/**/*.test.tsx",
+      "frontend/**/*.test.ts",
+    ],
   },
   oxc: {
     jsx: {

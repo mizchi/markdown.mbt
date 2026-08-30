@@ -24,4 +24,4 @@ source = "src"
 
 preferred_target = "js"
 
-supported_targets = "js+wasm+native"
+supported_targets = "js+wasm+wasm-gc+native"

@@ -396,6 +396,15 @@ test "parse block attribute list as an attributed wrapper" {
 }
 
 ///|
+test "parse block attribute list with trailing whitespace" {
+  let result = parse("# Heading\n\n{#intro .wide}\t\n")
+  guard result.document.children[0] is Block::Attributed(attributes~, ..) else {
+    fail("Expected Attributed")
+  }
+  inspect(attributes.length(), content="2")
+}
+
+///|
 test "parse link definition" {
   let result = parse("[link]: https://example.com \"Title\"\n")
   @debug.debug_inspect(result.definitions.length(), content="1")

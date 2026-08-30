@@ -476,7 +476,18 @@ fn BlockParser::parse_document(self : BlockParser) -> ParseResult {
   )
   let children = self.to_blocks(self.doc.children)
   self.resolve_inlines()
-  let children = recognize_attributes(recognize_alerts(children))
+  // These extension recognizers rebuild container subtrees. Skip those
+  // passes when the source cannot contain their opening marker.
+  let children = if self.source.contains("[!") {
+    recognize_alerts(children)
+  } else {
+    children
+  }
+  let children = if self.source.contains("{") {
+    recognize_attributes(children)
+  } else {
+    children
+  }
   let document = Document::{
     frontmatter,
     children,
@@ -627,6 +638,11 @@ fn attributes_from_block(block : Block) -> (Array[MarkdownAttribute], Span)? {
   guard block is Block::Paragraph(children~, span~, ..) else { return None }
   guard children.length() == 1 else { return None }
   guard children[0] is Inline::Text(content~, ..) else { return None }
+  // Attribute-only paragraphs must end in `}`. Most paragraphs do not, so do
+  // not allocate a trimmed copy merely to reject them.
+  guard content.length() > 0 && content.unsafe_get(content.length() - 1) == '}' else {
+    return None
+  }
   match parse_markdown_attributes(content) {
     Some(attributes) => Some((attributes, span))
     None => None
@@ -1522,6 +1538,9 @@ fn BlockParser::try_definition_list(
   content : String,
   span : Span,
 ) -> Block? {
+  // A definition list requires at least two physical lines. This keeps the
+  // common one-line paragraph path allocation-free.
+  guard content.contains("\n") else { return None }
   let lines : Array[String] = []
   for line in content.split("\n") {
     lines.push(line.to_owned())

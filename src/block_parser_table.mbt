@@ -150,8 +150,19 @@ fn split_table_cells(line : String) -> Array[String] {
       buf.reset()
       i = i + 1
     } else {
-      buf.write_string(trimmed.unsafe_substring(start=i, end=i + 1))
+      // Copy an ordinary run in one operation. The previous per-code-unit
+      // substring path allocated a temporary string for every table byte.
+      let run_start = i
       i = i + 1
+      while i < end {
+        let current = trimmed.unsafe_get(i)
+        if current == '|' ||
+          (current == '\\' && i + 1 < end && trimmed.unsafe_get(i + 1) == '|') {
+          break
+        }
+        i = i + 1
+      }
+      buf.write_string(trimmed.unsafe_substring(start=run_start, end=i))
     }
   }
   cells.push(buf.to_string())

@@ -1,6 +1,16 @@
 bench:
     moon bench
 
+# Reproduce the @mizchi/markdown rows in ox-content's competitor benchmark.
+bench-competitor runs="7":
+    pnpm run build:moon
+    pnpm run build:wasm
+    node scripts/benchmark-competitor.mjs --runs={{ runs }}
+
+# Build the Wasm GC + JS String Builtins npm subpath.
+wasm-build:
+    pnpm run build:wasm
+
 # Run the wasm scanner and parse workloads that exercise SIMD fast paths.
 bench-simd:
     moon bench --target wasm -p mizchi/markdown -f bench_scanner.mbt
@@ -19,6 +29,7 @@ test:
     node scripts/gen-gfm-tests.js
     moon test --target js src
     moon test --target wasm src
+    moon test --target wasm-gc src
     moon test --target js src/spec_tests
     moon test --target js src/cmark_tests
     moon test --target js src/gfm_tests
