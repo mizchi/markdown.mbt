@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Performance
+
+- Build JavaScript and Wasm GC AST objects directly instead of materializing an intermediate `Json` tree; the Wasm path uses JS String Builtins and `externref` imports without a JSON round trip.
+- Split table cells as zero-copy `StringView`s and materialize only cells containing escaped pipes.
+- Add a four-anchor SIMD scanner for bare-autolink candidates on native and linear-memory Wasm targets.
+- Pass output-size hints to HTML renderer buffers and keep hot bare-autolink matches as `#valtype` values.
+
 ## 0.8.1 - 2026-08-30
 
 ### Breaking changes

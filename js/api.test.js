@@ -9,8 +9,33 @@ import {
   deleteEdit,
   replaceEdit,
 } from "./api.js";
+import {
+  md_to_ast_json,
+  md_to_ast_json_with_wikilinks,
+} from "../_build/js/release/build/api/api.js";
 
 describe("parse", () => {
+  it("matches the serialized mdast contract for core and extension nodes", () => {
+    const cases = [
+      "# Heading\n\nParagraph with *emphasis*, **strong**, ~~delete~~, `code`, [link](https://example.com \"title\"), ![alt](image.png), and <b>HTML</b>.\n",
+      "> quote\n\n- [x] done\n- item\n\n1. first\n2. second\n\n---\n",
+      "```js meta\nconsole.log(1)\n```\n\n    indented\n\n| A | B |\n| :- | -: |\n| x | y |\n",
+      "```😀 meta\nnon-BMP info\n```\n",
+      "[^note]: footnote\n\nUse [^note].\n\n$$\nx^2\n$$\n",
+      "> [!WARNING]\n> alert\n\n:::note Meta\nBody\n:::\n\nTerm\n: Definition\n",
+      "# Attributed\n\n{#intro .wide}\n\nUse :badge[stable]{.green level=high}.\n",
+    ];
+
+    for (const source of cases) {
+      expect(parse(source)).toEqual(JSON.parse(md_to_ast_json(source)));
+    }
+
+    const wikilink = "[[MoonBit#syntax|MoonBit syntax]]";
+    expect(parse(wikilink, { wikilinks: true })).toEqual(
+      JSON.parse(md_to_ast_json_with_wikilinks(wikilink)),
+    );
+  });
+
   it("parses heading", () => {
     const ast = parse("# Hello");
     expect(Object.getPrototypeOf(ast)).toBe(Object.prototype);

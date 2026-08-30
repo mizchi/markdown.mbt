@@ -12,8 +12,8 @@ priv struct HtmlBuf {
 }
 
 ///|
-fn HtmlBuf::new() -> HtmlBuf {
-  { inner: StringBuilder(), at_line_start: true }
+fn HtmlBuf::new(size_hint? : Int = 0) -> HtmlBuf {
+  { inner: StringBuilder(size_hint~), at_line_start: true }
 }
 
 ///|
@@ -103,7 +103,7 @@ pub fn render_html_with_options(
     footnote_ref_counts: Map([]),
     math_block_renderer: options.math_block_renderer,
   }
-  let buf = HtmlBuf::new()
+  let buf = HtmlBuf::new(size_hint=doc.span.to - doc.span.from)
   for block in doc.children {
     render_block_html(block, buf, ctx)
   }
@@ -805,7 +805,7 @@ fn write_image(
 /// An image's `alt` keeps the source of its label so it round-trips; the HTML
 /// form is that label rendered as plain text.
 fn render_alt_text(alt : String, ctx : RenderCtx) -> String {
-  let buf = StringBuilder()
+  let buf = StringBuilder(size_hint=alt.length())
   write_plain_text(parse_inlines_with_defs(alt, ctx.defs, false), buf)
   buf.to_string()
 }
@@ -860,7 +860,7 @@ fn escape_html(s : String, attr? : Bool = false) -> String {
   if !needs_escape {
     return s
   }
-  let buf = StringBuilder()
+  let buf = StringBuilder(size_hint=s.length())
   for c in s {
     match c {
       '&' => buf.write_string("&amp;")

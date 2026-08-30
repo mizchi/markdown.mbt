@@ -49,8 +49,10 @@ const normalized = toMarkdown("# Hello\n\n\n\nWorld");
 
 The same one-shot API is available from a Wasm GC build using JS String
 Builtins. JavaScript strings cross the Wasm boundary directly, without a
-UTF-8 linear-memory copy. The module initializes its Wasm instance once and
-then exposes synchronous functions:
+UTF-8 linear-memory copy. `parse()` also builds ordinary JavaScript objects
+through `externref` imports, avoiding an AST JSON stringify/parse round trip.
+The module initializes its Wasm instance once and then exposes synchronous
+functions:
 
 ```javascript
 import { parse, toHtml, toMarkdown } from "@mizchi/markdown/wasm";

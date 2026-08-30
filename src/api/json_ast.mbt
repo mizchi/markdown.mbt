@@ -302,30 +302,20 @@ fn parse_code_info(info : String) -> (Json, Json) {
   if info.is_empty() {
     return (Json::null(), Json::null())
   }
-  // Find first space to split lang and meta
-  let mut space_idx = -1
-  let mut idx = 0
-  for c in info {
-    if c == ' ' {
-      space_idx = idx
-      break
+  match info[:].find(" "[:]) {
+    None => (info.to_json(), Json::null())
+    Some(space) => {
+      let lang = info[:space].to_owned()
+      let meta = info[space + 1:].to_owned()
+      (
+        lang.to_json(),
+        if meta.is_empty() {
+          Json::null()
+        } else {
+          meta.to_json()
+        },
+      )
     }
-    idx += 1
-  }
-  if space_idx < 0 {
-    (info.to_json(), Json::null())
-  } else {
-    // Note: substring is deprecated but slice syntax requires error handling
-    let lang = info.unsafe_substring(start=0, end=space_idx)
-    let meta = info.unsafe_substring(start=space_idx + 1, end=info.length())
-    (
-      lang.to_json(),
-      if meta.is_empty() {
-        Json::null()
-      } else {
-        meta.to_json()
-      },
-    )
   }
 }
 

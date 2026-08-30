@@ -56,7 +56,7 @@ fn parse_table_alignments(line : String) -> Array[TableAlign] {
   let alignments : Array[TableAlign] = []
   let cells = split_table_cells(line)
   for cell in cells {
-    let trimmed = cell.trim(chars=" \t\r\n").to_owned()
+    let trimmed = cell.trim(chars=" \t\r\n")
     // Every delimiter cell has to be a run of dashes, optionally fenced by
     // colons; nothing else, and never empty.
     if trimmed.is_empty() {
@@ -117,9 +117,9 @@ fn BlockParser::parse_table_row(
 
 ///|
 /// Split a table row on unescaped pipes, ignoring the optional outer ones.
-fn split_table_cells(line : String) -> Array[String] {
-  let cells : Array[String] = []
-  let trimmed = line.trim(chars=" \t\r\n").to_owned()
+fn split_table_cells(line : String) -> Array[StringView] {
+  let cells : Array[StringView] = []
+  let trimmed = line.trim(chars=" \t\r\n")
   let len = trimmed.length()
   let mut start = 0
   let mut end = len
@@ -138,33 +138,72 @@ fn split_table_cells(line : String) -> Array[String] {
       end = end - 1
     }
   }
-  let buf = StringBuilder()
-  let mut i = start
-  while i < end {
-    let c = trimmed.unsafe_get(i)
-    if c == '\\' && i + 1 < end && trimmed.unsafe_get(i + 1) == '|' {
-      buf.write_char('|')
-      i = i + 2
-    } else if c == '|' {
-      cells.push(buf.to_string())
-      buf.reset()
-      i = i + 1
-    } else {
-      // Copy an ordinary run in one operation. The previous per-code-unit
-      // substring path allocated a temporary string for every table byte.
-      let run_start = i
-      i = i + 1
-      while i < end {
-        let current = trimmed.unsafe_get(i)
-        if current == '|' ||
-          (current == '\\' && i + 1 < end && trimmed.unsafe_get(i + 1) == '|') {
-          break
+  let pipe = "|"[:]
+  let mut cell_start = start
+  let mut search_start = start
+  let mut has_escaped_pipe = false
+  while search_start < end {
+    match trimmed[search_start:end].find(pipe) {
+      None => break
+      Some(relative) => {
+        let found = search_start + relative
+        let mut backslashes = 0
+        let mut k = found - 1
+        while k >= cell_start && trimmed.unsafe_get(k) == '\\' {
+          backslashes = backslashes + 1
+          k = k - 1
         }
-        i = i + 1
+        if backslashes % 2 == 0 {
+          let cell = trimmed[cell_start:found]
+          cells.push(
+            if has_escaped_pipe {
+              unescape_table_pipes(cell)
+            } else {
+              cell
+            },
+          )
+          cell_start = found + 1
+          has_escaped_pipe = false
+        } else {
+          has_escaped_pipe = true
+        }
+        search_start = found + 1
       }
-      buf.write_string(trimmed.unsafe_substring(start=run_start, end=i))
     }
   }
-  cells.push(buf.to_string())
+  let final_cell = trimmed[cell_start:end]
+  cells.push(
+    if has_escaped_pipe {
+      unescape_table_pipes(final_cell)
+    } else {
+      final_cell
+    },
+  )
   cells
+}
+
+///|
+/// Materialize only cells that actually contain an escaped pipe.
+fn unescape_table_pipes(cell : StringView) -> StringView {
+  let output = StringBuilder(size_hint=cell.length())
+  let mut run_start = 0
+  let mut i = 0
+  while i < cell.length() {
+    if cell.unsafe_get(i) == '\\' &&
+      i + 1 < cell.length() &&
+      cell.unsafe_get(i + 1) == '|' {
+      if run_start < i {
+        output.write_string(cell[run_start:i].to_owned())
+      }
+      output.write_char('|')
+      i = i + 2
+      run_start = i
+    } else {
+      i = i + 1
+    }
+  }
+  if run_start < cell.length() {
+    output.write_string(cell[run_start:].to_owned())
+  }
+  output.to_string()[:]
 }

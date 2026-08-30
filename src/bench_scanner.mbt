@@ -12,6 +12,11 @@ let scanner_long_line : String = "ordinary text without markdown syntax ".repeat
 let scanner_line_16 : String = "123456789012345\n"
 
 ///|
+let autolink_scan_text : String = "ordinary plain text and simple content ".repeat(
+  128,
+)
+
+///|
 test "scanner: line end scalar 16B" (b : @bench.T) {
   b.bench(fn() {
     b.keep(find_line_end_scalar(scanner_line_16, 0, scanner_line_16.length()))
@@ -42,6 +47,30 @@ test "scanner: line end SIMD dispatch 4KiB" (b : @bench.T) {
   b.bench(fn() {
     let end = find_line_end(scanner_long_line, 0, scanner_long_line.length())
     b.keep(end)
+  })
+}
+
+///|
+test "scanner: autolink candidate scalar 4KiB" (b : @bench.T) {
+  b.bench(fn() {
+    let found = find_autolink_candidate_scalar(
+      autolink_scan_text,
+      0,
+      autolink_scan_text.length(),
+    )
+    b.keep(found)
+  })
+}
+
+///|
+test "scanner: autolink candidate SIMD dispatch 4KiB" (b : @bench.T) {
+  b.bench(fn() {
+    let found = find_autolink_candidate(
+      autolink_scan_text,
+      0,
+      autolink_scan_text.length(),
+    )
+    b.keep(found)
   })
 }
 

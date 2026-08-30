@@ -1,5 +1,30 @@
 const wasmUrl = new URL("./markdown.wasm", import.meta.url);
 
+// The Wasm GC parser builds ordinary JavaScript AST nodes through externref
+// imports. JS String Builtins make every String argument below a host string,
+// so neither source nor AST text needs a linear-memory copy.
+const imports = {
+  markdown_ast: {
+    null: () => null,
+    bool: (value) => Boolean(value),
+    number: (value) => value,
+    string: (value) => value,
+    array_new: () => [],
+    array_push: (array, value) => {
+      array.push(value);
+    },
+    object_new: () => ({}),
+    object_with_type: (type) => ({ type }),
+    position: (from, to) => ({
+      start: { offset: from },
+      end: { offset: to },
+    }),
+    object_set: (object, key, value) => {
+      object[key] = value;
+    },
+  },
+};
+
 async function loadWasm() {
   const compileOptions = {
     builtins: ["js-string"],
@@ -8,7 +33,11 @@ async function loadWasm() {
   if (wasmUrl.protocol === "file:") {
     const nodeFs = "node:fs/promises";
     const { readFile } = await import(nodeFs);
-    return WebAssembly.instantiate(await readFile(wasmUrl), {}, compileOptions);
+    return WebAssembly.instantiate(
+      await readFile(wasmUrl),
+      imports,
+      compileOptions,
+    );
   }
 
   const response = await fetch(wasmUrl);
@@ -16,7 +45,7 @@ async function loadWasm() {
     try {
       return await WebAssembly.instantiateStreaming(
         response.clone(),
-        {},
+        imports,
         compileOptions
       );
     } catch {
@@ -25,7 +54,7 @@ async function loadWasm() {
   }
   return WebAssembly.instantiate(
     await response.arrayBuffer(),
-    {},
+    imports,
     compileOptions
   );
 }
@@ -49,10 +78,9 @@ function useAutolink(options) {
 
 export function parse(source, options = {}) {
   assertSource(source);
-  const json = useWikilinks(options)
-    ? wasm.md_to_ast_json_with_wikilinks(source)
-    : wasm.md_to_ast_json(source);
-  return JSON.parse(json);
+  return useWikilinks(options)
+    ? wasm.md_to_ast_object_with_wikilinks(source)
+    : wasm.md_to_ast_object(source);
 }
 
 export function toHtml(source, options = {}) {

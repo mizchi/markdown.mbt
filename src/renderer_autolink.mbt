@@ -7,6 +7,7 @@ priv enum BareAutolinkKind {
 }
 
 ///|
+#valtype
 priv struct BareAutolink {
   start : Int
   end : Int
@@ -19,6 +20,10 @@ fn find_next_autolink(content : String, from : Int) -> BareAutolink? {
   let len = content.length()
   let mut pos = from
   while pos < len {
+    pos = find_autolink_candidate(content, pos, len)
+    if pos >= len {
+      return None
+    }
     let c = content.unsafe_get(pos)
     // GFM's URL forms are lowercase and can only start with h/f/w. Avoid
     // constructing and comparing four StringViews at every text position.
@@ -40,6 +45,60 @@ fn find_next_autolink(content : String, from : Int) -> BareAutolink? {
     pos = pos + 1
   }
   None
+}
+
+///|
+/// Scalar fallback for short strings and non-linear-memory targets.
+#inline
+fn find_autolink_candidate_scalar(
+  content : String,
+  start : Int,
+  end : Int,
+) -> Int {
+  for pos in start..<end {
+    let c = content.unsafe_get(pos)
+    if c == 'h' || c == 'f' || c == 'w' || c == '@' {
+      break pos
+    }
+  } nobreak {
+    end
+  }
+}
+
+///|
+#cfg(not(any(target="native", target="wasm")))
+#inline
+fn find_autolink_candidate(content : String, start : Int, end : Int) -> Int {
+  find_autolink_candidate_scalar(content, start, end)
+}
+
+///|
+/// Find the four possible bare-autolink anchors eight code units at a time.
+#cfg(any(target="native", target="wasm"))
+fn find_autolink_candidate(content : String, start : Int, end : Int) -> Int {
+  guard end - start >= 16 else {
+    return find_autolink_candidate_scalar(content, start, end)
+  }
+  let h = @v128.i16x8_splat('h')
+  let f = @v128.i16x8_splat('f')
+  let w = @v128.i16x8_splat('w')
+  let at = @v128.i16x8_splat('@')
+  let tail_start = for pos = start; pos + 8 <= end; {
+    let block = @v128.v128_load_i16x8(content, pos)
+    let mask = @v128.i16x8_bitmask(
+      @v128.v128_or_(
+        @v128.v128_or_(@v128.i16x8_eq(block, h), @v128.i16x8_eq(block, f)),
+        @v128.v128_or_(@v128.i16x8_eq(block, w), @v128.i16x8_eq(block, at)),
+      ),
+    )
+    if mask != 0 {
+      return pos + mask.ctz()
+    }
+    continue pos + 8
+  } nobreak {
+    pos
+  }
+  find_autolink_candidate_scalar(content, tail_start, end)
 }
 
 ///|
