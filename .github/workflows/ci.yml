@@ -54,12 +54,16 @@ jobs:
       - name: Moon test
         run: |
           moon test src/x/tui --target js,wasm
+      - name: Node test
+        run: pnpm test
       - name: Test Bench
         run: moon bench
       - name: Component build (wasm)
         run: |
           cd component
           moon build --target wasm --release
+      - name: Package dry run
+        run: npm pack --dry-run
 
   vrt:
     runs-on: ubuntu-latest

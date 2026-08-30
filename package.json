@@ -23,7 +23,8 @@
     "build:editor": "pnpm run build:moon && tsc -p tsconfig.editor.json && node scripts/prepare-editor-package.mjs",
     "bench:literal": "node --experimental-strip-types e2e/literal-benchmark.ts",
     "bench:literal:core": "moon bench --target js -p mizchi/markdown -f bench_renderer_literal.mbt",
-    "prepublishOnly": "pnpm run build:editor",
+    "prepack": "pnpm run build:editor",
+    "pretest": "pnpm run build:editor",
     "test": "vitest run"
   },
   "imports": {
