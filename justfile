@@ -1,6 +1,10 @@
 bench:
     moon bench
 
+# Run JavaScript benchmarks with the external Wasm ESM bridge preloaded.
+bench-js:
+    NODE_OPTIONS="--import=./js/inline-marker-simd.js" moon bench --target js
+
 # Reproduce the @mizchi/markdown rows in ox-content's competitor benchmark.
 bench-competitor runs="7":
     pnpm run build:moon
@@ -27,15 +31,15 @@ profile-native mode="parse" iterations="100":
 # Record a V8 CPU profile for the same 1 MiB workload on the JS backend.
 profile-js mode="parse" iterations="50":
     mkdir -p _build/js/release/profile/cmd/profile
-    NODE_OPTIONS="--cpu-prof --cpu-prof-dir=_build/js/release/profile/cmd/profile" moon run --release --target js src/cmd/profile -- "{{ mode }}" "{{ iterations }}"
+    NODE_OPTIONS="--import=./js/inline-marker-simd.js --cpu-prof --cpu-prof-dir=_build/js/release/profile/cmd/profile" moon run --release --target js src/cmd/profile -- "{{ mode }}" "{{ iterations }}"
 
-# Rebuild the synchronous inline Wasm SIMD kernel used by the JS backend.
+# Build the external Wasm SIMD kernel imported through ESM Integration.
 inline-wasm-build:
-    node scripts/embed-inline-marker-wasm.mjs
+    pnpm run build:inline-marker-wasm
 
-# Verify that the embedded Wasm bytes match their WAT source.
+# Verify that the generated .wasm artifact matches its WAT source.
 inline-wasm-check:
-    node scripts/embed-inline-marker-wasm.mjs --check
+    node scripts/build-inline-marker-wasm.mjs --check
 
 bench-accept:
     moon bench > .bench-baseline

@@ -1,8 +1,9 @@
 import {
+  copyFileSync,
+  existsSync,
   mkdtempSync,
   readFileSync,
   rmSync,
-  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join, resolve } from "node:path";
@@ -12,10 +13,8 @@ import { fileURLToPath } from "node:url";
 const scriptDir = dirname(fileURLToPath(import.meta.url));
 const root = resolve(scriptDir, "..");
 const watPath = join(root, "src", "inline_marker_simd.wat");
-const moonbitPath = join(root, "src", "inline_marker_search.mbt");
+const outputPath = join(root, "js", "inline_marker_simd.wasm");
 const checkOnly = process.argv.includes("--check");
-const beginMarker = "  #| // BEGIN GENERATED INLINE MARKER WASM BYTES";
-const endMarker = "  #| // END GENERATED INLINE MARKER WASM BYTES";
 const tempDir = mkdtempSync(join(tmpdir(), "markdown-inline-wasm-"));
 
 function runWasmTools(args) {
@@ -33,27 +32,15 @@ try {
   runWasmTools(["strip", "-a", rawPath, "-o", strippedPath]);
   runWasmTools(["validate", "--features", "simd", strippedPath]);
 
-  const bytes = [...readFileSync(strippedPath)];
-  const lines = [];
-  for (let offset = 0; offset < bytes.length; offset += 16) {
-    lines.push(`  #| ${bytes.slice(offset, offset + 16).join(",")},`);
-  }
-  const generated = [beginMarker, ...lines, endMarker].join("\n");
-  const current = readFileSync(moonbitPath, "utf8");
-  const begin = current.indexOf(beginMarker);
-  const end = current.indexOf(endMarker, begin);
-  if (begin < 0 || end < 0) throw new Error("embedded Wasm markers not found");
-  const next =
-    current.slice(0, begin) + generated + current.slice(end + endMarker.length);
-
+  const built = readFileSync(strippedPath);
   if (checkOnly) {
-    if (next !== current) {
-      throw new Error("embedded Wasm is stale; run `just inline-wasm-build`");
+    if (!existsSync(outputPath) || !readFileSync(outputPath).equals(built)) {
+      throw new Error("inline-marker Wasm is stale; run `just inline-wasm-build`");
     }
-    console.log(`embedded inline-marker Wasm is current (${bytes.length} bytes)`);
+    console.log(`inline-marker Wasm is current (${built.length} bytes)`);
   } else {
-    writeFileSync(moonbitPath, next);
-    console.log(`embedded inline-marker Wasm (${bytes.length} bytes)`);
+    copyFileSync(strippedPath, outputPath);
+    console.log(`built js/inline_marker_simd.wasm (${built.length} bytes)`);
   }
 } finally {
   rmSync(tempDir, { recursive: true, force: true });

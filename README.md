@@ -347,21 +347,23 @@ just profile-js parse 50
 
 Profiles are written below `_build/js/release/profile/cmd/profile/`.
 
-### JavaScript inline Wasm SIMD
+### JavaScript Wasm SIMD via ESM Integration
 
 On the JavaScript target, ASCII inline-text runs of at least 64 UTF-16 code
-units use a synchronous 396-byte embedded Wasm SIMD scanner. `TextEncoder`
-writes directly into reusable Wasm memory; a non-ASCII prefix or a runtime
-without Wasm SIMD falls back to the UTF-16 scalar scanner. This keeps source
-offsets exact and avoids adding an asynchronous `.wasm` asset to the default
-npm entry point.
+units use a 396-byte Wasm SIMD scanner. The default npm entry point statically
+imports `js/inline_marker_simd.wasm` through WebAssembly ESM Integration;
+there is no inline byte array or manual `WebAssembly.instantiate` step.
+`TextEncoder` writes directly into reusable Wasm memory, while a non-ASCII
+prefix falls back to the UTF-16 scalar scanner so source offsets remain exact.
 
-The WAT source and embedded byte array can be rebuilt and checked separately:
+The WAT source and generated `.wasm` artifact can be rebuilt and checked
+separately. `just bench-js` preloads the same ESM bridge for MoonBit's direct JS
+benchmark runner:
 
 ```sh
 just inline-wasm-build
 just inline-wasm-check
-moon bench --target js -p mizchi/markdown -f bench_scanner.mbt -i 6-12
+just bench-js
 ```
 
 ## Documentation

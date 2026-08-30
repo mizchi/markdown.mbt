@@ -18,6 +18,7 @@
     "node": ">=24"
   },
   "scripts": {
+    "build:inline-marker-wasm": "node scripts/build-inline-marker-wasm.mjs",
     "build:moon": "moon build --target js --release",
     "build:wasm": "moon build --target wasm-gc --release src/api && node scripts/copy-wasm-package.mjs",
     "build:pages": "pnpm run build:moon && vite build --base=/markdown.mbt/",
@@ -133,6 +134,8 @@
   "files": [
     "js/api.js",
     "js/api.d.ts",
+    "js/inline-marker-simd.js",
+    "js/inline_marker_simd.wasm",
     "wasm/api.js",
     "wasm/api.d.ts",
     "wasm/markdown.wasm",

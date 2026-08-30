@@ -4,6 +4,8 @@
  * Provides a clean, ergonomic API for parsing and rendering Markdown.
  */
 
+import "./inline-marker-simd.js";
+
 import {
   md_to_html,
   md_to_html_without_autolink,

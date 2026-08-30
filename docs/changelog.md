@@ -9,7 +9,7 @@
 - Add a four-anchor SIMD scanner for bare-autolink candidates on native and linear-memory Wasm targets.
 - Pass output-size hints to HTML renderer buffers and keep hot bare-autolink matches as `#valtype` values.
 - Add a reproducible native `moon run --profile` harness for isolated parse, render, and combined 1 MiB workloads.
-- Use a size-gated, copy-inclusive embedded Wasm SIMD scanner for long ASCII inline-text runs on the JavaScript target, with exact UTF-16 fallback for Unicode input.
+- Use a size-gated, copy-inclusive Wasm SIMD scanner imported as an external `.wasm` module through WebAssembly ESM Integration for long ASCII inline-text runs on the JavaScript target, with exact UTF-16 fallback for Unicode input.
 - Bypass `InlineCtx` allocation for marker-free text, reject non-definition multiline paragraphs before splitting, and materialize deferred top-level inline nodes directly into their CST child arrays.
 - Extend the 1 MiB profiling harness to the JavaScript target through Node's V8 CPU profiler.
 
