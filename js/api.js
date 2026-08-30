@@ -7,10 +7,7 @@
 import "./inline-marker-simd.js";
 
 import {
-  md_to_html,
-  md_to_html_without_autolink,
-  md_to_html_with_wikilinks_and_autolink,
-  md_to_html_with_wikilinks_without_autolink,
+  md_to_html_with_options,
   md_to_html_literal,
   md_to_markdown,
   md_to_markdown_with_wikilinks,
@@ -18,8 +15,7 @@ import {
   md_to_ast_json_with_wikilinks,
   md_to_ast_object,
   md_to_ast_object_with_wikilinks,
-  md_render_html_with_autolink,
-  md_render_html_without_autolink,
+  md_render_html_with_options,
   md_serialize,
   md_parse_with_source,
   md_parse_with_source_with_wikilinks,
@@ -39,10 +35,26 @@ function useAutolink(options) {
   return options?.autolink !== false;
 }
 
+function useTagfilter(options) {
+  return options?.tagfilter !== false;
+}
+
+const RENDER_WIKILINKS = 1;
+const RENDER_AUTOLINK = 2;
+const RENDER_TAGFILTER = 4;
+
+function rendererFlags(options) {
+  let flags = 0;
+  if (useWikilinks(options)) flags |= RENDER_WIKILINKS;
+  if (useAutolink(options)) flags |= RENDER_AUTOLINK;
+  if (useTagfilter(options)) flags |= RENDER_TAGFILTER;
+  return flags;
+}
+
 /**
  * Parse markdown and return the AST.
  * @param {string} source - Markdown source
- * @param {{ wikilinks?: boolean, autolink?: boolean }} [options] - Parser and renderer extensions
+ * @param {{ wikilinks?: boolean, autolink?: boolean, tagfilter?: boolean }} [options] - Parser and renderer extensions
  * @returns {import('./api').Document} Parsed AST
  */
 export function parse(source, options = {}) {
@@ -54,28 +66,17 @@ export function parse(source, options = {}) {
 /**
  * Convert markdown to HTML.
  * @param {string} source - Markdown source
- * @param {{ wikilinks?: boolean, autolink?: boolean }} [options] - Parser and renderer extensions
+ * @param {{ wikilinks?: boolean, autolink?: boolean, tagfilter?: boolean }} [options] - Parser and renderer extensions
  * @returns {string} HTML output
  */
 export function toHtml(source, options = {}) {
-  const wikilinks = useWikilinks(options);
-  const autolink = useAutolink(options);
-  if (wikilinks && autolink) {
-    return md_to_html_with_wikilinks_and_autolink(source);
-  }
-  if (wikilinks) {
-    return md_to_html_with_wikilinks_without_autolink(source);
-  }
-  if (!autolink) {
-    return md_to_html_without_autolink(source);
-  }
-  return md_to_html(source);
+  return md_to_html_with_options(source, rendererFlags(options));
 }
 
 /**
  * Normalize/serialize markdown source.
  * @param {string} source - Markdown source
- * @param {{ wikilinks?: boolean, autolink?: boolean }} [options] - Parser and renderer extensions
+ * @param {{ wikilinks?: boolean, autolink?: boolean, tagfilter?: boolean }} [options] - Parser and renderer extensions
  * @returns {string} Normalized markdown
  */
 export function toMarkdown(source, options = {}) {
@@ -120,12 +121,12 @@ export function toHtmlLiteral(source, options = {}) {
 /**
  * Create a new document from markdown source.
  * @param {string} source - Markdown source
- * @param {{ wikilinks?: boolean, autolink?: boolean }} [options] - Parser and renderer extensions
+ * @param {{ wikilinks?: boolean, autolink?: boolean, tagfilter?: boolean }} [options] - Parser and renderer extensions
  * @returns {import('./api').DocumentHandle} Document handle
  */
 export function createDocument(source, options = {}) {
   const wikilinks = useWikilinks(options);
-  const autolink = useAutolink(options);
+  const renderFlags = rendererFlags(options);
   const handle = wikilinks
     ? md_parse_with_source_with_wikilinks(source)
     : md_parse_with_source(source);
@@ -140,9 +141,7 @@ export function createDocument(source, options = {}) {
     },
 
     toHtml() {
-      return autolink
-        ? md_render_html_with_autolink(handle)
-        : md_render_html_without_autolink(handle);
+      return md_render_html_with_options(handle, renderFlags);
     },
 
     toMarkdown() {
@@ -169,10 +168,7 @@ export function createDocument(source, options = {}) {
           }
           return newCachedAst;
         },
-        toHtml: () =>
-          autolink
-            ? md_render_html_with_autolink(newHandle)
-            : md_render_html_without_autolink(newHandle),
+        toHtml: () => md_render_html_with_options(newHandle, renderFlags),
         toMarkdown: () => md_serialize(newHandle),
         update: (s, e) => createDocument(s, options).update(s, e), // Simplified
         dispose: () => md_free(newHandle),

@@ -40,6 +40,13 @@ const html = toHtml("See https://example.com/docs\n");
 const plain = toHtml("See https://example.com/docs\n", { autolink: false });
 // => "<p>See https://example.com/docs</p>\n"
 
+// Match CommonMark 0.31.2 rendering by disabling GFM renderer extensions
+const commonmark = toHtml("<script>raw</script>\n\nhttps://example.com\n", {
+  autolink: false,
+  tagfilter: false,
+});
+// => "<script>raw</script>\n<p>https://example.com</p>\n"
+
 // Normalize markdown
 const normalized = toMarkdown("# Hello\n\n\n\nWorld");
 // => "# Hello\n\nWorld\n"
@@ -387,12 +394,16 @@ See [docs/markdown.md](./docs/markdown.md) for detailed architecture and design.
 
 ## CommonMark Compatibility
 
-`md_to_html` renders all 652 examples of the [CommonMark 0.31.2
-spec](https://spec.commonmark.org/0.31.2/) byte for byte, which
-`scripts/gen-spec-tests.js` checks on every run of the test suite. Bare-URL
-autolinking, tables, strikethrough, task lists and footnotes are GFM extensions
-on top of that; the spec suite runs with `autolink=false` so it measures plain
-CommonMark, and with `tagfilter=false` because tagfilter is a GFM extension.
+`md_to_html` and the public JavaScript `toHtml()` API render all 652 examples of
+the [CommonMark 0.31.2 spec](https://spec.commonmark.org/0.31.2/) byte for byte.
+Use `{ autolink: false, tagfilter: false }` with `toHtml()` to select the
+CommonMark-faithful renderer configuration. `scripts/gen-spec-tests.js` checks
+the MoonBit API on every test run, while the JavaScript regression suite locks
+the 11 examples affected by these two GFM renderer extensions.
+
+Bare-URL autolinking, tables, strikethrough, task lists and footnotes are GFM
+extensions on top of CommonMark. Tagfilter is also a GFM extension and escapes
+raw `script`, `style`, and `textarea` tags when enabled.
 
 Markdown output (`md_to_markdown`) is normalized rather than byte-preserving.
 It uses stable markers and block spacing, and emits parsed link reference

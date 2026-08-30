@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+## 0.8.3 - 2026-08-31
+
+### Compatibility
+
+- Expose the GFM `tagfilter` renderer option through the JavaScript and Wasm GC APIs, allowing `{ autolink: false, tagfilter: false }` to pass all 652 CommonMark 0.31.2 examples through the public npm API.
+
 ## 0.8.2 - 2026-08-31
 
 ### Performance

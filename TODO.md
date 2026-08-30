@@ -4,6 +4,7 @@
 
 - Core parser tests: 302/302 on both JavaScript and Wasm.
 - CommonMark HTML conformance: 652/652 with no skipped examples.
+- Public JavaScript API CommonMark conformance: 652/652 with `{ autolink: false, tagfilter: false }`.
 - Markdown serialization parity with remark: 464 active examples and 78 skipped examples.
 - CommonMark semantic round-trip: 611/652; 41 examples still change rendered HTML after normalization.
 - GFM extension serialization comparison: 23 active examples and 1 intentional skipped example.

@@ -76,6 +76,22 @@ function useAutolink(options) {
   return options?.autolink !== false;
 }
 
+function useTagfilter(options) {
+  return options?.tagfilter !== false;
+}
+
+const RENDER_WIKILINKS = 1;
+const RENDER_AUTOLINK = 2;
+const RENDER_TAGFILTER = 4;
+
+function rendererFlags(options) {
+  let flags = 0;
+  if (useWikilinks(options)) flags |= RENDER_WIKILINKS;
+  if (useAutolink(options)) flags |= RENDER_AUTOLINK;
+  if (useTagfilter(options)) flags |= RENDER_TAGFILTER;
+  return flags;
+}
+
 export function parse(source, options = {}) {
   assertSource(source);
   return useWikilinks(options)
@@ -85,18 +101,7 @@ export function parse(source, options = {}) {
 
 export function toHtml(source, options = {}) {
   assertSource(source);
-  const wikilinks = useWikilinks(options);
-  const autolink = useAutolink(options);
-  if (wikilinks && autolink) {
-    return wasm.md_to_html_with_wikilinks_and_autolink(source);
-  }
-  if (wikilinks) {
-    return wasm.md_to_html_with_wikilinks_without_autolink(source);
-  }
-  if (!autolink) {
-    return wasm.md_to_html_without_autolink(source);
-  }
-  return wasm.md_to_html(source);
+  return wasm.md_to_html_with_options(source, rendererFlags(options));
 }
 
 export function toMarkdown(source, options = {}) {

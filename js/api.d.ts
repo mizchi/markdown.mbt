@@ -57,7 +57,7 @@ export interface EditInfo {
 }
 
 /**
- * Parser extension options.
+ * Parser and renderer extension options.
  */
 export interface MarkdownOptions {
   /**
@@ -71,6 +71,12 @@ export interface MarkdownOptions {
    * Enabled by default; set false to keep bare URLs as plain text.
    */
   autolink?: boolean;
+
+  /**
+   * Apply the GFM tagfilter to raw HTML tags such as script and style.
+   * Enabled by default; set false for CommonMark raw-HTML behavior.
+   */
+  tagfilter?: boolean;
 }
 
 /**

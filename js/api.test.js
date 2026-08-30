@@ -148,6 +148,65 @@ describe("toHtml", () => {
     ).toBe('<p><a href="MoonBit">MoonBit notes</a> https://example.com/docs</p>\n');
   });
 
+  it("matches the remaining CommonMark examples with GFM rendering disabled", () => {
+    const cases = [
+      [
+        '<script type="text/javascript">\n// JavaScript example\n\ndocument.getElementById("demo").innerHTML = "Hello JavaScript!";\n</script>\nokay\n',
+        '<script type="text/javascript">\n// JavaScript example\n\ndocument.getElementById("demo").innerHTML = "Hello JavaScript!";\n</script>\n<p>okay</p>\n',
+      ],
+      [
+        "<textarea>\n\n*foo*\n\n_bar_\n\n</textarea>\n",
+        "<textarea>\n\n*foo*\n\n_bar_\n\n</textarea>\n",
+      ],
+      [
+        '<style\n  type="text/css">\nh1 {color:red;}\n\np {color:blue;}\n</style>\nokay\n',
+        '<style\n  type="text/css">\nh1 {color:red;}\n\np {color:blue;}\n</style>\n<p>okay</p>\n',
+      ],
+      [
+        '<style\n  type="text/css">\n\nfoo\n',
+        '<style\n  type="text/css">\n\nfoo\n',
+      ],
+      [
+        "<style>p{color:red;}</style>\n*foo*\n",
+        "<style>p{color:red;}</style>\n<p><em>foo</em></p>\n",
+      ],
+      [
+        "<script>\nfoo\n</script>1. *bar*\n",
+        "<script>\nfoo\n</script>1. *bar*\n",
+      ],
+      [
+        "<https://foo.bar/baz bim>\n",
+        "<p>&lt;https://foo.bar/baz bim&gt;</p>\n",
+      ],
+      [
+        "<foo\\+@bar.example.com>\n",
+        "<p>&lt;foo+@bar.example.com&gt;</p>\n",
+      ],
+      [
+        "< https://foo.bar >\n",
+        "<p>&lt; https://foo.bar &gt;</p>\n",
+      ],
+      ["https://example.com\n", "<p>https://example.com</p>\n"],
+      ["foo@bar.example.com\n", "<p>foo@bar.example.com</p>\n"],
+    ];
+
+    for (const [source, expected] of cases) {
+      expect(toHtml(source, { autolink: false, tagfilter: false })).toBe(expected);
+    }
+  });
+
+  it("controls tagfilter independently from other extensions", () => {
+    expect(
+      toHtml("<script>raw</script>\n\n[[MoonBit]] https://example.com\n", {
+        wikilinks: true,
+        autolink: false,
+        tagfilter: false,
+      })
+    ).toBe(
+      '<script>raw</script>\n<p><a href="MoonBit">MoonBit</a> https://example.com</p>\n'
+    );
+  });
+
   it("renders a bullet list directly followed by a thematic break", () => {
     const source = "- a\n- m\n---------------\n";
     expect(parse(source).children.map((node) => node.type)).toEqual([
@@ -262,6 +321,17 @@ describe("createDocument", () => {
       autolink: false,
     });
     expect(doc.toHtml()).toBe("<p>Read https://example.com/docs.</p>\n");
+    doc.dispose();
+  });
+
+  it("can disable GFM tagfilter on document handles", () => {
+    const doc = createDocument(
+      "<script>raw</script>\n\nhttps://example.com\n",
+      { autolink: false, tagfilter: false },
+    );
+    expect(doc.toHtml()).toBe(
+      "<script>raw</script>\n<p>https://example.com</p>\n",
+    );
     doc.dispose();
   });
 

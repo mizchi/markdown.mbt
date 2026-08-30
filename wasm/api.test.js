@@ -37,6 +37,15 @@ describe("WebAssembly API", () => {
     })).toBe('<p><a href="MoonBit">MoonBit</a> https://example.com</p>\n');
   });
 
+  it("can disable GFM rendering extensions for CommonMark", () => {
+    expect(
+      toHtml("<script>raw</script>\n\nhttps://example.com\n", {
+        autolink: false,
+        tagfilter: false,
+      }),
+    ).toBe("<script>raw</script>\n<p>https://example.com</p>\n");
+  });
+
   it("reuses one instance across calls", () => {
     for (let index = 0; index < 100; index += 1) {
       expect(toHtml(`# Item ${index}`)).toBe(`<h1>Item ${index}</h1>\n`);

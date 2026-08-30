@@ -78,6 +78,18 @@ pub fn md_to_html(source : String) -> String {
 }
 
 ///|
+/// Parse markdown and render with a renderer-extension bitmask.
+///
+/// Bits are `WIKILINKS` (1), `AUTOLINK` (2), and `TAGFILTER` (4). Passing
+/// zero selects strict CommonMark rendering.
+pub fn md_to_html_with_options(source : String, flags : Int) -> String {
+  let wikilinks = (flags & 1) != 0
+  let autolink = (flags & 2) != 0
+  let tagfilter = (flags & 4) != 0
+  @markdown.md_to_html(source, wikilinks~, autolink~, tagfilter~)
+}
+
+///|
 /// Parse markdown with bare URL autolinks enabled and return HTML directly
 pub fn md_to_html_with_autolink(source : String) -> String {
   @markdown.md_to_html(source, autolink=true)
@@ -159,6 +171,18 @@ pub fn md_to_html_literal(source : String, flags : Int) -> String {
 /// Render handle's document to HTML
 pub fn md_render_html(handle : Int) -> String {
   with_doc(handle, fn(doc) { @markdown.render_html(doc) })
+}
+
+///|
+/// Render a handle with the same renderer-extension bitmask accepted by
+/// `md_to_html_with_options`.
+pub fn md_render_html_with_options(handle : Int, flags : Int) -> String {
+  let autolink = (flags & 2) != 0
+  let tagfilter = (flags & 4) != 0
+  with_doc(
+    handle,
+    fn(doc) { @markdown.render_html(doc, autolink~, tagfilter~) },
+  )
 }
 
 ///|
