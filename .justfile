@@ -24,6 +24,7 @@ test:
   moon test --target js src/gfm_tests
   moon test --target js src/gfm_html_tests
   moon test --target wasm src/gfm_html_tests
+  moon test --target js src/html_tests
   moon test --target native src/mmmd_native_core
 
 # Run VRT (geometry + screenshot) for the playground editor.

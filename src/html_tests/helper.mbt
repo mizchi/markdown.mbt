@@ -30,14 +30,38 @@ fn normalize_void_tags(s : String) -> String {
 }
 
 ///|
+/// remark-html adds presentation classes to GFM task lists and serializes
+/// boolean input attributes differently from cmark-gfm. Normalize those
+/// differences so this suite compares the resulting HTML semantics while the
+/// official GFM suite remains the exact-output authority.
+fn normalize_task_list_html(s : String) -> String {
+  normalize_void_tags(s)
+  .replace_all(old="<ul class=\"contains-task-list\">", new="<ul>")
+  .replace_all(
+    old="<ol class=\"contains-task-list\" start=\"",
+    new="<ol start=\"",
+  )
+  .replace_all(old="<ol class=\"contains-task-list\">", new="<ol>")
+  .replace_all(old="<li class=\"task-list-item\">", new="<li>")
+  .replace_all(
+    old="<input type=\"checkbox\" checked disabled>",
+    new="<input checked=\"\" disabled=\"\" type=\"checkbox\">",
+  )
+  .replace_all(
+    old="<input type=\"checkbox\" disabled>",
+    new="<input disabled=\"\" type=\"checkbox\">",
+  )
+}
+
+///|
 /// Test helper: compare our HTML output with remark-html output
 pub fn assert_html_compat(input : String, name : String) -> Unit {
   let our_output = @markdown.md_to_html(input)
   let remark_output = remark_html(input)
 
   // Normalize trailing whitespace for comparison
-  let our_normalized = normalize_void_tags(our_output).trim_end(chars=" \n\t")
-  let remark_normalized = normalize_void_tags(remark_output).trim_end(chars=" \n\t")
+  let our_normalized = normalize_task_list_html(our_output).trim_end(chars=" \n\t")
+  let remark_normalized = normalize_task_list_html(remark_output).trim_end(chars=" \n\t")
   if our_normalized != remark_normalized {
     println("=== HTML Test: \{name} ===")
     println("=== Input ===")
@@ -55,8 +79,8 @@ pub fn assert_html_compat(input : String, name : String) -> Unit {
 pub fn assert_html_compat_strict(input : String, name : String) -> Unit {
   let our_output = @markdown.md_to_html_strict(input)
   let remark_output = remark_html(input)
-  let our_normalized = normalize_void_tags(our_output).trim_end(chars=" \n\t")
-  let remark_normalized = normalize_void_tags(remark_output).trim_end(chars=" \n\t")
+  let our_normalized = normalize_task_list_html(our_output).trim_end(chars=" \n\t")
+  let remark_normalized = normalize_task_list_html(remark_output).trim_end(chars=" \n\t")
   if our_normalized != remark_normalized {
     println("=== HTML Test (strict): \{name} ===")
     println("=== Input ===")
