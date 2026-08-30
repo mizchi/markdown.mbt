@@ -713,6 +713,13 @@ fn get_paragraph_text(children : Array[@markdown.Inline]) -> String {
         buf.write_string(content)
         buf.write_char('`')
       }
+      @markdown.Inline::Directive(name~, label~, ..) => {
+        buf.write_char(':')
+        buf.write_string(name)
+        buf.write_char('[')
+        buf.write_string(label)
+        buf.write_char(']')
+      }
       @markdown.Inline::HtmlInline(html~, ..) => buf.write_string(html)
       @markdown.Inline::Autolink(url~, ..) => {
         // Reconstruct autolink syntax: <url>

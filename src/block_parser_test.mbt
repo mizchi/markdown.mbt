@@ -333,6 +333,69 @@ test "parse frontmatter" {
 }
 
 ///|
+test "parse GitHub alert as a dedicated block" {
+  let result = parse("> [!NOTE]\n> Read this carefully.\n")
+  guard result.document.children[0] is Block::Alert(kind~, children~, ..) else {
+    fail("Expected Alert")
+  }
+  inspect(kind, content="Note")
+  guard children[0] is Block::Paragraph(children=body, ..) else {
+    fail("Expected alert paragraph")
+  }
+  guard body[0] is Inline::Text(content~, ..) else {
+    fail("Expected alert text")
+  }
+  inspect(content, content="Read this carefully.")
+}
+
+///|
+test "parse display math as a dedicated block" {
+  let result = parse("$$\nx^2 + y^2 = z^2\n$$\n")
+  guard result.document.children[0] is Block::MathBlock(value~, ..) else {
+    fail("Expected MathBlock")
+  }
+  inspect(value, content="x^2 + y^2 = z^2\n")
+}
+
+///|
+test "parse fenced directive as a container block" {
+  let result = parse(":::note Optional title\n**Body**\n:::\n")
+  guard result.document.children[0]
+    is Block::Directive(name~, meta~, children~, ..) else {
+    fail("Expected Directive")
+  }
+  inspect(name, content="note")
+  inspect(meta, content="Optional title")
+  guard children[0] is Block::Paragraph(children=inlines, ..) else {
+    fail("Expected directive paragraph")
+  }
+  guard inlines[0] is Inline::Strong(..) else { fail("Expected strong body") }
+}
+
+///|
+test "parse definition list" {
+  let result = parse("MoonBit\n: A programming language\n: Compiles to Wasm\n")
+  guard result.document.children[0] is Block::DefinitionList(items~, ..) else {
+    fail("Expected DefinitionList")
+  }
+  inspect(items.length(), content="1")
+  inspect(items[0].definitions.length(), content="2")
+}
+
+///|
+test "parse block attribute list as an attributed wrapper" {
+  let result = parse("# Heading\n\n{#intro .wide key=value}\n")
+  guard result.document.children[0]
+    is Block::Attributed(block~, attributes~, ..) else {
+    fail("Expected Attributed")
+  }
+  guard block is Block::Heading(..) else { fail("Expected attributed heading") }
+  inspect(attributes.length(), content="3")
+  inspect(attributes[0].name, content="id")
+  inspect(attributes[0].value, content="intro")
+}
+
+///|
 test "parse link definition" {
   let result = parse("[link]: https://example.com \"Title\"\n")
   @debug.debug_inspect(result.definitions.length(), content="1")
@@ -500,7 +563,7 @@ test "serialize table roundtrip" {
   let source = "| A | B |\n|:---|---:|\n| 1 | 2 |\n"
   let result = parse(source)
   let output = serialize(result.document)
-  @debug.debug_inspect(output.contains("| A |"), content="true")
+  @debug.debug_inspect(output.contains("| A   |"), content="true")
   // remark-gfm style: | :-- | (left) and | --: | (right)
   @debug.debug_inspect(output.contains("| :-- |"), content="true")
   @debug.debug_inspect(output.contains("| --: |"), content="true")

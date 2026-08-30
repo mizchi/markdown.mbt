@@ -1,5 +1,9 @@
 # Comparative Analysis with cmark Implementation
 
+> Historical design note. The benchmark values and implementation gaps below
+> describe the repository at the time of the original comparison; the current
+> parser passes all 652 CommonMark 0.31.2 HTML examples.
+
 Analysis of rami3l/cmark (v0.4.0) emphasis implementation, summarizing adoptable approaches.
 
 ## Benchmark Comparison

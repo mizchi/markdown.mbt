@@ -133,6 +133,50 @@ fn render_block_tui(block : @markdown.Block, buf : StringBuilder) -> Unit {
         buf.write_string(reset)
         buf.write_string("\n\n")
       }
+    @markdown.Block::MathBlock(value~, ..) => {
+      buf.write_string(bright_cyan)
+      buf.write_string("$$\n")
+      buf.write_string(value)
+      if !value.has_suffix("\n") {
+        buf.write_string("\n")
+      }
+      buf.write_string("$$")
+      buf.write_string(reset)
+      buf.write_string("\n\n")
+    }
+    @markdown.Block::Directive(name~, meta~, children~, ..) => {
+      buf.write_string(dim)
+      buf.write_string(":::" + name)
+      if !meta.is_empty() {
+        buf.write_string(" " + meta)
+      }
+      buf.write_string(reset)
+      buf.write_string("\n")
+      for child in children {
+        render_block_tui(child, buf)
+      }
+      buf.write_string(dim)
+      buf.write_string(":::")
+      buf.write_string(reset)
+      buf.write_string("\n\n")
+    }
+    @markdown.Block::DefinitionList(items~, ..) => {
+      for item in items {
+        buf.write_string(bold)
+        render_inlines_tui_raw(item.term, buf)
+        buf.write_string(reset)
+        buf.write_string("\n")
+        for definition in item.definitions {
+          buf.write_string(dim)
+          buf.write_string("  : ")
+          buf.write_string(reset)
+          render_inlines_tui_raw(definition, buf)
+          buf.write_string("\n")
+        }
+      }
+      buf.write_string("\n")
+    }
+    @markdown.Block::Attributed(block~, ..) => render_block_tui(block, buf)
     @markdown.Block::IndentedCode(code~, ..) => {
       buf.write_string(cyan)
       let lines = code.split("\n").collect()
@@ -156,6 +200,18 @@ fn render_block_tui(block : @markdown.Block, buf : StringBuilder) -> Unit {
       }
       buf.write_string(reset)
       buf.write_string("\n")
+    }
+    @markdown.Block::Alert(kind~, children~, ..) => {
+      buf.write_string(bold)
+      buf.write_string(yellow)
+      buf.write_string("[!")
+      buf.write_string(kind.slug().to_upper())
+      buf.write_string("] ")
+      buf.write_string(reset)
+      for child in children {
+        render_block_tui_inline(child, buf)
+      }
+      buf.write_string("\n\n")
     }
     @markdown.Block::BulletList(items~, ..) => {
       for item in items {
@@ -285,6 +341,7 @@ fn measure_inline_width(inline : @markdown.Inline) -> Int {
   match inline {
     @markdown.Inline::Text(content~, ..) => content.iter().count()
     @markdown.Inline::Code(content~, ..) => content.iter().count() + 2 // backticks
+    @markdown.Inline::Directive(label~, ..) => label.iter().count()
     @markdown.Inline::Emphasis(children~, ..) => measure_inlines_width(children)
     @markdown.Inline::Strong(children~, ..) => measure_inlines_width(children)
     @markdown.Inline::Strikethrough(children~, ..) =>
@@ -392,6 +449,16 @@ fn render_inline_tui(inline : @markdown.Inline, buf : StringBuilder) -> Unit {
       buf.write_string("`")
       buf.write_string(content)
       buf.write_string("`")
+      buf.write_string(reset)
+    }
+    @markdown.Inline::Directive(name~, label~, ..) => {
+      buf.write_string(bright_cyan)
+      buf.write_string(label)
+      buf.write_string(reset)
+      buf.write_string(dim)
+      buf.write_string(" [:")
+      buf.write_string(name)
+      buf.write_string("]")
       buf.write_string(reset)
     }
     @markdown.Inline::Emphasis(children~, ..) => {

@@ -51,6 +51,7 @@ fn InlineCtx::close_bracket(self : InlineCtx, pos : Int) -> Int {
   let mut dest = ""
   let mut title = ""
   let mut ref_label : String? = None
+  let mut ref_style = ReferenceStyle::Full
   let mut end = -1
 
   // Inline form: `](dest "title")`.
@@ -66,20 +67,21 @@ fn InlineCtx::close_bracket(self : InlineCtx, pos : Int) -> Int {
   }
   if end < 0 {
     // Reference forms: full `][label]`, collapsed `][]`, or shortcut.
-    let (label, after) = match read_reference_label(text, pos + 1) {
+    let (label, after, style) = match read_reference_label(text, pos + 1) {
       Some((label, after)) =>
         if label.is_empty() {
-          (label_src, after)
+          (label_src, after, ReferenceStyle::Collapsed)
         } else {
-          (label, after)
+          (label, after, ReferenceStyle::Full)
         }
-      None => (label_src, pos + 1)
+      None => (label_src, pos + 1, ReferenceStyle::Shortcut)
     }
     match self.defs.get(normalize_label(label)) {
       Some(def) => {
         dest = def.url
         title = def.title
         ref_label = Some(label)
+        ref_style = style
         end = after
       }
       None => ()
@@ -106,12 +108,13 @@ fn InlineCtx::close_bracket(self : InlineCtx, pos : Int) -> Int {
   )
   let node = if bracket.image {
     match ref_label {
-      Some(label) => Inline::RefImage(alt=label_src, label~, span~)
+      Some(label) =>
+        Inline::RefImage(alt=label_src, label~, style=ref_style, span~)
       None => Inline::Image(alt=label_src, url=dest, title~, span~)
     }
   } else {
     match ref_label {
-      Some(label) => Inline::RefLink(children~, label~, span~)
+      Some(label) => Inline::RefLink(children~, label~, style=ref_style, span~)
       None => Inline::Link(children~, url=dest, title~, span~)
     }
   }
@@ -498,19 +501,16 @@ fn parse_footnote_reference(text : String, start : Int) -> (Inline, Int)? {
     if c == ']' {
       break
     }
-    if !(is_ascii_alnum_unit(c) || c == '-' || c == '_') {
+    if c == '[' || c == '\n' || c == '\r' || c == 0 {
       return None
     }
     i = i + 1
   }
   guard i < len && i > start + 2 else { return None }
-  Some(
-    (
-      Inline::FootnoteReference(
-        label=text.unsafe_substring(start=start + 2, end=i),
-        span=Span::new(start, i + 1),
-      ),
-      i + 1,
-    ),
-  )
+  let label = text
+    .unsafe_substring(start=start + 2, end=i)
+    .trim(chars=" \t")
+    .to_owned()
+  guard !label.is_empty() else { return None }
+  Some((Inline::FootnoteReference(label~, span=Span::new(start, i + 1)), i + 1))
 }

@@ -14,7 +14,6 @@ export default defineConfig({
       input: {
         index: resolve(import.meta.dirname, "playground/index.html"),
         literal: resolve(import.meta.dirname, "playground/literal/index.html"),
-        folddown: resolve(import.meta.dirname, "playground/folddown.html"),
       },
     },
   },

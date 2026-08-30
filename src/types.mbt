@@ -1,6 +1,6 @@
 ///| Markdown CST (Concrete Syntax Tree) Types
 
-///| Designed for lossless roundtrip and incremental parsing
+///| Designed for semantic parsing, source spans, and incremental updates.
 
 // =============================================================================
 // Source Position
@@ -29,7 +29,7 @@ pub fn Span::empty() -> Span {
 }
 
 // =============================================================================
-// Markers (for lossless serialization)
+// Source markers retained for editor and source-oriented rendering APIs.
 // =============================================================================
 
 ///|
@@ -68,6 +68,14 @@ pub(all) enum HeadingStyle {
   Setext // Heading\n======
 } derive(Eq, Debug)
 
+///|
+/// Syntax used by a link or image reference.
+pub(all) enum ReferenceStyle {
+  Full // [text][label]
+  Collapsed // [text][]
+  Shortcut // [text]
+} derive(Eq, Debug)
+
 // =============================================================================
 // Trivia (preserved whitespace/formatting)
 // =============================================================================
@@ -89,12 +97,12 @@ pub fn Trivia::empty() -> Trivia {
 }
 
 ///|
-pub impl Show for Span with output(self : Span, logger : &Logger) -> Unit {
+pub impl Show for Span with fn output(self : Span, logger : &Logger) -> Unit {
   logger.write_string(@debug.to_string(self))
 }
 
 ///|
-pub impl Show for EmphasisMarker with output(
+pub impl Show for EmphasisMarker with fn output(
   self : EmphasisMarker,
   logger : &Logger,
 ) -> Unit {
@@ -102,12 +110,15 @@ pub impl Show for EmphasisMarker with output(
 }
 
 ///|
-pub impl Show for FenceMarker with output(self : FenceMarker, logger : &Logger) -> Unit {
+pub impl Show for FenceMarker with fn output(
+  self : FenceMarker,
+  logger : &Logger,
+) -> Unit {
   logger.write_string(@debug.to_string(self))
 }
 
 ///|
-pub impl Show for BulletMarker with output(
+pub impl Show for BulletMarker with fn output(
   self : BulletMarker,
   logger : &Logger,
 ) -> Unit {
@@ -115,7 +126,7 @@ pub impl Show for BulletMarker with output(
 }
 
 ///|
-pub impl Show for OrderedDelimiter with output(
+pub impl Show for OrderedDelimiter with fn output(
   self : OrderedDelimiter,
   logger : &Logger,
 ) -> Unit {
@@ -123,7 +134,7 @@ pub impl Show for OrderedDelimiter with output(
 }
 
 ///|
-pub impl Show for HeadingStyle with output(
+pub impl Show for HeadingStyle with fn output(
   self : HeadingStyle,
   logger : &Logger,
 ) -> Unit {
@@ -131,7 +142,7 @@ pub impl Show for HeadingStyle with output(
 }
 
 ///|
-pub impl Show for Trivia with output(self : Trivia, logger : &Logger) -> Unit {
+pub impl Show for Trivia with fn output(self : Trivia, logger : &Logger) -> Unit {
   logger.write_string(@debug.to_string(self))
 }
 
@@ -156,6 +167,40 @@ pub(all) struct Frontmatter {
   raw : String // Original YAML content (between ---)
   entries : Array[(String, String)] // Parsed key-value pairs
   span : Span
+}
+
+///|
+/// One normalized block attribute from `{#id .class key=value}`.
+pub(all) struct MarkdownAttribute {
+  name : String
+  value : String
+} derive(Eq, Debug)
+
+///|
+/// GitHub alert kind (`> [!NOTE]`, etc.).
+pub(all) enum AlertKind {
+  Note
+  Tip
+  Important
+  Warning
+  Caution
+} derive(Eq, Debug)
+
+///|
+pub impl Show for AlertKind with fn output(self : AlertKind, logger : &Logger) -> Unit {
+  logger.write_string(@debug.to_string(self))
+}
+
+///|
+/// Stable lowercase name used by renderers and JSON APIs.
+pub fn AlertKind::slug(self : AlertKind) -> String {
+  match self {
+    Note => "note"
+    Tip => "tip"
+    Important => "important"
+    Warning => "warning"
+    Caution => "caution"
+  }
 }
 
 ///|
@@ -197,6 +242,37 @@ pub(all) enum Block {
     leading_trivia~ : Trivia,
     trailing_trivia~ : Trivia
   )
+  /// Display math fenced by a line containing two or more `$` characters.
+  MathBlock(
+    value~ : String,
+    fence_length~ : Int,
+    span~ : Span,
+    leading_trivia~ : Trivia,
+    trailing_trivia~ : Trivia
+  )
+  /// Generic fenced directive (`:::name metadata ... :::`).
+  Directive(
+    name~ : String,
+    meta~ : String,
+    children~ : Array[Block],
+    fence_length~ : Int,
+    span~ : Span,
+    leading_trivia~ : Trivia,
+    trailing_trivia~ : Trivia
+  )
+  /// Definition list (`Term` followed by one or more `: Definition` lines).
+  DefinitionList(
+    items~ : Array[DefinitionItem],
+    span~ : Span,
+    leading_trivia~ : Trivia,
+    trailing_trivia~ : Trivia
+  )
+  /// Apply a block attribute list without adding fields to every block kind.
+  Attributed(
+    block~ : Block,
+    attributes~ : Array[MarkdownAttribute],
+    span~ : Span
+  )
   /// Indented code block
   IndentedCode(
     code~ : String,
@@ -206,6 +282,14 @@ pub(all) enum Block {
   )
   /// Blockquote
   Blockquote(
+    children~ : Array[Block],
+    span~ : Span,
+    leading_trivia~ : Trivia,
+    trailing_trivia~ : Trivia
+  )
+  /// GitHub alert, recognized from a blockquote whose first line is `[!KIND]`.
+  Alert(
+    kind~ : AlertKind,
     children~ : Array[Block],
     span~ : Span,
     leading_trivia~ : Trivia,
@@ -276,6 +360,13 @@ pub(all) struct TableCell {
 }
 
 ///|
+/// One term and one or more inline definitions in a definition list.
+pub(all) struct DefinitionItem {
+  term : Array[Inline]
+  definitions : Array[Array[Inline]]
+}
+
+///|
 /// Table alignment
 pub(all) enum TableAlign {
   Left
@@ -309,18 +400,38 @@ pub(all) enum Inline {
     backtick_count~ : Int, // Number of backticks used
     span~ : Span
   )
+  /// Text directive `:name[label]{#id .class key=value}`.
+  ///
+  /// The label intentionally stays raw text. Consumers can map this node to
+  /// their own component/rendering layer without interpreting nested Markdown.
+  Directive(
+    name~ : String,
+    label~ : String,
+    attributes~ : Array[MarkdownAttribute],
+    span~ : Span
+  )
   /// Wiki link [[target]] or [[target|label]] (opt-in extension)
   WikiLink(target~ : String, label~ : String, fragment~ : String, span~ : Span)
   /// Link [text](url "title")
   Link(children~ : Array[Inline], url~ : String, title~ : String, span~ : Span)
   /// Reference link [text][ref]
-  RefLink(children~ : Array[Inline], label~ : String, span~ : Span)
+  RefLink(
+    children~ : Array[Inline],
+    label~ : String,
+    style~ : ReferenceStyle,
+    span~ : Span
+  )
   /// Autolink <url>
   Autolink(url~ : String, is_email~ : Bool, span~ : Span)
   /// Image ![alt](url "title")
   Image(alt~ : String, url~ : String, title~ : String, span~ : Span)
   /// Reference image ![alt][ref]
-  RefImage(alt~ : String, label~ : String, span~ : Span)
+  RefImage(
+    alt~ : String,
+    label~ : String,
+    style~ : ReferenceStyle,
+    span~ : Span
+  )
   /// Raw inline HTML
   HtmlInline(html~ : String, span~ : Span)
   /// Footnote reference [^label] (GFM)
@@ -335,12 +446,12 @@ pub(all) enum HardBreakStyle {
 } derive(Eq, Debug)
 
 ///|
-pub impl Show for TableAlign with output(self : TableAlign, logger : &Logger) -> Unit {
+pub impl Show for TableAlign with fn output(self : TableAlign, logger : &Logger) -> Unit {
   logger.write_string(@debug.to_string(self))
 }
 
 ///|
-pub impl Show for HardBreakStyle with output(
+pub impl Show for HardBreakStyle with fn output(
   self : HardBreakStyle,
   logger : &Logger,
 ) -> Unit {

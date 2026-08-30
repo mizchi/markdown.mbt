@@ -131,9 +131,14 @@ fn get_block_span(block : @markdown.Block) -> @markdown.Span {
     @markdown.Block::Paragraph(span~, ..) => span
     @markdown.Block::Heading(span~, ..) => span
     @markdown.Block::FencedCode(span~, ..) => span
+    @markdown.Block::MathBlock(span~, ..) => span
+    @markdown.Block::Directive(span~, ..) => span
+    @markdown.Block::DefinitionList(span~, ..) => span
+    @markdown.Block::Attributed(span~, ..) => span
     @markdown.Block::IndentedCode(span~, ..) => span
     @markdown.Block::ThematicBreak(span~, ..) => span
     @markdown.Block::Blockquote(span~, ..) => span
+    @markdown.Block::Alert(span~, ..) => span
     @markdown.Block::BulletList(span~, ..) => span
     @markdown.Block::OrderedList(span~, ..) => span
     @markdown.Block::HtmlBlock(span~, ..) => span

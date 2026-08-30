@@ -15,6 +15,18 @@ moon runwasm src/cmd/mmmd --format html < document.md
 blocks are rendered as ASCII-art diagrams. `--format html` produces an HTML
 fragment.
 
+For a native executable, run:
+
+```sh
+just build-native
+_build/native/release/build/cmd/mmmd-native/mmmd-native.exe --format tui < document.md
+_build/native/release/build/cmd/mmmd-native/mmmd-native.exe --format html < document.md
+```
+
+Install or rename that executable as `mmmd` if desired. Native TUI output uses
+normalized Markdown as its portable fallback, so Mermaid remains a fenced code
+block instead of being converted to ASCII art.
+
 Invalid options are reported to standard error and exit with a non-zero status;
 standard output remains empty.
 

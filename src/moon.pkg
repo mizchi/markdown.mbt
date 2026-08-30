@@ -1,4 +1,9 @@
 import {
   "moonbitlang/core/bench",
   "moonbitlang/core/debug",
+  "moonbitlang/core/v128",
 }
+
+// The v128 API is experimental and only reachable on linear-memory targets.
+
+warnings = "-14"

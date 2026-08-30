@@ -128,6 +128,18 @@ fn render_inline_literal(
       write_marker_repeat(buf, '`', backticks)
       buf.write_string("</code>")
     }
+    Inline::Directive(name~, label~, attributes~, ..) => {
+      buf.write_string("<span class=\"md-inline-directive\">")
+      write_marker(buf, ":" + name + "[")
+      escape_html_into(buf, label)
+      write_marker(buf, "]")
+      if !attributes.is_empty() {
+        let source = StringBuilder()
+        serialize_attribute_list(attributes, source)
+        write_marker(buf, source.to_string())
+      }
+      buf.write_string("</span>")
+    }
     Inline::WikiLink(target~, label~, fragment~, ..) => {
       let href = if fragment.is_empty() {
         target
@@ -169,13 +181,17 @@ fn render_inline_literal(
       write_marker(buf, trailing)
       buf.write_string("</a>")
     }
-    Inline::RefLink(children~, label~, ..) => {
+    Inline::RefLink(children~, label~, style~, ..) => {
       buf.write_string("<a class=\"md-reflink\" href=\"#ref-")
       escape_html_attr_into(buf, label)
       buf.write_string("\">")
       write_marker(buf, "[")
       render_inlines_literal(children, buf, opts)
-      write_marker(buf, "][" + label + "]")
+      match style {
+        ReferenceStyle::Full => write_marker(buf, "][" + label + "]")
+        ReferenceStyle::Collapsed => write_marker(buf, "][]")
+        ReferenceStyle::Shortcut => write_marker(buf, "]")
+      }
       buf.write_string("</a>")
     }
     Inline::Autolink(url~, is_email~, ..) => {
@@ -206,7 +222,7 @@ fn render_inline_literal(
       }
       buf.write_string("</span>")
     }
-    Inline::RefImage(alt~, label~, ..) => {
+    Inline::RefImage(alt~, label~, style~, ..) => {
       // Reference images don't carry an URL inline; the slot stays empty.
       // The consumer can resolve `data-md-image-ref` against their own
       // definition map and assign a `src` later.
@@ -216,7 +232,11 @@ fn render_inline_literal(
       buf.write_string("\">")
       write_marker(buf, "![")
       escape_html_into(buf, alt)
-      write_marker(buf, "][" + label + "]")
+      match style {
+        ReferenceStyle::Full => write_marker(buf, "][" + label + "]")
+        ReferenceStyle::Collapsed => write_marker(buf, "][]")
+        ReferenceStyle::Shortcut => write_marker(buf, "]")
+      }
       if opts.image_preview {
         write_image_preview_slot_open(buf, meta)
         buf.write_string("<img class=\"md-image-preview\" data-md-image-ref=\"")

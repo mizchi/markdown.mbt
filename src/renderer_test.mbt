@@ -134,7 +134,6 @@ test "render image" {
     html,
     content=(
       #|"<p><img src=\"image.png\" alt=\"alt\" /></p>\n"
-
     ),
   )
 }
@@ -179,7 +178,6 @@ test "render thematic break" {
     html,
     content=(
       #|"<hr />\n"
-
     ),
   )
 }
@@ -190,7 +188,7 @@ test "render task list" {
   @debug.debug_inspect(
     html,
     content=(
-      #|"<ul class=\"contains-task-list\">\n<li class=\"task-list-item\"><input type=\"checkbox\" disabled> todo</li>\n<li class=\"task-list-item\"><input type=\"checkbox\" checked disabled> done</li>\n</ul>\n"
+      #|"<ul>\n<li><input disabled=\"\" type=\"checkbox\"> todo</li>\n<li><input checked=\"\" disabled=\"\" type=\"checkbox\"> done</li>\n</ul>\n"
     ),
   )
 }
@@ -241,12 +239,19 @@ test "render inline html comment" {
 
 ///|
 test "render footnote" {
-  let html = md_to_html("Text[^1]\n\n[^1]: Note\n")
-  @debug.debug_inspect(html.contains("<sup><a href=\"#fn-1\""), content="true")
-  @debug.debug_inspect(
-    html.contains("<div class=\"footnote\" id=\"fn-1\">"),
+  let html = md_to_html(
+    "First[^note], again[^note].\n\n[^note]: Footnote body.\n",
+  )
+  inspect(html.contains("id=\"fnref-note\""), content="true")
+  inspect(html.contains("id=\"fnref-note-2\""), content="true")
+  inspect(html.contains(">1</a></sup>"), content="true")
+  inspect(
+    html.contains("<section data-footnotes=\"\" class=\"footnotes\">"),
     content="true",
   )
+  inspect(html.contains("<li id=\"fn-note\">"), content="true")
+  inspect(html.contains("href=\"#fnref-note-2\""), content="true")
+  inspect(html.has_suffix("</section>\n"), content="true")
 }
 
 ///|
@@ -260,7 +265,6 @@ test "render: superscript letters are not punctuation for flanking" {
     ),
   )
 }
-
 
 ///|
 test "render: Latin Extended-A labels fold to their own case pair" {
@@ -282,17 +286,86 @@ test "render: Latin Extended-A labels fold to their own case pair" {
 }
 
 //|
+
+///|
 test "render: raw text HTML block ends at its own closing tag" {
   // </pre> must not close a <script> block.
   let html = md_to_html("<script>\n</pre>\nstill script\n</script>\n")
   @debug.debug_inspect(
     html,
     content=(
-      #|"<script>\n</pre>\nstill script\n</script>\n"
+      #|"&lt;script>\n</pre>\nstill script\n&lt;/script>\n"
     ),
   )
 }
 
+///|
+test "render can disable GFM tagfilter for CommonMark HTML" {
+  inspect(
+    md_to_html("<script>raw</script>\n", autolink=false, tagfilter=false),
+    content="<script>raw</script>\n",
+  )
+}
+
+///|
+test "render GitHub alert" {
+  inspect(
+    md_to_html("> [!WARNING]\n> Dangerous operation.\n"),
+    content="<div class=\"markdown-alert markdown-alert-warning\">\n<p class=\"markdown-alert-title\">Warning</p>\n<p>Dangerous operation.</p>\n</div>\n",
+  )
+}
+
+///|
+test "render display math with safe fallback" {
+  inspect(
+    md_to_html("$$\nx < y && y > 0\n$$\n"),
+    content="<pre class=\"math math-display\"><code>x &lt; y &amp;&amp; y &gt; 0\n</code></pre>\n",
+  )
+}
+
+///|
+test "render display math through an injected renderer" {
+  let doc = parse("$$\nx^2\n$$\n").document
+  let options = RenderOptions::default().with_math_block_renderer(fn(value) {
+    "<div data-katex>" + value.trim(chars="\n").to_owned() + "</div>"
+  })
+  inspect(
+    render_html_with_options(doc, options),
+    content="<div data-katex>x^2</div>\n",
+  )
+}
+
+///|
+test "render fenced directive with a neutral HTML contract" {
+  inspect(
+    md_to_html(":::note Optional title\nBody\n:::\n"),
+    content="<div class=\"directive directive-note\" data-directive=\"note\" data-directive-meta=\"Optional title\">\n<p>Body</p>\n</div>\n",
+  )
+}
+
+///|
+test "render definition list" {
+  inspect(
+    md_to_html("MoonBit\n: A **fast** language\n"),
+    content="<dl>\n<dt>MoonBit</dt>\n<dd>A <strong>fast</strong> language</dd>\n</dl>\n",
+  )
+}
+
+///|
+test "render block attributes on a heading" {
+  inspect(
+    md_to_html("# Heading\n\n{#intro .wide key=value}\n"),
+    content="<h1 id=\"intro\" class=\"wide\" key=\"value\">Heading</h1>\n",
+  )
+}
+
+///|
+test "render inline directive" {
+  inspect(
+    md_to_html("Use :badge[stable]{.green level=high}.\n"),
+    content="<p>Use <span data-directive=\"badge\" class=\"green\" level=\"high\">stable</span>.</p>\n",
+  )
+}
 
 ///|
 test "render: delimiter row cells need a dash" {
@@ -305,15 +378,24 @@ test "render: delimiter row cells need a dash" {
   )
 }
 
-
 ///|
-test "render: a line without a cell separator ends the table" {
+test "render: a line without a cell separator continues the table" {
   let html = md_to_html("a | b\n--- | ---\nordinary text\n")
   @debug.debug_inspect(
     html,
     content=(
-      #|"<table>\n<thead>\n<tr>\n<th>a</th>\n<th>b</th>\n</tr>\n</thead>\n</table>\n<p>ordinary text</p>\n"
+      #|"<table>\n<thead>\n<tr>\n<th>a</th>\n<th>b</th>\n</tr>\n</thead>\n<tbody>\n<tr>\n<td>ordinary text</td>\n<td></td>\n</tr>\n</tbody>\n</table>\n"
     ),
   )
 }
 
+///|
+test "render: a new block ends a table without a blank line" {
+  let html = md_to_html("a | b\n--- | ---\n# heading\n")
+  @debug.debug_inspect(
+    html,
+    content=(
+      #|"<table>\n<thead>\n<tr>\n<th>a</th>\n<th>b</th>\n</tr>\n</thead>\n</table>\n<h1>heading</h1>\n"
+    ),
+  )
+}

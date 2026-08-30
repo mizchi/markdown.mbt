@@ -1,108 +1,49 @@
 # TODO
 
-- [x] Multi-line WebComponents customElements elements are not being parsed correctly
+## Current status
 
-## Current Status
+- Core parser tests: 302/302 on both JavaScript and Wasm.
+- CommonMark HTML conformance: 652/652 with no skipped examples.
+- Markdown serialization parity with remark: 464 active examples and 78 skipped examples.
+- CommonMark semantic round-trip: 611/652; 41 examples still change rendered HTML after normalization.
+- GFM extension serialization comparison: 23 active examples and 1 intentional skipped example.
+- Official GFM HTML conformance: 24/24 on both JavaScript and Wasm.
+- A native `mmmd` implementation is available under `src/cmd/mmmd-native`.
+- The only open GitHub issue is #1; its implementation is present locally but the issue remains open pending release/closure.
+- The `strict` argument remains for compatibility; parsing is always CommonMark-conformant.
 
-- **Main tests**: 125/125 passing (100%)
-- **CommonMark tests (strict=true)**: 205/205 passing (100%)
-- **GFM tests**: 26/26 passing (100%)
-- **Skipped tests**: 337 (complex edge cases)
-- **Serializer**: Normalized to remark-gfm output style
+## P0: Completed
 
-## Strict Mode
+- [x] Gate GFM behavior against the official cmark-gfm HTML for all 24 extension examples on JavaScript and Wasm.
+- [x] Implement GFM disallowed-raw-HTML tag filtering for block and inline HTML.
+- [x] Keep GFM table bodies open for pipe-less continuation rows until a blank line or a new block begins.
+- [x] Implement GFM extended autolinks, including boundary, host, punctuation, entity, and balanced-parenthesis rules.
+- [x] Add a native CLI for [issue #1](https://github.com/mizchi/markdown.mbt/issues/1). Native TUI output deliberately leaves Mermaid as an ordinary fenced code block because the diagram renderer is JavaScript/Wasm-only.
+- [x] Define `serialize` as a stable normalized format: ATX headings, canonical markers and spacing, a trailing reference-definition section, preserved reference styles, and idempotent/semantic round-trip tests.
 
-New `strict` option for full CommonMark compliance:
+## P1: Correctness and maintenance
 
-```moonbit
-// Fast mode (default) - optimized for common cases
-let doc = parse(source)
+- [ ] Fix the 41 CommonMark semantic round-trip cases classified in `docs/serializer-compat.md`; prioritize block/list structure, block-start escaping, and reference definitions.
+- [ ] Decide whether the 47 formatting-only remark differences are worth matching. They do not change rendered HTML and often conflict with the normalized serializer contract.
+- [ ] Decide whether the experimental notebook package remains in this repository. Its separate backlog is in `src/x/notebook/TODO.md`.
 
-// Strict mode - full CommonMark compliance with delimiter stack
-let doc = parse(source, strict=true)
-```
+## P1: Performance
 
-### Performance (strict=false vs baseline)
-| Benchmark | Change |
-|-----------|--------|
-| parse: small | +5.9% |
-| parse: medium | +4.1% |
-| parse: large | +5.7% |
+- [ ] Establish stable serializer and large-table baselines before optimizing them. The old percentage-regression notes were not backed by the current benchmark baseline.
+- [ ] Keep `just bench-simd` as the regression gate for line scanning and long HTML terminator searches.
 
-## High Priority
+## Completed or removed
 
-### Serializer Fixes
-
-- [x] **Title quote normalization**: `'title'` and `(title)` → `"title"` (all quotes normalized to double quotes)
-- [ ] **URL escape normalization**: Remove unnecessary escapes like `\:` (example 500)
-
-### Parser Improvements
-
-- [x] **Delimiter stack algorithm**: Implemented for strict mode
-- [x] **Emphasis flanking rules**: Full CommonMark compliance in strict mode
-- [x] **Hard line breaks**: Fixed in parse_segment_simple
-- [x] **Link/Image parsing in strict mode**: Added to parse_segment_simple
-- [x] **HTML block parsing**: Block-level HTML tags preserved as HtmlBlock
-- [ ] **Nested lists**: Complex list nesting not handled correctly
-- [ ] **Reference link resolution**: Parsed but not fully resolved
-
-### Skipped Test Categories (337 total)
-
-| Category | Count | Notes |
-|----------|-------|-------|
-| Emphasis edge cases | 90 | Many pass with strict=true |
-| Reference links | 54 | Not fully implemented |
-| List items | 35 | Complex nesting |
-| URL edge cases | 22 | Spaces, newlines, escape normalization |
-| Lists | 21 | Edge cases |
-| Setext headings | 20 | Not implemented |
-| Images | 17 | Edge cases |
-| Code spans | 13 | Edge cases |
-| Block quotes | 13 | Nested quotes |
-| Other | 52 | Various edge cases |
-
-## Medium Priority
-
-### Performance
-
-- [ ] Serializer performance regressed ~15-17% due to `calc_fence_length` - consider caching or lazy evaluation
-- [ ] Large table parsing shows high variance - investigate potential optimization
-
-### Features
-
-- [ ] **Link reference definitions**: Currently parsed but not fully utilized in serialization
-- [x] **Footnotes** (GFM extension): Implemented (FootnoteDefinition block, FootnoteReference inline)
-- [x] **Task lists**: Fully working (2/2 GFM tests pass)
-- [x] **HTML renderer**: `md_to_html()` and `render_html()` functions
-
-## Low Priority
-
-### Code Quality
-
-- [ ] Extract common patterns in block_parser.mbt
-- [ ] Consider splitting large files (block_parser.mbt is quite large)
-- [ ] Clean up deprecated `substring` calls
-
-### Benchmarks
-
-- [ ] **rami3l/cmark comparison benchmarks**: Restore when cmark is updated for current MoonBit version (removed due to UInt16/Int incompatibility)
-
-### Future Enhancements
-
-- [ ] **Incremental inline parsing**: Currently only block-level incremental parsing
-- [ ] **Source maps**: Track original positions through transformations
-- [ ] **Custom syntax extensions**: Plugin system for custom block/inline types
-- [ ] **Streaming parser**: For very large documents
-- [ ] **SVG popup preview**: Show floating preview when editing SVG code blocks (use data-span for targeted updates)
-- [ ] **Moonlight SVG editor integration**: Integrate [mizchi/moonlight](https://github.com/mizchi/moonlight) for bidirectional SVG editing
-  - Lazy load via WebComponents (`<moonlight-editor>`)
-  - Code block handler for `moonlight-svg` language
-  - Bidirectional sync: editor ↔ source via `data-span`
-  - See `docs/moonlight_integrate.md` for details
-
-## Notes
-
-- The serializer now outputs GFM-normalized markdown (matching remark-gfm behavior)
-- CST preservation is partially sacrificed for compatibility (trivia, markers normalized)
-- Incremental parsing still works correctly for block-level changes
-- Strict mode uses delimiter stack algorithm for full CommonMark emphasis handling
+- [x] Full CommonMark HTML conformance, including nested lists, setext headings, emphasis, and reference-link resolution.
+- [x] Split block parsing into focused files.
+- [x] SIMD line scanning and HTML terminator search benchmarks.
+- [x] Official GFM HTML conformance, tagfilter, table continuation, and extended autolinks.
+- [x] Escaped pipes inside table inline elements ([issue #6](https://github.com/mizchi/markdown.mbt/issues/6), including official GFM example 200).
+- [x] Native `mmmd` CLI with a deterministic Mermaid fallback.
+- [x] Stable normalized serializer contract and canonical reference definitions.
+- [x] GitHub alert blocks and complete footnote rendering with repeated back references.
+- [x] Display-math blocks with a replaceable trusted-HTML renderer boundary for KaTeX-style integrations.
+- [x] Container/text directives, definition lists, and standalone block attributes.
+- [x] Shift nested ordered/unordered list-item and child-block spans during incremental reuse.
+- [x] Resolve 5 of 6 GFM serializer differences. Keep example 204 intentionally different because remark exposes an overflow cell that official GFM ignores.
+- [x] Remove the experimental Folddown package, public API, viewer, workflow, and documentation.

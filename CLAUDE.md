@@ -36,7 +36,6 @@ src/
 │   ├── multipass/                  # Experimental multi-pass inline parser
 │   ├── notebook/                   # Notebook cells / executable code blocks
 │   ├── mdx/                        # MDX (JSX-in-Markdown) extraction
-│   ├── folddown/                   # Typed structured-document declarations
 │   ├── slide/                      # Slide-deck splitting
 │   ├── tui/                        # Terminal renderer
 │   └── purify/                     # HTML sanitization

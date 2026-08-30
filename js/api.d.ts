@@ -73,58 +73,6 @@ export interface MarkdownOptions {
   autolink?: boolean;
 }
 
-/** A typed Folddown declaration with its Markdown child source. */
-export interface FolddownNode {
-  id: string;
-  kind: "concept" | "procedure" | "reference" | "evidence";
-  level: "intro" | "basic" | "advanced" | "expert";
-  locale: string | null;
-  requires: string[];
-  roles: string[];
-  goals: string[];
-  evidence: string[];
-  /** Reader-background roles for which this node is a direct correspondence. */
-  familiarTo: string[];
-  body: string;
-}
-
-/** A localized reader state generated from the Folddown frontmatter DSL. */
-export interface FolddownReaderProfile {
-  id: string;
-  labelJa: string;
-  labelEn: string;
-  collapseLevels: Array<FolddownNode["level"]>;
-}
-
-/** A localized content-selection state generated from frontmatter. */
-export interface FolddownContentFilter {
-  id: string;
-  labelJa: string;
-  labelEn: string;
-  mode: "all" | "unfamiliar";
-}
-
-/** A non-throwing Folddown parser result. */
-export interface FolddownParseResult {
-  nodes: FolddownNode[];
-  readerProfiles: FolddownReaderProfile[];
-  contentFilters: FolddownContentFilter[];
-  diagnostics: Array<{ code: string; message: string }>;
-}
-
-/** A typed external document declaration from `<Include>`. */
-export interface FolddownInclude {
-  src: string;
-  sync: string | null;
-  raw: string;
-}
-
-/** A non-throwing external-document declaration parser result. */
-export interface FolddownIncludeParseResult {
-  includes: FolddownInclude[];
-  diagnostics: Array<{ code: string; message: string }>;
-}
-
 /**
  * mdast extension node emitted when MarkdownOptions.wikilinks is enabled.
  */
@@ -137,6 +85,76 @@ export interface WikiLink {
   };
 }
 
+/** Generic inline `:name[label]{attributes}` directive. */
+export interface TextDirective {
+  type: "textDirective";
+  name: string;
+  label: string;
+  attributes: MarkdownAttribute[];
+  position?: import("unist").Position;
+}
+
+/** Display-math block. Renderers may hand `value` to KaTeX or another engine. */
+export interface MathBlock {
+  type: "math";
+  value: string;
+  position?: import("unist").Position;
+}
+
+export type AlertKind = "note" | "tip" | "important" | "warning" | "caution";
+
+/** GitHub alert recognized from `> [!KIND]`. */
+export interface AlertBlock {
+  type: "alert";
+  kind: AlertKind;
+  children: MarkdownBlock[];
+  position?: import("unist").Position;
+}
+
+/** Generic `:::name metadata` container directive. */
+export interface ContainerDirective {
+  type: "containerDirective";
+  name: string;
+  meta: string;
+  children: MarkdownBlock[];
+  position?: import("unist").Position;
+}
+
+export interface MarkdownAttribute {
+  name: string;
+  value: string;
+}
+
+export interface AttributedBlock {
+  type: "attributed";
+  attributes: MarkdownAttribute[];
+  child: MarkdownBlock;
+  position?: import("unist").Position;
+}
+
+export interface DefinitionListItem {
+  term: import("mdast").PhrasingContent[];
+  definitions: import("mdast").PhrasingContent[][];
+}
+
+export interface DefinitionList {
+  type: "definitionList";
+  items: DefinitionListItem[];
+  position?: import("unist").Position;
+}
+
+export type MarkdownBlock =
+  | import("mdast").RootContent
+  | MathBlock
+  | AlertBlock
+  | ContainerDirective
+  | AttributedBlock
+  | DefinitionList;
+
+export type MarkdownRoot = Omit<import("mdast").Root, "children"> & {
+  children: MarkdownBlock[];
+};
+
 // =============================================================================
 // Document Handle
 // =============================================================================
@@ -146,7 +164,7 @@ export interface WikiLink {
  */
 export interface DocumentHandle {
   /** Get the parsed AST (cached after first access) */
-  readonly ast: import("mdast").Root;
+  readonly ast: MarkdownRoot;
 
   /** Render the document to HTML */
   toHtml(): string;
@@ -175,13 +193,7 @@ export interface DocumentHandle {
  * const ast = parse("# Hello\n\nWorld");
  * console.log(ast.children[0].type); // "heading"
  */
-export function parse(source: string, options?: MarkdownOptions): import("mdast").Root;
-
-/** Parse typed Folddown MDX into its reader manifest. */
-export function parseFolddown(source: string): FolddownParseResult;
-
-/** Parse typed Folddown external-document declarations. */
-export function parseFolddownIncludes(source: string): FolddownIncludeParseResult;
+export function parse(source: string, options?: MarkdownOptions): MarkdownRoot;
 
 /**
  * Convert markdown to HTML.

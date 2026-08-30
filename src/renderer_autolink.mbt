@@ -1,20 +1,31 @@
-///| Bare-URL autolink helpers used by the HTML renderer.
+///|
+/// GFM extended-autolink helpers used by the HTML renderer.
+priv enum BareAutolinkKind {
+  Url
+  Www
+  Email
+}
 
 ///|
-
-///| Pure utilities — given a `String` and a position, classify the surrounding
-
-///| characters and find the boundaries of an `http(s)://` URL. Extracted from
-
-///| renderer.mbt to keep the renderer itself focused on AST traversal.
+priv struct BareAutolink {
+  start : Int
+  end : Int
+  kind : BareAutolinkKind
+}
 
 ///|
-fn find_next_url_start(content : String, from : Int) -> Int? {
+/// Find the next URL, `www.` link, or email in a plain-text inline node.
+fn find_next_autolink(content : String, from : Int) -> BareAutolink? {
   let len = content.length()
   let mut pos = from
   while pos < len {
-    if is_url_start_at(content, pos) {
-      return Some(pos)
+    match url_autolink_at(content, pos) {
+      Some(found) => return Some(found)
+      None => ()
+    }
+    match email_autolink_at(content, pos) {
+      Some(found) => return Some(found)
+      None => ()
     }
     pos = pos + 1
   }
@@ -22,79 +33,219 @@ fn find_next_url_start(content : String, from : Int) -> Int? {
 }
 
 ///|
-fn is_url_start_at(content : String, pos : Int) -> Bool {
-  let boundary = pos == 0 ||
-    is_url_left_boundary(ascii_char_at(content, pos - 1))
-  boundary &&
-  (
-    string_has_prefix_at(content, pos, "https://") ||
-    string_has_prefix_at(content, pos, "http://")
-  )
+/// Match an explicit `http(s)://` / `ftp://` URL or a `www.` URL.
+fn url_autolink_at(content : String, start : Int) -> BareAutolink? {
+  let is_www = string_has_prefix_at(content, start, "www.")
+  let scheme_length = if string_has_prefix_at(content, start, "https://") {
+    8
+  } else if string_has_prefix_at(content, start, "http://") ||
+    string_has_prefix_at(content, start, "ftp://") {
+    7
+  } else {
+    0
+  }
+  if !is_www && scheme_length == 0 {
+    return None
+  }
+  if start > 0 {
+    let previous = content.unsafe_get(start - 1)
+    if is_www {
+      if !(is_html_space(previous) ||
+        previous == '*' ||
+        previous == '_' ||
+        previous == '~' ||
+        previous == '(') {
+        return None
+      }
+    } else if is_ascii_alnum_unit(previous) {
+      return None
+    }
+  }
+  let host_start = if is_www { start + 4 } else { start + scheme_length }
+  let host_end = scan_url_host(content, host_start)
+  if host_end == host_start {
+    return None
+  }
+  if is_www && !url_host_has_dot(content, host_start, host_end) {
+    return None
+  }
+  if url_host_has_invalid_underscore(content, host_start, host_end) {
+    return None
+  }
+  let raw_end = find_url_raw_end(content, host_end)
+  let end = trim_url_end(content, start, raw_end)
+  guard end > host_start else { return None }
+  Some({ start, end, kind: if is_www { Www } else { Url } })
 }
 
 ///|
-fn ascii_char_at(content : String, pos : Int) -> Char {
-  Int::unsafe_to_char(content.code_unit_at(pos).to_int())
+/// The host portion ends before URL path/query punctuation.
+fn scan_url_host(content : String, start : Int) -> Int {
+  let len = content.length()
+  let mut end = start
+  while end < len {
+    let c = content.unsafe_get(end)
+    if is_ascii_alnum_unit(c) || c == '.' || c == '-' || c == '_' {
+      end = end + 1
+    } else {
+      break
+    }
+  }
+  end
+}
+
+///|
+fn url_host_has_dot(content : String, start : Int, end : Int) -> Bool {
+  for i = start; i < end; i = i + 1 {
+    if content.unsafe_get(i) == '.' {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// Hostnames reject underscores in either of their final two labels.
+fn url_host_has_invalid_underscore(
+  content : String,
+  start : Int,
+  end : Int,
+) -> Bool {
+  let mut last_dot = end
+  let mut previous_dot = end
+  for i = end - 1; i >= start; i = i - 1 {
+    if content.unsafe_get(i) == '.' {
+      if last_dot == end {
+        last_dot = i
+      } else {
+        previous_dot = i
+        break
+      }
+    }
+  }
+  let check_from = if previous_dot < end { previous_dot + 1 } else { start }
+  for i = check_from; i < end; i = i + 1 {
+    if content.unsafe_get(i) == '_' {
+      return true
+    }
+  }
+  false
+}
+
+///|
+/// Match the GFM extended-email form at the start of its local part.
+fn email_autolink_at(content : String, start : Int) -> BareAutolink? {
+  let len = content.length()
+  guard start < len && is_email_local_char(content.unsafe_get(start)) else {
+    return None
+  }
+  if start > 0 && is_email_local_char(content.unsafe_get(start - 1)) {
+    return None
+  }
+  let mut at = start
+  while at < len && is_email_local_char(content.unsafe_get(at)) {
+    at = at + 1
+  }
+  guard at > start && at < len && content.unsafe_get(at) == '@' else {
+    return None
+  }
+  let domain_start = at + 1
+  let mut end = domain_start
+  let mut dots = 0
+  while end < len {
+    let c = content.unsafe_get(end)
+    if is_ascii_alnum_unit(c) || c == '-' || c == '_' {
+      end = end + 1
+    } else if c == '.' &&
+      end + 1 < len &&
+      is_ascii_alnum_unit(content.unsafe_get(end + 1)) {
+      dots = dots + 1
+      end = end + 1
+    } else {
+      break
+    }
+  }
+  guard end > domain_start && dots > 0 else { return None }
+  let last = content.unsafe_get(end - 1)
+  guard is_ascii_letter_unit(last) else { return None }
+  guard !url_host_has_invalid_underscore(content, domain_start, end) else {
+    return None
+  }
+  Some({ start, end, kind: Email })
+}
+
+///|
+fn is_email_local_char(c : UInt16) -> Bool {
+  is_ascii_alnum_unit(c) || c == '.' || c == '+' || c == '-' || c == '_'
 }
 
 ///|
 fn string_has_prefix_at(content : String, pos : Int, prefix : String) -> Bool {
   let end = pos + prefix.length()
-  end <= content.length() && content.unsafe_substring(start=pos, end~) == prefix
-}
-
-///|
-fn is_url_left_boundary(c : Char) -> Bool {
-  c == ' ' ||
-  c == '\n' ||
-  c == '\t' ||
-  c == '\r' ||
-  c == '(' ||
-  c == '[' ||
-  c == '{' ||
-  c == '<'
+  end <= content.length() && content[pos:end] == prefix[:]
 }
 
 ///|
 fn find_url_raw_end(content : String, start : Int) -> Int {
   let len = content.length()
   let mut end = start
-  while end < len && !is_url_stop_char(ascii_char_at(content, end)) {
+  while end < len {
+    let c = content.unsafe_get(end)
+    if is_html_space(c) || c == '<' {
+      break
+    }
     end = end + 1
   }
   end
 }
 
 ///|
-fn is_url_stop_char(c : Char) -> Bool {
-  c == ' ' ||
-  c == '\n' ||
-  c == '\t' ||
-  c == '\r' ||
-  c == '<' ||
-  c == '"' ||
-  c == '\''
-}
-
-///|
+/// Apply cmark-gfm's balanced-parenthesis and trailing-delimiter rules.
 fn trim_url_end(content : String, start : Int, raw_end : Int) -> Int {
+  let mut opening = 0
+  let mut closing = 0
+  for i = start; i < raw_end; i = i + 1 {
+    let c = content.unsafe_get(i)
+    if c == '(' {
+      opening = opening + 1
+    } else if c == ')' {
+      closing = closing + 1
+    }
+  }
   let mut end = raw_end
-  while end > start &&
-        is_url_trailing_punctuation(ascii_char_at(content, end - 1)) {
-    end = end - 1
+  while end > start {
+    let c = content.unsafe_get(end - 1)
+    if c == ')' {
+      if closing <= opening {
+        return end
+      }
+      closing = closing - 1
+      end = end - 1
+    } else if c == '?' ||
+      c == '!' ||
+      c == '.' ||
+      c == ',' ||
+      c == ':' ||
+      c == '*' ||
+      c == '_' ||
+      c == '~' ||
+      c == '\'' ||
+      c == '"' {
+      end = end - 1
+    } else if c == ';' {
+      let mut entity_start = end - 2
+      while entity_start > start &&
+            is_ascii_letter_unit(content.unsafe_get(entity_start)) {
+        entity_start = entity_start - 1
+      }
+      if entity_start < end - 2 && content.unsafe_get(entity_start) == '&' {
+        end = entity_start
+      } else {
+        end = end - 1
+      }
+    } else {
+      return end
+    }
   }
   end
-}
-
-///|
-fn is_url_trailing_punctuation(c : Char) -> Bool {
-  c == '.' ||
-  c == ',' ||
-  c == ';' ||
-  c == ':' ||
-  c == '!' ||
-  c == '?' ||
-  c == ')' ||
-  c == ']' ||
-  c == '}'
 }

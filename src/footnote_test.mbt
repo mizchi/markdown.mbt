@@ -47,3 +47,20 @@ test "footnote roundtrip" {
   let output = md_parse_and_render(input)
   @debug.debug_inspect(output == input, content="true")
 }
+
+///|
+test "footnote labels accept Unicode and spaces" {
+  let input = "本文[^注 1]\n\n[^注 1]: 補足です。\n"
+  let result = parse(input)
+  guard result.document.children[0] is Paragraph(children~, ..) else {
+    fail("Expected paragraph")
+  }
+  guard children[1] is FootnoteReference(label~, ..) else {
+    fail("Expected footnote reference")
+  }
+  inspect(label, content="注 1")
+  guard result.document.children[2] is FootnoteDefinition(label=definition, ..) else {
+    fail("Expected footnote definition")
+  }
+  inspect(definition, content="注 1")
+}

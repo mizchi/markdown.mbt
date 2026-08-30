@@ -26,11 +26,11 @@ pub fn is_whitespace(Char) -> Bool
 
 pub fn md_parse_and_render(String, strict? : Bool, wikilinks? : Bool) -> String
 
-pub fn md_to_html(String, wikilinks? : Bool, autolink? : Bool) -> String
+pub fn md_to_html(String, wikilinks? : Bool, autolink? : Bool, tagfilter? : Bool) -> String
 
 pub fn md_to_html_literal(String, wikilinks? : Bool, positions? : Bool, image_preview? : Bool) -> String
 
-pub fn md_to_html_strict(String, wikilinks? : Bool, autolink? : Bool) -> String
+pub fn md_to_html_strict(String, wikilinks? : Bool, autolink? : Bool, tagfilter? : Bool) -> String
 
 pub fn parse(String, strict? : Bool, wikilinks? : Bool) -> ParseResult
 
@@ -40,9 +40,11 @@ pub fn parse_incremental(Document, String, String, EditInfo, wikilinks? : Bool) 
 
 pub fn parse_inlines(String, strict? : Bool, wikilinks? : Bool) -> Array[Inline]
 
-pub fn render_html(Document, autolink? : Bool) -> String
+pub fn render_html(Document, autolink? : Bool, tagfilter? : Bool) -> String
 
 pub fn render_html_literal(Document, positions? : Bool, image_preview? : Bool) -> String
+
+pub fn render_html_with_options(Document, RenderOptions, autolink? : Bool, tagfilter? : Bool) -> String
 
 pub fn serialize(Document) -> String
 
@@ -51,13 +53,28 @@ pub fn serialize_definitions(Array[LinkDefinition]) -> String
 // Errors
 
 // Types and methods
+pub(all) enum AlertKind {
+  Note
+  Tip
+  Important
+  Warning
+  Caution
+} derive(Eq, @debug.Debug)
+pub fn AlertKind::slug(Self) -> String
+pub impl Show for AlertKind
+
 pub(all) enum Block {
   ThematicBreak(marker~ : Char, count~ : Int, span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
   Heading(level~ : Int, style~ : HeadingStyle, children~ : Array[Inline], closing_hashes~ : Int, span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
   Paragraph(children~ : Array[Inline], span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
   FencedCode(fence_marker~ : FenceMarker, fence_length~ : Int, info~ : String, code~ : String, indent~ : Int, span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
+  MathBlock(value~ : String, fence_length~ : Int, span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
+  Directive(name~ : String, meta~ : String, children~ : Array[Block], fence_length~ : Int, span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
+  DefinitionList(items~ : Array[DefinitionItem], span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
+  Attributed(block~ : Block, attributes~ : Array[MarkdownAttribute], span~ : Span)
   IndentedCode(code~ : String, span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
   Blockquote(children~ : Array[Block], span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
+  Alert(kind~ : AlertKind, children~ : Array[Block], span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
   BulletList(marker~ : BulletMarker, tight~ : Bool, items~ : Array[ListItem], span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
   OrderedList(start~ : Int, delimiter~ : OrderedDelimiter, tight~ : Bool, items~ : Array[ListItem], span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
   HtmlBlock(html~ : String, span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
@@ -79,9 +96,15 @@ pub(all) struct CodeBlockInfo {
   meta : String
 }
 
+pub(all) struct DefinitionItem {
+  term : Array[Inline]
+  definitions : Array[Array[Inline]]
+}
+
 pub(all) struct Document {
   frontmatter : Frontmatter?
   children : Array[Block]
+  definitions : Array[LinkDefinition]
   span : Span
 }
 
@@ -139,12 +162,13 @@ pub(all) enum Inline {
   Strong(marker~ : EmphasisMarker, children~ : Array[Inline], span~ : Span)
   Strikethrough(children~ : Array[Inline], span~ : Span)
   Code(content~ : String, backtick_count~ : Int, span~ : Span)
+  Directive(name~ : String, label~ : String, attributes~ : Array[MarkdownAttribute], span~ : Span)
   WikiLink(target~ : String, label~ : String, fragment~ : String, span~ : Span)
   Link(children~ : Array[Inline], url~ : String, title~ : String, span~ : Span)
-  RefLink(children~ : Array[Inline], label~ : String, span~ : Span)
+  RefLink(children~ : Array[Inline], label~ : String, style~ : ReferenceStyle, span~ : Span)
   Autolink(url~ : String, is_email~ : Bool, span~ : Span)
   Image(alt~ : String, url~ : String, title~ : String, span~ : Span)
-  RefImage(alt~ : String, label~ : String, span~ : Span)
+  RefImage(alt~ : String, label~ : String, style~ : ReferenceStyle, span~ : Span)
   HtmlInline(html~ : String, span~ : Span)
   FootnoteReference(label~ : String, span~ : Span)
 }
@@ -164,6 +188,11 @@ pub(all) struct ListItem {
   span : Span
 }
 
+pub(all) struct MarkdownAttribute {
+  name : String
+  value : String
+} derive(Eq, @debug.Debug)
+
 pub(all) enum OrderedDelimiter {
   Dot
   Paren
@@ -175,11 +204,19 @@ pub(all) struct ParseResult {
   definitions : Array[LinkDefinition]
 }
 
+pub(all) enum ReferenceStyle {
+  Full
+  Collapsed
+  Shortcut
+} derive(Eq, @debug.Debug)
+
 pub struct RenderOptions {
   code_highlighter : ((CodeBlockInfo, String) -> String)?
+  math_block_renderer : ((String) -> String)?
 }
 pub fn RenderOptions::default() -> Self
 pub fn RenderOptions::with_highlighter((CodeBlockInfo, String) -> String) -> Self
+pub fn RenderOptions::with_math_block_renderer(Self, (String) -> String) -> Self
 pub fn RenderOptions::with_simple_highlighter((String, String) -> String) -> Self
 
 pub(all) struct Scanner {

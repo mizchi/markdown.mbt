@@ -59,28 +59,31 @@ fn is_custom_element_tag(tag : String) -> Bool {
 /// The tags whose blocks run until a matching closing tag (condition 1).
 let html_raw_text_tags : Array[String] = ["script", "pre", "style", "textarea"]
 
-///|
-fn matches_at_ignore_case(text : String, start : Int, needle : String) -> Bool {
-  let n = needle.length()
-  if start + n > text.length() {
-    return false
-  }
-  text.unsafe_substring(start~, end=start + n)[:].equal_ignore_ascii_case(
-    needle[:],
-  )
-}
+///| Find a `</tag>` raw-text closer at or after `start`.
 
 ///|
-fn contains_from(text : String, start : Int, needle : String) -> Bool {
-  let limit = text.length() - needle.length()
-  let mut i = start
-  while i <= limit {
-    if matches_at_ignore_case(text, i, needle) {
-      return true
+/// SIMD finds sparse `<` candidates; scalar case-insensitive comparison only
+/// runs at those positions. No substring is materialized while scanning.
+fn find_html_raw_text_closer(text : String, start : Int, tag : String) -> Int? {
+  let text_len = text.length()
+  let needle = "</" + tag + ">"
+  let needle_len = needle.length()
+  guard start >= 0 && start <= text_len else { return None }
+  let mut search_from = start
+  while search_from + needle_len <= text_len {
+    match find_exact_from(text, search_from, "<") {
+      Some(candidate) => {
+        guard candidate + needle_len <= text_len else { return None }
+        let candidate_view = text[candidate:candidate + needle_len]
+        if candidate_view.equal_ignore_ascii_case(needle[:]) {
+          return Some(candidate)
+        }
+        search_from = candidate + 1
+      }
+      None => return None
     }
-    i = i + 1
   }
-  false
+  None
 }
 
 ///|
@@ -108,14 +111,14 @@ fn BlockParser::try_html_block_start(
   let line = self.line
   let start = self.next_nonspace
   let kind = html_block_kind(line, start, container)
-  guard kind > 0 else { return None }
+  guard kind != HtmlBlockKind::None else { return None }
   let node = self.add_child(
     container,
     NodeKind::HtmlBlockNode,
     self.line_start + start,
   )
   node.html_kind = kind
-  if kind == 1 {
+  if kind == HtmlBlockKind::RawText {
     // A raw text block runs until its own closing tag, so remember which.
     node.info = raw_text_tag(line, start)
   }
@@ -138,22 +141,26 @@ fn raw_text_tag(line : String, start : Int) -> String {
 }
 
 ///|
-fn html_block_kind(line : String, start : Int, container : Node) -> Int {
+fn html_block_kind(
+  line : String,
+  start : Int,
+  container : Node,
+) -> HtmlBlockKind {
   let len = line.length()
   // 2: comment, 3: processing instruction, 4: declaration, 5: CDATA
   if matches_at(line, start, "<!--") {
-    return 2
+    return HtmlBlockKind::Comment
   }
   if matches_at(line, start, "<?") {
-    return 3
+    return HtmlBlockKind::ProcessingInstruction
   }
   if matches_at(line, start, "<![CDATA[") {
-    return 5
+    return HtmlBlockKind::Cdata
   }
   if start + 2 < len &&
     line.unsafe_get(start + 1) == '!' &&
     is_ascii_letter_unit(line.unsafe_get(start + 2)) {
-    return 4
+    return HtmlBlockKind::Declaration
   }
   let closing = start + 1 < len && line.unsafe_get(start + 1) == '/'
   let name_start = if closing { start + 2 } else { start + 1 }
@@ -166,7 +173,7 @@ fn html_block_kind(line : String, start : Int, container : Node) -> Int {
         if tag[:].equal_ignore_ascii_case(raw[:]) {
           let after = if name_end < len { line.unsafe_get(name_end) } else { 0 }
           if name_end >= len || after == '>' || is_html_space(after) {
-            return 1
+            return HtmlBlockKind::RawText
           }
         }
       }
@@ -174,23 +181,23 @@ fn html_block_kind(line : String, start : Int, container : Node) -> Int {
     // 6: known block-level tags
     if is_html_block_tag(tag) {
       if name_end >= len {
-        return 6
+        return HtmlBlockKind::BlockTag
       }
       let after = line.unsafe_get(name_end)
       if is_html_space(after) || after == '>' {
-        return 6
+        return HtmlBlockKind::BlockTag
       }
       if after == '/' &&
         name_end + 1 < len &&
         line.unsafe_get(name_end + 1) == '>' {
-        return 6
+        return HtmlBlockKind::BlockTag
       }
     }
   }
   // 7: any other complete tag alone on its line; it may not interrupt a
   // paragraph.
   if container.kind == NodeKind::ParagraphNode {
-    return 0
+    return HtmlBlockKind::None
   }
   match scan_complete_tag(line, start) {
     Some(after) => {
@@ -199,11 +206,11 @@ fn html_block_kind(line : String, start : Int, container : Node) -> Int {
         i = i + 1
       }
       if i >= len {
-        return 7
+        return HtmlBlockKind::CompleteTag
       }
-      0
+      HtmlBlockKind::None
     }
-    None => 0
+    None => HtmlBlockKind::None
   }
 }
 
@@ -233,11 +240,14 @@ fn BlockParser::html_block_ends(self : BlockParser, node : Node) -> Bool {
     0
   }
   match node.html_kind {
-    1 => contains_from(line, from, "</" + node.info + ">")
-    2 => contains_from(line, from, "-->")
-    3 => contains_from(line, from, "?>")
-    4 => contains_from(line, from, ">")
-    5 => contains_from(line, from, "]]>")
+    HtmlBlockKind::RawText =>
+      find_html_raw_text_closer(line, from, node.info) is Some(_)
+    HtmlBlockKind::Comment => find_exact_end_from(line, from, "-->") is Some(_)
+    HtmlBlockKind::ProcessingInstruction =>
+      find_exact_end_from(line, from, "?>") is Some(_)
+    HtmlBlockKind::Declaration =>
+      find_exact_end_from(line, from, ">") is Some(_)
+    HtmlBlockKind::Cdata => find_exact_end_from(line, from, "]]>") is Some(_)
     _ => false
   }
 }

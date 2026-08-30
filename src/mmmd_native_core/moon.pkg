@@ -1,0 +1,5 @@
+supported_targets = "native"
+
+import {
+  "mizchi/markdown",
+}

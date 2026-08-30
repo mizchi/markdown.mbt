@@ -50,12 +50,35 @@ priv enum NodeKind {
   HeadingNode
   ThematicBreakNode
   FencedCodeNode
+  MathBlockNode
+  DirectiveNode
   IndentedCodeNode
   HtmlBlockNode
   TableNode
   FootnoteDefNode
   BlankLinesNode
 } derive(Eq)
+
+///|
+/// CommonMark's seven HTML block start conditions.
+priv enum HtmlBlockKind {
+  None
+  RawText
+  Comment
+  ProcessingInstruction
+  Declaration
+  Cdata
+  BlockTag
+  CompleteTag
+} derive(Eq)
+
+///|
+fn HtmlBlockKind::ends_on_blank_line(self : HtmlBlockKind) -> Bool {
+  match self {
+    HtmlBlockKind::BlockTag | HtmlBlockKind::CompleteTag => true
+    _ => false
+  }
+}
 
 ///|
 /// A block under construction.
@@ -82,7 +105,7 @@ priv struct Node {
   mut info : String
   /// Set while a fenced code block's info-string line has yet to be skipped.
   mut info_pending : Bool
-  mut html_kind : Int
+  mut html_kind : HtmlBlockKind
   mut ordered : Bool
   mut list_start : Int
   mut delim : Char
@@ -115,7 +138,7 @@ fn Node::new(kind : NodeKind, start : Int) -> Node {
     fence_indent: 0,
     info: "",
     info_pending: false,
-    html_kind: 0,
+    html_kind: HtmlBlockKind::None,
     ordered: false,
     list_start: 1,
     delim: '.',
@@ -266,25 +289,6 @@ fn is_space_or_tab(c : UInt16) -> Bool {
 }
 
 ///|
-/// Whether the rest of the line holds an unescaped `|`, which is what makes it
-/// a table row.
-fn BlockParser::line_has_cell_separator(self : BlockParser) -> Bool {
-  let mut i = self.next_nonspace
-  while i < self.line_len {
-    let c = self.line.unsafe_get(i)
-    if c == '\\' {
-      i = i + 2
-      continue
-    }
-    if c == '|' {
-      return true
-    }
-    i = i + 1
-  }
-  false
-}
-
-///|
 /// Move `count` characters (or columns, when `columns` is set) forward,
 /// expanding tabs to the next tab stop.
 fn BlockParser::advance_offset(
@@ -376,8 +380,10 @@ fn BlockParser::rest_of_line(self : BlockParser) -> String {
 ///|
 fn can_contain(parent : NodeKind, child : NodeKind) -> Bool {
   match parent {
-    NodeKind::DocNode | NodeKind::BlockQuoteNode | NodeKind::FootnoteDefNode =>
-      child != NodeKind::ItemNode
+    NodeKind::DocNode
+    | NodeKind::BlockQuoteNode
+    | NodeKind::DirectiveNode
+    | NodeKind::FootnoteDefNode => child != NodeKind::ItemNode
     NodeKind::ItemNode => child != NodeKind::ItemNode
     NodeKind::ListNode => child == NodeKind::ItemNode
     _ => false
@@ -390,6 +396,7 @@ fn accepts_lines(kind : NodeKind) -> Bool {
   kind == NodeKind::ParagraphNode ||
   kind == NodeKind::HeadingNode ||
   kind == NodeKind::FencedCodeNode ||
+  kind == NodeKind::MathBlockNode ||
   kind == NodeKind::IndentedCodeNode ||
   kind == NodeKind::HtmlBlockNode ||
   kind == NodeKind::TableNode
@@ -469,6 +476,7 @@ fn BlockParser::parse_document(self : BlockParser) -> ParseResult {
   )
   let children = self.to_blocks(self.doc.children)
   self.resolve_inlines()
+  let children = recognize_attributes(recognize_alerts(children))
   let document = Document::{
     frontmatter,
     children,
@@ -479,17 +487,366 @@ fn BlockParser::parse_document(self : BlockParser) -> ParseResult {
 }
 
 ///|
+/// Attach standalone attribute-list paragraphs to the preceding block.
+fn recognize_attributes(blocks : Array[Block]) -> Array[Block] {
+  let result : Array[Block] = []
+  for block in blocks {
+    match attributes_from_block(block) {
+      Some((attributes, attr_span)) => {
+        let blanks : Array[Block] = []
+        while result.last() is Some(Block::BlankLines(..)) {
+          match result.pop() {
+            Some(blank) => blanks.push(blank)
+            None => ()
+          }
+        }
+        match result.pop() {
+          Some(previous) => {
+            let span = Span::new(
+              previous.get_span_internal().from,
+              attr_span.to,
+            )
+            result.push(Block::Attributed(block=previous, attributes~, span~))
+          }
+          None => {
+            for i = blanks.length() - 1; i >= 0; i = i - 1 {
+              result.push(blanks[i])
+            }
+            result.push(block)
+          }
+        }
+      }
+      None => result.push(recognize_attributes_in_block(block))
+    }
+  }
+  result
+}
+
+///|
+/// Recurse through block containers before looking for attached attributes.
+fn recognize_attributes_in_block(block : Block) -> Block {
+  match block {
+    Block::Blockquote(children~, span~, leading_trivia~, trailing_trivia~) =>
+      Block::Blockquote(
+        children=recognize_attributes(children),
+        span~,
+        leading_trivia~,
+        trailing_trivia~,
+      )
+    Block::Alert(kind~, children~, span~, leading_trivia~, trailing_trivia~) =>
+      Block::Alert(
+        kind~,
+        children=recognize_attributes(children),
+        span~,
+        leading_trivia~,
+        trailing_trivia~,
+      )
+    Block::Directive(
+      name~,
+      meta~,
+      children~,
+      fence_length~,
+      span~,
+      leading_trivia~,
+      trailing_trivia~
+    ) =>
+      Block::Directive(
+        name~,
+        meta~,
+        children=recognize_attributes(children),
+        fence_length~,
+        span~,
+        leading_trivia~,
+        trailing_trivia~,
+      )
+    Block::FootnoteDefinition(
+      label~,
+      children~,
+      span~,
+      leading_trivia~,
+      trailing_trivia~
+    ) =>
+      Block::FootnoteDefinition(
+        label~,
+        children=recognize_attributes(children),
+        span~,
+        leading_trivia~,
+        trailing_trivia~,
+      )
+    Block::BulletList(
+      marker~,
+      tight~,
+      items~,
+      span~,
+      leading_trivia~,
+      trailing_trivia~
+    ) => {
+      let nested : Array[ListItem] = []
+      for item in items {
+        nested.push({ ..item, children: recognize_attributes(item.children) })
+      }
+      Block::BulletList(
+        marker~,
+        tight~,
+        items=nested,
+        span~,
+        leading_trivia~,
+        trailing_trivia~,
+      )
+    }
+    Block::OrderedList(
+      start~,
+      delimiter~,
+      tight~,
+      items~,
+      span~,
+      leading_trivia~,
+      trailing_trivia~
+    ) => {
+      let nested : Array[ListItem] = []
+      for item in items {
+        nested.push({ ..item, children: recognize_attributes(item.children) })
+      }
+      Block::OrderedList(
+        start~,
+        delimiter~,
+        tight~,
+        items=nested,
+        span~,
+        leading_trivia~,
+        trailing_trivia~,
+      )
+    }
+    _ => block
+  }
+}
+
+///|
+/// Extract attributes only from a paragraph consisting of one text node.
+fn attributes_from_block(block : Block) -> (Array[MarkdownAttribute], Span)? {
+  guard block is Block::Paragraph(children~, span~, ..) else { return None }
+  guard children.length() == 1 else { return None }
+  guard children[0] is Inline::Text(content~, ..) else { return None }
+  match parse_markdown_attributes(content) {
+    Some(attributes) => Some((attributes, span))
+    None => None
+  }
+}
+
+///|
+/// Internal span accessor used before incremental.mbt's public helper scope.
+fn Block::get_span_internal(self : Block) -> Span {
+  match self {
+    Block::ThematicBreak(span~, ..)
+    | Block::Heading(span~, ..)
+    | Block::Paragraph(span~, ..)
+    | Block::FencedCode(span~, ..)
+    | Block::MathBlock(span~, ..)
+    | Block::Directive(span~, ..)
+    | Block::DefinitionList(span~, ..)
+    | Block::Attributed(span~, ..)
+    | Block::IndentedCode(span~, ..)
+    | Block::Blockquote(span~, ..)
+    | Block::Alert(span~, ..)
+    | Block::BulletList(span~, ..)
+    | Block::OrderedList(span~, ..)
+    | Block::HtmlBlock(span~, ..)
+    | Block::Table(span~, ..)
+    | Block::BlankLines(span~, ..)
+    | Block::FootnoteDefinition(span~, ..) => span
+  }
+}
+
+///|
+/// Parse the marker used by GitHub alert blockquotes.
+fn alert_kind_from_marker(marker : String) -> AlertKind? {
+  match marker.to_lower() {
+    "[!note]" => Some(AlertKind::Note)
+    "[!tip]" => Some(AlertKind::Tip)
+    "[!important]" => Some(AlertKind::Important)
+    "[!warning]" => Some(AlertKind::Warning)
+    "[!caution]" => Some(AlertKind::Caution)
+    _ => None
+  }
+}
+
+///|
+/// Turn the GitHub alert blockquote convention into a semantic CST node.
+fn recognize_alerts(blocks : Array[Block]) -> Array[Block] {
+  let result : Array[Block] = []
+  for block in blocks {
+    match block {
+      Block::Blockquote(children~, span~, leading_trivia~, trailing_trivia~) => {
+        let nested = recognize_alerts(children)
+        match extract_alert(nested) {
+          Some((kind, body)) =>
+            result.push(
+              Block::Alert(
+                kind~,
+                children=body,
+                span~,
+                leading_trivia~,
+                trailing_trivia~,
+              ),
+            )
+          None =>
+            result.push(
+              Block::Blockquote(
+                children=nested,
+                span~,
+                leading_trivia~,
+                trailing_trivia~,
+              ),
+            )
+        }
+      }
+      Block::Alert(kind~, children~, span~, leading_trivia~, trailing_trivia~) =>
+        result.push(
+          Block::Alert(
+            kind~,
+            children=recognize_alerts(children),
+            span~,
+            leading_trivia~,
+            trailing_trivia~,
+          ),
+        )
+      Block::Directive(
+        name~,
+        meta~,
+        children~,
+        fence_length~,
+        span~,
+        leading_trivia~,
+        trailing_trivia~
+      ) =>
+        result.push(
+          Block::Directive(
+            name~,
+            meta~,
+            children=recognize_alerts(children),
+            fence_length~,
+            span~,
+            leading_trivia~,
+            trailing_trivia~,
+          ),
+        )
+      Block::FootnoteDefinition(
+        label~,
+        children~,
+        span~,
+        leading_trivia~,
+        trailing_trivia~
+      ) =>
+        result.push(
+          Block::FootnoteDefinition(
+            label~,
+            children=recognize_alerts(children),
+            span~,
+            leading_trivia~,
+            trailing_trivia~,
+          ),
+        )
+      Block::BulletList(
+        marker~,
+        tight~,
+        items~,
+        span~,
+        leading_trivia~,
+        trailing_trivia~
+      ) => {
+        let nested : Array[ListItem] = []
+        for item in items {
+          nested.push({ ..item, children: recognize_alerts(item.children) })
+        }
+        result.push(
+          Block::BulletList(
+            marker~,
+            tight~,
+            items=nested,
+            span~,
+            leading_trivia~,
+            trailing_trivia~,
+          ),
+        )
+      }
+      Block::OrderedList(
+        start~,
+        delimiter~,
+        tight~,
+        items~,
+        span~,
+        leading_trivia~,
+        trailing_trivia~
+      ) => {
+        let nested : Array[ListItem] = []
+        for item in items {
+          nested.push({ ..item, children: recognize_alerts(item.children) })
+        }
+        result.push(
+          Block::OrderedList(
+            start~,
+            delimiter~,
+            tight~,
+            items=nested,
+            span~,
+            leading_trivia~,
+            trailing_trivia~,
+          ),
+        )
+      }
+      _ => result.push(block)
+    }
+  }
+  result
+}
+
+///|
+/// Remove an alert marker from the first paragraph and return its body.
+fn extract_alert(children : Array[Block]) -> (AlertKind, Array[Block])? {
+  guard children.length() > 0 else { return None }
+  guard children[0]
+    is Block::Paragraph(
+      children=inlines,
+      span~,
+      leading_trivia~,
+      trailing_trivia~
+    ) else {
+    return None
+  }
+  guard inlines.length() > 0 else { return None }
+  guard inlines[0] is Inline::Text(content=marker, ..) else { return None }
+  guard alert_kind_from_marker(marker) is Some(kind) else { return None }
+  let body : Array[Block] = []
+  let block_start = 1
+  if inlines.length() >= 2 && inlines[1] is Inline::SoftBreak(..) {
+    let rest : Array[Inline] = []
+    for i = 2; i < inlines.length(); i = i + 1 {
+      rest.push(inlines[i])
+    }
+    if !rest.is_empty() {
+      body.push(
+        Block::Paragraph(
+          children=rest,
+          span~,
+          leading_trivia~,
+          trailing_trivia~,
+        ),
+      )
+    }
+  } else if inlines.length() != 1 {
+    return None
+  }
+  for i = block_start; i < children.length(); i = i + 1 {
+    body.push(children[i])
+  }
+  Some((kind, body))
+}
+
+///|
 /// Read the line starting at `pos`, returning its text (without the line
 /// ending) and the offset of the next line.
 fn BlockParser::read_line(self : BlockParser, pos : Int) -> (String, Int) {
-  let mut i = pos
-  while i < self.len {
-    let c = self.source.unsafe_get(i)
-    if c == '\n' || c == '\r' {
-      break
-    }
-    i = i + 1
-  }
+  let i = find_line_end(self.source, pos, self.len)
   let text = self.source.unsafe_substring(start=pos, end=i)
   let mut next = i
   if next < self.len {
@@ -597,15 +954,25 @@ fn BlockParser::check_open_blocks(self : BlockParser) -> (Node, Bool, Bool) {
             i = i - 1
           }
         }
+      NodeKind::MathBlockNode =>
+        if self.indent <= 3 && self.scan_close_math_fence(container) {
+          let _ = self.close(container)
+          return (container, false, true)
+        }
+      NodeKind::DirectiveNode =>
+        if self.indent <= 3 && self.scan_close_directive_fence(container) {
+          let _ = self.close(container)
+          return (container, false, true)
+        }
       NodeKind::HtmlBlockNode =>
-        if self.blank && container.html_kind >= 6 {
+        if self.blank && container.html_kind.ends_on_blank_line() {
           all_matched = false
         }
       NodeKind::ParagraphNode => if self.blank { all_matched = false }
       NodeKind::TableNode =>
-        // Only a line that still looks like a row keeps the table open;
-        // anything else has to be reconsidered as ordinary block content.
-        if self.blank || !self.line_has_cell_separator() {
+        // A body row may omit pipes; a blank line or a newly opened block
+        // closes the table, as required by GFM.
+        if self.blank {
           all_matched = false
         }
       NodeKind::HeadingNode | NodeKind::ThematicBreakNode => all_matched = false
@@ -632,6 +999,7 @@ fn BlockParser::open_new_blocks(
   let mut container = last_matched
   let mut maybe_lazy = self.tip.kind == NodeKind::ParagraphNode
   while container.kind != NodeKind::FencedCodeNode &&
+        container.kind != NodeKind::MathBlockNode &&
         container.kind != NodeKind::HtmlBlockNode &&
         container.kind != NodeKind::IndentedCodeNode {
     self.find_next_nonspace()
@@ -646,6 +1014,10 @@ fn BlockParser::open_new_blocks(
     } else if !indented && self.try_atx_heading(container) is Some(node) {
       container = node
     } else if !indented && self.try_open_code_fence(container) is Some(node) {
+      container = node
+    } else if !indented && self.try_open_math_block(container) is Some(node) {
+      container = node
+    } else if !indented && self.try_open_directive(container) is Some(node) {
       container = node
     } else if !indented && self.try_html_block_start(container) is Some(node) {
       container = node
@@ -705,6 +1077,7 @@ fn BlockParser::add_text(
     container.kind == NodeKind::HeadingNode ||
     container.kind == NodeKind::ThematicBreakNode ||
     container.kind == NodeKind::FencedCodeNode ||
+    container.kind == NodeKind::MathBlockNode ||
     (
       container.kind == NodeKind::ItemNode &&
       container.children.is_empty() &&
@@ -976,6 +1349,10 @@ fn BlockParser::to_block(self : BlockParser, node : Node) -> Block? {
       if is_blank_text(content) {
         return None
       }
+      match self.try_definition_list(content, span) {
+        Some(list) => return Some(list)
+        None => ()
+      }
       Some(
         Block::Paragraph(
           children=self.parse_inline_content(content),
@@ -1025,6 +1402,28 @@ fn BlockParser::to_block(self : BlockParser, node : Node) -> Block? {
           info=node.info,
           code=code_lines(node),
           indent=node.fence_indent,
+          span~,
+          leading_trivia=empty,
+          trailing_trivia=empty,
+        ),
+      )
+    NodeKind::MathBlockNode =>
+      Some(
+        Block::MathBlock(
+          value=code_lines(node),
+          fence_length=node.fence_length,
+          span~,
+          leading_trivia=empty,
+          trailing_trivia=empty,
+        ),
+      )
+    NodeKind::DirectiveNode =>
+      Some(
+        Block::Directive(
+          name=node.label,
+          meta=node.info,
+          children=self.to_blocks(node.children),
+          fence_length=node.fence_length,
           span~,
           leading_trivia=empty,
           trailing_trivia=empty,
@@ -1114,6 +1513,53 @@ fn BlockParser::to_block(self : BlockParser, node : Node) -> Block? {
     }
     _ => None
   }
+}
+
+///|
+/// Recognize the compact definition-list extension inside one paragraph.
+fn BlockParser::try_definition_list(
+  self : BlockParser,
+  content : String,
+  span : Span,
+) -> Block? {
+  let lines : Array[String] = []
+  for line in content.split("\n") {
+    lines.push(line.to_owned())
+  }
+  guard lines.length() >= 2 else { return None }
+  let items : Array[DefinitionItem] = []
+  let mut i = 0
+  while i < lines.length() {
+    let term = lines[i].trim(chars=" \t\r").to_owned()
+    guard !term.is_empty() && !term.has_prefix(":") else { return None }
+    i = i + 1
+    let definitions : Array[Array[Inline]] = []
+    while i < lines.length() {
+      let line = lines[i].trim(chars=" \t\r").to_owned()
+      if !line.has_prefix(":") {
+        break
+      }
+      guard line.length() == 1 || is_space_or_tab(line.unsafe_get(1)) else {
+        return None
+      }
+      let definition = line
+        .unsafe_substring(start=1, end=line.length())
+        .trim(chars=" \t")
+        .to_owned()
+      definitions.push(self.parse_inline_content(definition))
+      i = i + 1
+    }
+    guard !definitions.is_empty() else { return None }
+    items.push({ term: self.parse_inline_content(term), definitions })
+  }
+  Some(
+    Block::DefinitionList(
+      items~,
+      span~,
+      leading_trivia=Trivia::empty(),
+      trailing_trivia=Trivia::empty(),
+    ),
+  )
 }
 
 // =============================================================================

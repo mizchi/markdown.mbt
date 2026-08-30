@@ -59,6 +59,30 @@ let medium_doc : String = generate_sample_markdown(20)
 let large_doc : String = generate_sample_markdown(100)
 
 ///|
+/// Long prose lines exercise the block scanner's SIMD fast path.
+let long_line_doc : String = {
+  let buf = StringBuilder()
+  for _ in 0..<32 {
+    buf.write_string("ordinary prose without a line ending ".repeat(64))
+    buf.write_string("\n\n")
+  }
+  buf.to_string()
+}
+
+///|
+/// Long code lines isolate block scanning because they skip inline parsing.
+let long_code_doc : String = {
+  let buf = StringBuilder()
+  buf.write_string("```text\n")
+  for _ in 0..<32 {
+    buf.write_string("code bytes without a line ending ".repeat(64))
+    buf.write_char('\n')
+  }
+  buf.write_string("```\n")
+  buf.to_string()
+}
+
+///|
 test "parse: small document (5 sections)" (b : @bench.T) {
   b.bench(fn() {
     let result = parse(small_doc)
@@ -78,6 +102,22 @@ test "parse: medium document (20 sections)" (b : @bench.T) {
 test "parse: large document (100 sections)" (b : @bench.T) {
   b.bench(fn() {
     let result = parse(large_doc)
+    b.keep(result)
+  })
+}
+
+///|
+test "parse: 32 long prose lines" (b : @bench.T) {
+  b.bench(fn() {
+    let result = parse(long_line_doc)
+    b.keep(result)
+  })
+}
+
+///|
+test "parse: fenced code with 32 long lines" (b : @bench.T) {
+  b.bench(fn() {
+    let result = parse(long_code_doc)
     b.keep(result)
   })
 }

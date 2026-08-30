@@ -808,6 +808,7 @@ fn MultiPassParser::parse_ref_link(
   let inline = @markdown.Inline::RefLink(
     children~,
     label~,
+    style=@markdown.ReferenceStyle::Full,
     span=@markdown.Span::new(link_start, pos),
   )
   Some((inline, pos))
@@ -1005,6 +1006,7 @@ fn MultiPassParser::parse_ref_image(
   let inline = @markdown.Inline::RefImage(
     alt~,
     label~,
+    style=@markdown.ReferenceStyle::Full,
     span=@markdown.Span::new(image_start, pos),
   )
   Some((inline, pos))

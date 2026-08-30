@@ -3,6 +3,7 @@ target
 node_modules/
 src/cmark_tests/
 src/gfm_tests/
+src/gfm_html_tests/
 src/spec_tests/
 playground/dist/
 .claude/settings.local.json

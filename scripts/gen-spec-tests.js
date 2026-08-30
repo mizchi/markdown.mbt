@@ -72,10 +72,10 @@ const HELPER = `///| CommonMark ${SPEC_VERSION} conformance tests.
 
 ///|
 /// Assert that rendering \`input\` produces exactly the HTML the CommonMark spec
-/// prescribes. Bare-URL autolinking is a GFM extension, so it is turned off
-/// here to keep the comparison to plain CommonMark.
+/// prescribes. Bare-URL autolinking and tagfilter are GFM extensions, so they
+/// are turned off here to keep the comparison to plain CommonMark.
 pub fn assert_spec(input : String, expected : String) -> Unit {
-  let actual = @markdown.md_to_html(input, autolink=false)
+  let actual = @markdown.md_to_html(input, autolink=false, tagfilter=false)
   if actual != expected {
     println("=== input ===")
     println(input)

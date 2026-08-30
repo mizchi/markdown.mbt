@@ -69,6 +69,7 @@ fn append_inline_text(inline : @md.Inline, buf : StringBuilder) -> Unit {
   match inline {
     @md.Inline::Text(content~, ..) | @md.Inline::Code(content~, ..) =>
       buf.write_string(content)
+    @md.Inline::Directive(label~, ..) => buf.write_string(label)
     @md.Inline::SoftBreak(..) => buf.write_string(" ")
     @md.Inline::HardBreak(..) => buf.write_string("\n")
     @md.Inline::Emphasis(children~, ..)

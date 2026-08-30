@@ -21,6 +21,7 @@ const noSkip = process.argv.includes('--no-skip');
 
 const SPEC_URL = 'https://raw.githubusercontent.com/github/cmark-gfm/master/test/spec.txt';
 const OUTPUT_DIR = path.join(__dirname, '../src/gfm_tests');
+const HTML_OUTPUT_DIR = path.join(__dirname, '../src/gfm_html_tests');
 
 // GFM extension sections to include
 const GFM_EXTENSION_SECTIONS = [
@@ -35,21 +36,8 @@ const GFM_EXTENSION_SECTIONS = [
 // Generated from actual test failures
 const SKIP_TESTS = {
   'Tables (extension)': {
-    reason: 'Table edge case',
-    examples: [199, 200, 202, 203, 204],  // 198, 201, 205 pass
-  },
-  'Strikethrough (extension)': {
-    reason: 'Strikethrough edge case',
-    examples: [492],  // 491 passes
-  },
-  'Autolinks (extension)': {
-    reason: 'Extended autolink not implemented',
-    examples: [621, 622, 623, 624, 625, 626, 627, 628, 629, 630, 631],
-  },
-  // Task list items: All tests pass (279, 280)
-  'Disallowed Raw HTML (extension)': {
-    reason: 'HTML filtering not implemented',
-    examples: [652],
+    reason: 'remark preserves an overflow cell that official GFM ignores',
+    examples: [204],
   },
 };
 
@@ -167,20 +155,35 @@ async function main() {
     bySection.get(test.section).push(test);
   }
 
-  // Create output directory
-  if (!fs.existsSync(OUTPUT_DIR)) {
-    fs.mkdirSync(OUTPUT_DIR, { recursive: true });
+  // Create output directories
+  for (const outputDir of [OUTPUT_DIR, HTML_OUTPUT_DIR]) {
+    if (!fs.existsSync(outputDir)) {
+      fs.mkdirSync(outputDir, { recursive: true });
+    }
   }
 
-  // Generate moon.pkg.json
-  const pkgJson = {
-    supported_targets: 'js',
-    'test-import': ['mizchi/markdown'],
-  };
-  fs.writeFileSync(
-    path.join(OUTPUT_DIR, 'moon.pkg.json'),
-    JSON.stringify(pkgJson, null, 2) + '\n'
-  );
+  // Generate the current MoonBit package format and remove the deprecated one.
+  const pkg = `import {
+  "mizchi/markdown",
+} for "test"
+
+options(
+  supported_targets: "js",
+)
+`;
+  fs.writeFileSync(path.join(OUTPUT_DIR, 'moon.pkg'), pkg);
+  fs.rmSync(path.join(OUTPUT_DIR, 'moon.pkg.json'), { force: true });
+
+  const htmlPkg = `import {
+  "mizchi/markdown",
+} for "test"
+
+options(
+  supported_targets: "js+wasm",
+)
+`;
+  fs.writeFileSync(path.join(HTML_OUTPUT_DIR, 'moon.pkg'), htmlPkg);
+  fs.rmSync(path.join(HTML_OUTPUT_DIR, 'moon.pkg.json'), { force: true });
 
   // Generate ffi.mbt
   const ffiContent = `///| FFI bindings for remark compatibility testing
@@ -271,14 +274,24 @@ pub fn assert_gfm_compat(input : String, example : Int) -> Unit {
 
     fs.writeFileSync(path.join(OUTPUT_DIR, fileName), content);
     console.log(`Generated ${fileName} with ${tests.length} tests`);
+
+    let htmlContent = `///| GFM HTML spec tests: ${section}\n\n`;
+    for (const test of tests) {
+      htmlContent += `test "gfm html example ${test.example}: ${section}" {\n`;
+      htmlContent += `  inspect(@markdown.md_to_html("${escapeString(test.markdown)}"), content="${escapeString(test.html)}")\n`;
+      htmlContent += `}\n\n`;
+    }
+    fs.writeFileSync(path.join(HTML_OUTPUT_DIR, fileName), htmlContent);
   }
 
   console.log(`\nTotal: ${totalTests} GFM extension tests generated in ${OUTPUT_DIR}`);
+  console.log(`Official HTML expectations generated in ${HTML_OUTPUT_DIR}`);
   if (noSkip) {
     console.log('\n⚠️  Generated with --no-skip: all tests will run without skip annotations');
     console.log('   Remember to regenerate without --no-skip after checking!');
   }
   console.log('\nRun tests with: moon test --target js src/gfm_tests');
+  console.log('Official HTML gate: moon test --target js src/gfm_html_tests');
 }
 
 main().catch(console.error);

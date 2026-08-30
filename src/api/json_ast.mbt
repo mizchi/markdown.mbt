@@ -36,6 +36,15 @@ fn position_to_json(span : @markdown.Span) -> Json {
 }
 
 ///|
+fn reference_style_to_json(style : @markdown.ReferenceStyle) -> Json {
+  match style {
+    Full => "full".to_json()
+    Collapsed => "collapsed".to_json()
+    Shortcut => "shortcut".to_json()
+  }
+}
+
+///|
 /// Convert Block to mdast JSON (returns None for skipped nodes like BlankLines)
 fn block_to_json(block : @markdown.Block) -> Json? {
   match block {
@@ -79,6 +88,78 @@ fn block_to_json(block : @markdown.Block) -> Json? {
         "position": position_to_json(span),
       })
     }
+    @markdown.Block::MathBlock(value~, span~, ..) =>
+      Some({
+        "type": "math",
+        "value": value.to_json(),
+        "position": position_to_json(span),
+      })
+    @markdown.Block::Directive(name~, meta~, children~, span~, ..) => {
+      let blocks : Array[Json] = []
+      for child in children {
+        match block_to_json(child) {
+          Some(json) => blocks.push(json)
+          None => ()
+        }
+      }
+      Some({
+        "type": "containerDirective",
+        "name": name.to_json(),
+        "meta": meta.to_json(),
+        "children": Json::array(blocks),
+        "position": position_to_json(span),
+      })
+    }
+    @markdown.Block::DefinitionList(items~, span~, ..) => {
+      let json_items : Array[Json] = []
+      for item in items {
+        let term : Array[Json] = []
+        for inline in item.term {
+          match inline_to_json(inline) {
+            Some(json) => term.push(json)
+            None => ()
+          }
+        }
+        let definitions : Array[Json] = []
+        for definition in item.definitions {
+          let inlines : Array[Json] = []
+          for inline in definition {
+            match inline_to_json(inline) {
+              Some(json) => inlines.push(json)
+              None => ()
+            }
+          }
+          definitions.push(Json::array(inlines))
+        }
+        json_items.push({
+          "term": Json::array(term),
+          "definitions": Json::array(definitions),
+        })
+      }
+      Some({
+        "type": "definitionList",
+        "items": Json::array(json_items),
+        "position": position_to_json(span),
+      })
+    }
+    @markdown.Block::Attributed(block~, attributes~, span~) => {
+      let attrs : Array[Json] = []
+      for attribute in attributes {
+        attrs.push({
+          "name": attribute.name.to_json(),
+          "value": attribute.value.to_json(),
+        })
+      }
+      Some({
+        "type": "attributed",
+        "attributes": Json::array(attrs),
+        "child": match block_to_json(block) {
+          Some(json) => json
+          None => Json::null()
+        },
+        "position": position_to_json(span),
+      })
+    }
     @markdown.Block::IndentedCode(code~, span~, ..) =>
       Some({
         "type": "code",
@@ -97,6 +178,21 @@ fn block_to_json(block : @markdown.Block) -> Json? {
       }
       Some({
         "type": "blockquote",
+        "children": Json::array(blocks),
+        "position": position_to_json(span),
+      })
+    }
+    @markdown.Block::Alert(kind~, children~, span~, ..) => {
+      let blocks : Array[Json] = []
+      for child in children {
+        match block_to_json(child) {
+          Some(json) => blocks.push(json)
+          None => ()
+        }
+      }
+      Some({
+        "type": "alert",
+        "kind": alert_kind_to_json(kind),
         "children": Json::array(blocks),
         "position": position_to_json(span),
       })
@@ -186,6 +282,17 @@ fn block_to_json(block : @markdown.Block) -> Json? {
         "position": position_to_json(span),
       })
     }
+  }
+}
+
+///|
+fn alert_kind_to_json(kind : @markdown.AlertKind) -> Json {
+  match kind {
+    Note => "note".to_json()
+    Tip => "tip".to_json()
+    Important => "important".to_json()
+    Warning => "warning".to_json()
+    Caution => "caution".to_json()
   }
 }
 
@@ -340,6 +447,22 @@ fn inline_to_json(inline : @markdown.Inline) -> Json? {
         "value": content.to_json(),
         "position": position_to_json(span),
       })
+    @markdown.Inline::Directive(name~, label~, attributes~, span~) => {
+      let attrs : Array[Json] = []
+      for attribute in attributes {
+        attrs.push({
+          "name": attribute.name.to_json(),
+          "value": attribute.value.to_json(),
+        })
+      }
+      Some({
+        "type": "textDirective",
+        "name": name.to_json(),
+        "label": label.to_json(),
+        "attributes": Json::array(attrs),
+        "position": position_to_json(span),
+      })
+    }
     @markdown.Inline::WikiLink(target~, label~, fragment~, span~) =>
       Some({
         "type": "wikiLink",
@@ -367,7 +490,7 @@ fn inline_to_json(inline : @markdown.Inline) -> Json? {
         "position": position_to_json(span),
       })
     }
-    @markdown.Inline::RefLink(children~, label~, span~) => {
+    @markdown.Inline::RefLink(children~, label~, style~, span~) => {
       let inlines : Array[Json] = []
       for child in children {
         match inline_to_json(child) {
@@ -379,7 +502,7 @@ fn inline_to_json(inline : @markdown.Inline) -> Json? {
         "type": "linkReference",
         "identifier": label.to_json(),
         "label": label.to_json(),
-        "referenceType": "full".to_json(),
+        "referenceType": reference_style_to_json(style),
         "children": Json::array(inlines),
         "position": position_to_json(span),
       })
@@ -406,12 +529,12 @@ fn inline_to_json(inline : @markdown.Inline) -> Json? {
         "alt": alt.to_json(),
         "position": position_to_json(span),
       })
-    @markdown.Inline::RefImage(alt~, label~, span~) =>
+    @markdown.Inline::RefImage(alt~, label~, style~, span~) =>
       Some({
         "type": "imageReference",
         "identifier": label.to_json(),
         "label": label.to_json(),
-        "referenceType": "full".to_json(),
+        "referenceType": reference_style_to_json(style),
         "alt": alt.to_json(),
         "position": position_to_json(span),
       })

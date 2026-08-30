@@ -1,5 +1,44 @@
 # Changelog
 
+## Unreleased
+
+## 0.8.1 - 2026-08-30
+
+### Breaking changes
+
+- Remove the experimental `mizchi/markdown/x/folddown` package and its JavaScript APIs, playground viewer, drift-review workflow, and sample documents.
+
+### Performance
+
+- Add SIMD CR/LF scanning for linear-memory targets.
+- Use MoonBit's optimized `StringView::find` path for long HTML block and inline terminators.
+- Add focused scanner and HTML parsing benchmarks under `just bench-simd`.
+
+### Compatibility
+
+- Add an exact official GFM HTML gate for all 24 extension examples on JavaScript and Wasm.
+- Implement GFM tagfilter, pipe-less table continuation rows, and extended autolinks.
+- Define Markdown serialization as a normalized, idempotent format and emit reference definitions in a canonical trailing section.
+- Preserve full, collapsed, and shortcut reference-link styles in the CST and JSON AST.
+- Add semantic GitHub alert blocks and rendered footnotes with stable reference/back-reference IDs.
+- Add display-math blocks with an injectable MoonBit HTML renderer boundary and an escaped default fallback.
+- Add container/text directives, definition lists, and standalone block attributes to the CST, renderer, serializer, and JSON AST.
+
+### CLI
+
+- Add the native `mmmd` command under `src/cmd/mmmd-native`.
+- Use normalized Markdown as native TUI output; Mermaid remains fenced when the JavaScript/Wasm renderer is unavailable.
+
+### Maintenance
+
+- Split stateless search primitives from the stateful scanner.
+- Replace numeric HTML block kinds with a closed enum.
+- Generate CommonMark/GFM test package manifests in the current `moon.pkg` format.
+- Correct recursively reused nested-list item and child-block spans after incremental edits.
+- Match remark's GFM table layout, escaped pipes, and literal strikethrough safety while retaining official-GFM overflow-cell semantics.
+
+---
+
 ## 2025-12-19: Unicode (non-BMP) support for Scanner
 
 **Commits:** `a616f73`, `8d99c3a`

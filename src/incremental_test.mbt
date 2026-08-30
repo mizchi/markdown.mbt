@@ -200,3 +200,53 @@ test "incremental: adding a link definition resolves reused references" {
     ),
   )
 }
+
+///|
+test "incremental: shifts reused nested list item spans" {
+  let old_source = "# A\n\n1. outer\n   - inner\n     1. deepest\n\nTail.\n"
+  let new_source = "# Longer\n\n1. outer\n   - inner\n     1. deepest\n\nTail.\n"
+  let incremental = parse_incremental(
+    parse(old_source).document,
+    old_source,
+    new_source,
+    EditInfo::replace(2, 1, 6),
+  )
+  let full = parse(new_source).document
+  guard incremental.document.children[2]
+    is Block::OrderedList(items=incremental_items, ..) else {
+    fail("expected incrementally reused ordered list")
+  }
+  guard full.children[2] is Block::OrderedList(items=full_items, ..) else {
+    fail("expected fully parsed ordered list")
+  }
+  inspect(incremental.reused_after > 0, content="true")
+  inspect(incremental_items[0].span, content=full_items[0].span.to_string())
+  guard incremental_items[0].children[1]
+    is Block::BulletList(
+      items=incremental_nested,
+      span=incremental_nested_span,
+      ..
+    ) else {
+    fail("expected incrementally reused nested list")
+  }
+  guard full_items[0].children[1]
+    is Block::BulletList(items=full_nested, span=full_nested_span, ..) else {
+    fail("expected fully parsed nested list")
+  }
+  inspect(incremental_nested_span, content=full_nested_span.to_string())
+  inspect(incremental_nested[0].span, content=full_nested[0].span.to_string())
+  guard incremental_nested[0].children[1]
+    is Block::OrderedList(
+      items=incremental_deepest,
+      span=incremental_deepest_span,
+      ..
+    ) else {
+    fail("expected incrementally reused deepest ordered list")
+  }
+  guard full_nested[0].children[1]
+    is Block::OrderedList(items=full_deepest, span=full_deepest_span, ..) else {
+    fail("expected fully parsed deepest ordered list")
+  }
+  inspect(incremental_deepest_span, content=full_deepest_span.to_string())
+  inspect(incremental_deepest[0].span, content=full_deepest[0].span.to_string())
+}

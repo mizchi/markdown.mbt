@@ -553,6 +553,16 @@ fn render_block_literal(
   opts : LiteralOpts,
 ) -> Unit {
   match block {
+    Block::Attributed(block~, attributes~, span~) => {
+      buf.write_string("<div class=\"md-attributed\"")
+      write_pos_attrs(buf, span, opts.positions)
+      buf.write_char('>')
+      render_block_literal(block, buf, opts.nested())
+      let attrs = StringBuilder()
+      serialize_attribute_list(attributes, attrs)
+      write_marker(buf, attrs.to_string())
+      buf.write_string("</div>\n")
+    }
     Block::ThematicBreak(marker~, count~, span~, ..) => {
       buf.write_string("<div role=\"separator\"")
       write_pos_attrs(buf, span, opts.positions)
@@ -560,35 +570,19 @@ fn render_block_literal(
       write_marker_repeat(buf, marker, count)
       buf.write_string("</div>\n")
     }
-    Block::Heading(level~, style~, children~, span~, ..) => {
+    Block::Heading(level~, children~, span~, ..) => {
       write_heading_open(buf, level, span, opts)
-      match style {
-        HeadingStyle::Atx =>
-          if !children.is_empty() {
-            // `## ` etc. — marker text is ASCII, no escaping needed.
-            buf.write_string("<span class=\"md-marker\" aria-hidden=\"true\">")
-            for k = 0; k < level; k = k + 1 {
-              buf.write_char('#')
-            }
-            buf.write_char(' ')
-            buf.write_string("</span>")
-            render_inlines_literal(children, buf, opts)
-          } else {
-            write_marker_repeat(buf, '#', level)
-          }
-        HeadingStyle::Setext => {
-          render_inlines_literal(children, buf, opts)
-          buf.write_char('\n')
-          let underline_char = if level == 1 { '=' } else { '-' }
-          // Match the serializer, which sizes the underline to the last line.
-          let content = StringBuilder()
-          serialize_inlines(children, content)
-          write_marker_repeat(
-            buf,
-            underline_char,
-            last_line_width(content.to_string()),
-          )
+      if !children.is_empty() {
+        // `## ` etc. — marker text is ASCII, no escaping needed.
+        buf.write_string("<span class=\"md-marker\" aria-hidden=\"true\">")
+        for k = 0; k < level; k = k + 1 {
+          buf.write_char('#')
         }
+        buf.write_char(' ')
+        buf.write_string("</span>")
+        render_inlines_literal(children, buf, opts)
+      } else {
+        write_marker_repeat(buf, '#', level)
       }
       write_heading_close(buf, level)
     }
@@ -601,6 +595,57 @@ fn render_block_literal(
     }
     Block::FencedCode(info~, code~, span~, ..) =>
       write_fenced_code(buf, code, info, span, opts)
+    Block::MathBlock(value~, span~, ..) => {
+      buf.write_string("<div class=\"md-math-block\"")
+      write_pos_attrs(buf, span, opts.positions)
+      buf.write_char('>')
+      let fence_len = math_fence_length(value)
+      let opening = StringBuilder()
+      write_chars(opening, '$', fence_len)
+      opening.write_char('\n')
+      write_marker(buf, opening.to_string())
+      escape_html_into(buf, value)
+      if !value.has_suffix("\n") {
+        buf.write_char('\n')
+      }
+      let closing = StringBuilder()
+      write_chars(closing, '$', fence_len)
+      write_marker(buf, closing.to_string())
+      buf.write_string("</div>\n")
+    }
+    Block::Directive(name~, meta~, children~, span~, ..) => {
+      buf.write_string("<div class=\"md-directive\"")
+      write_pos_attrs(buf, span, opts.positions)
+      buf.write_char('>')
+      let opening = if meta.is_empty() {
+        ":::" + name + "\n"
+      } else {
+        ":::" + name + " " + meta + "\n"
+      }
+      write_marker(buf, opening)
+      for child in children {
+        render_block_literal(child, buf, opts.nested())
+      }
+      write_marker(buf, ":::")
+      buf.write_string("</div>\n")
+    }
+    Block::DefinitionList(items~, span~, ..) => {
+      buf.write_string("<dl class=\"md-definition-list\"")
+      write_pos_attrs(buf, span, opts.positions)
+      buf.write_char('>')
+      for item in items {
+        buf.write_string("<dt>")
+        render_inlines_literal(item.term, buf, opts)
+        buf.write_string("</dt>\n")
+        for definition in item.definitions {
+          buf.write_string("<dd>")
+          write_marker(buf, ": ")
+          render_inlines_literal(definition, buf, opts)
+          buf.write_string("</dd>\n")
+        }
+      }
+      buf.write_string("</dl>\n")
+    }
     Block::IndentedCode(code~, span~, ..) =>
       // The serializer canonicalises indented code to fenced (`info=""`).
       write_fenced_code(buf, code, "", span, opts)
@@ -618,6 +663,20 @@ fn render_block_literal(
         write_blockquote_prefixed(buf, child_buf.to_string())
       }
       buf.write_string("</blockquote>")
+    }
+    Block::Alert(kind~, children~, span~, ..) => {
+      buf.write_string("<div class=\"md-alert md-alert-")
+      buf.write_string(alert_kind_slug(kind))
+      buf.write_char('"')
+      write_pos_attrs(buf, span, opts.positions)
+      buf.write_char('>')
+      write_marker(buf, "> [!" + alert_kind_slug(kind).to_upper() + "]\n")
+      for child in children {
+        let child_buf = StringBuilder()
+        render_block_literal(child, child_buf, opts.nested())
+        write_blockquote_prefixed(buf, child_buf.to_string())
+      }
+      buf.write_string("</div>")
     }
     Block::BulletList(items~, span~, ..) => {
       write_list_open(buf, "ul", items, span, opts, 1)
@@ -694,32 +753,43 @@ fn render_table_literal(
   buf : StringBuilder,
   opts : LiteralOpts,
 ) -> Unit {
+  let rendered_header = render_table_row_cells(header)
+  let rendered_rows : Array[Array[String]] = []
+  let columns = alignments.length()
+  for row in rows {
+    let rendered = render_table_row_cells(row)
+    rendered_rows.push(rendered)
+  }
+  let widths = calculate_table_widths(rendered_header, rendered_rows, columns)
   buf.write_string("<div class=\"md-table\" role=\"table\"")
   write_pos_attrs(buf, span, opts.positions)
   buf.write_char('>')
   // Header row, wrapped in a row group for AT navigation.
   buf.write_string("<div class=\"md-table-rowgroup\" role=\"rowgroup\">")
-  write_table_row_literal(header, alignments, "columnheader", buf, opts)
+  write_table_row_literal(header, alignments, widths, "columnheader", buf, opts)
   buf.write_string("</div>")
   // Separator row — purely syntactic, so the entire row is hidden from
   // AT. Visible text matches the serializer: `| :-- | --- | …`.
   buf.write_string("<div class=\"md-table-separator\" aria-hidden=\"true\">")
   write_marker(buf, "|")
-  for align in alignments {
-    let sep = match align {
-      TableAlign::Left => " :-- |"
-      TableAlign::Center => " :-: |"
-      TableAlign::Right => " --: |"
-      TableAlign::None => " --- |"
+  for i, width in widths {
+    let align = if i < alignments.length() {
+      alignments[i]
+    } else {
+      TableAlign::None
     }
-    write_marker(buf, sep)
+    let sep = StringBuilder()
+    sep.write_char(' ')
+    write_table_delimiter(align, width, sep)
+    sep.write_string(" |")
+    write_marker(buf, sep.to_string())
   }
   buf.write_char('\n')
   buf.write_string("</div>")
   if rows.length() > 0 {
     buf.write_string("<div class=\"md-table-rowgroup\" role=\"rowgroup\">")
     for row in rows {
-      write_table_row_literal(row, alignments, "cell", buf, opts)
+      write_table_row_literal(row, alignments, widths, "cell", buf, opts)
     }
     buf.write_string("</div>")
   }
@@ -735,6 +805,7 @@ fn render_table_literal(
 fn write_table_row_literal(
   row : Array[TableCell],
   alignments : Array[TableAlign],
+  widths : Array[Int],
   cell_role : String,
   buf : StringBuilder,
   opts : LiteralOpts,
@@ -743,7 +814,7 @@ fn write_table_row_literal(
   // The row-opening `|` plus the leading space of the first cell are
   // emitted together so screen readers don't hear the pipe.
   write_marker(buf, "|")
-  for i, cell in row {
+  for i, width in widths {
     let align = if i < alignments.length() {
       alignments[i]
     } else {
@@ -760,9 +831,31 @@ fn write_table_row_literal(
     buf.write_char('"')
     buf.write_string(style_attr)
     buf.write_char('>')
-    write_marker(buf, " ")
-    write_table_cell_inlines_literal(cell.children, buf, opts)
-    write_marker(buf, " ")
+    let cell_source = if i < row.length() {
+      let cell_buf = StringBuilder()
+      serialize_table_cell_inlines(row[i].children, cell_buf)
+      cell_buf.to_string()
+    } else {
+      ""
+    }
+    let gap = width - cell_source.length()
+    let left = match align {
+      TableAlign::Right => gap
+      TableAlign::Center => gap / 2
+      _ => 0
+    }
+    let right = gap - left
+    let leading = StringBuilder()
+    leading.write_char(' ')
+    write_chars(leading, ' ', left)
+    write_marker(buf, leading.to_string())
+    if i < row.length() {
+      write_table_cell_inlines_literal(row[i].children, buf, opts)
+    }
+    let trailing = StringBuilder()
+    write_chars(trailing, ' ', right)
+    trailing.write_char(' ')
+    write_marker(buf, trailing.to_string())
     buf.write_string("</span>")
     write_marker(buf, "|")
   }
@@ -782,7 +875,7 @@ fn write_table_cell_inlines_literal(
   buf : StringBuilder,
   opts : LiteralOpts,
 ) -> Unit {
-  let cell = StringBuilder::new()
+  let cell = StringBuilder()
   render_inlines_literal(children, cell, opts)
   write_pipe_escaped_literal(cell.to_string(), buf)
 }

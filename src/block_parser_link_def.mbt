@@ -158,7 +158,7 @@ fn BlockParser::try_footnote_definition(
     if c == ']' {
       break
     }
-    if !(is_ascii_alnum_unit(c) || c == '-' || c == '_') {
+    if c == '[' || c == '\n' || c == '\r' || c == 0 {
       return None
     }
     i = i + 1
@@ -167,7 +167,11 @@ fn BlockParser::try_footnote_definition(
   guard i + 1 < self.line_len && self.line.unsafe_get(i + 1) == ':' else {
     return None
   }
-  let label = self.line.unsafe_substring(start=self.next_nonspace + 2, end=i)
+  let label = self.line
+    .unsafe_substring(start=self.next_nonspace + 2, end=i)
+    .trim(chars=" \t")
+    .to_owned()
+  guard !label.is_empty() else { return None }
   let node = self.add_child(
     container,
     NodeKind::FootnoteDefNode,

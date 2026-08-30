@@ -48,12 +48,39 @@ fn HtmlBuf::to_string(self : HtmlBuf) -> String {
 /// Everything the block/inline renderers need to know beyond the node itself.
 priv struct RenderCtx {
   autolink : Bool
+  tagfilter : Bool
   defs : Map[String, LinkDefinition]
+  footnote_defs : Map[String, FootnoteRenderDefinition]
+  footnote_order : Array[String]
+  footnote_numbers : Map[String, Int]
+  footnote_ref_counts : Map[String, Int]
+  math_block_renderer : ((String) -> String)?
+}
+
+///|
+/// Footnote content collected before rendering the document body.
+priv struct FootnoteRenderDefinition {
+  children : Array[Block]
 }
 
 ///|
 /// Render a document to HTML
-pub fn render_html(doc : Document, autolink? : Bool = true) -> String {
+pub fn render_html(
+  doc : Document,
+  autolink? : Bool = true,
+  tagfilter? : Bool = true,
+) -> String {
+  render_html_with_options(doc, RenderOptions::default(), autolink~, tagfilter~)
+}
+
+///|
+/// Render with replaceable block renderers such as KaTeX.
+pub fn render_html_with_options(
+  doc : Document,
+  options : RenderOptions,
+  autolink? : Bool = true,
+  tagfilter? : Bool = true,
+) -> String {
   let defs : Map[String, LinkDefinition] = Map(
     [],
     capacity=doc.definitions.length(),
@@ -64,18 +91,61 @@ pub fn render_html(doc : Document, autolink? : Bool = true) -> String {
       defs[key] = def
     }
   }
-  let ctx = RenderCtx::{ autolink, defs }
+  let footnote_defs : Map[String, FootnoteRenderDefinition] = Map([])
+  collect_footnote_definitions(doc.children, footnote_defs)
+  let ctx = RenderCtx::{
+    autolink,
+    tagfilter,
+    defs,
+    footnote_defs,
+    footnote_order: [],
+    footnote_numbers: Map([]),
+    footnote_ref_counts: Map([]),
+    math_block_renderer: options.math_block_renderer,
+  }
   let buf = HtmlBuf::new()
   for block in doc.children {
     render_block_html(block, buf, ctx)
   }
+  render_footnote_section(buf, ctx)
   buf.to_string()
+}
+
+///|
+/// Collect definitions recursively; the first definition for a label wins.
+fn collect_footnote_definitions(
+  blocks : Array[Block],
+  defs : Map[String, FootnoteRenderDefinition],
+) -> Unit {
+  for block in blocks {
+    match block {
+      Block::FootnoteDefinition(label~, children~, ..) => {
+        let key = normalize_label(label)
+        if !defs.contains(key) {
+          defs[key] = { children, }
+        }
+      }
+      Block::Blockquote(children~, ..) | Block::Alert(children~, ..) =>
+        collect_footnote_definitions(children, defs)
+      Block::Directive(children~, ..) =>
+        collect_footnote_definitions(children, defs)
+      Block::Attributed(block~, ..) =>
+        collect_footnote_definitions([block], defs)
+      Block::BulletList(items~, ..) | Block::OrderedList(items~, ..) =>
+        for item in items {
+          collect_footnote_definitions(item.children, defs)
+        }
+      _ => ()
+    }
+  }
 }
 
 ///|
 /// Render a block element to HTML
 fn render_block_html(block : Block, buf : HtmlBuf, ctx : RenderCtx) -> Unit {
   match block {
+    Block::Attributed(block~, attributes~, ..) =>
+      render_attributed_block(block, attributes, buf, ctx)
     Block::Paragraph(children~, ..) => {
       buf.cr()
       buf.write_string("<p>")
@@ -109,6 +179,56 @@ fn render_block_html(block : Block, buf : HtmlBuf, ctx : RenderCtx) -> Unit {
       write_code_content(code, buf)
       buf.write_string("</code></pre>\n")
     }
+    Block::MathBlock(value~, ..) => {
+      buf.cr()
+      match ctx.math_block_renderer {
+        Some(renderer) => {
+          let html = renderer(value)
+          buf.write_string(html)
+          if !html.has_suffix("\n") {
+            buf.write_char('\n')
+          }
+        }
+        None => {
+          buf.write_string("<pre class=\"math math-display\"><code>")
+          buf.write_string(escape_html(value))
+          buf.write_string("</code></pre>\n")
+        }
+      }
+    }
+    Block::Directive(name~, meta~, children~, ..) => {
+      buf.cr()
+      buf.write_string("<div class=\"directive directive-")
+      buf.write_string(escape_html(name))
+      buf.write_string("\" data-directive=\"")
+      buf.write_string(escape_html(name))
+      buf.write_char('"')
+      if !meta.is_empty() {
+        buf.write_string(" data-directive-meta=\"")
+        buf.write_string(escape_html(meta))
+        buf.write_char('"')
+      }
+      buf.write_string(">\n")
+      for child in children {
+        render_block_html(child, buf, ctx)
+      }
+      buf.write_string("</div>\n")
+    }
+    Block::DefinitionList(items~, ..) => {
+      buf.cr()
+      buf.write_string("<dl>\n")
+      for item in items {
+        buf.write_string("<dt>")
+        render_inlines_html(item.term, buf, ctx)
+        buf.write_string("</dt>\n")
+        for definition in item.definitions {
+          buf.write_string("<dd>")
+          render_inlines_html(definition, buf, ctx)
+          buf.write_string("</dd>\n")
+        }
+      }
+      buf.write_string("</dl>\n")
+    }
     Block::IndentedCode(code~, ..) => {
       buf.cr()
       buf.write_string("<pre><code>")
@@ -123,46 +243,44 @@ fn render_block_html(block : Block, buf : HtmlBuf, ctx : RenderCtx) -> Unit {
       }
       buf.write_string("</blockquote>\n")
     }
+    Block::Alert(kind~, children~, ..) => {
+      let slug = alert_kind_slug(kind)
+      buf.cr()
+      buf.write_string("<div class=\"markdown-alert markdown-alert-")
+      buf.write_string(slug)
+      buf.write_string("\">\n<p class=\"markdown-alert-title\">")
+      buf.write_string(alert_kind_title(kind))
+      buf.write_string("</p>\n")
+      for child in children {
+        render_block_html(child, buf, ctx)
+      }
+      buf.write_string("</div>\n")
+    }
     Block::BulletList(items~, tight~, ..) => {
       buf.cr()
-      // Check if this list contains task items
-      let has_task = items.iter().any(fn(item) { !(item.checked is None) })
-      if has_task {
-        buf.write_string("<ul class=\"contains-task-list\">\n")
-      } else {
-        buf.write_string("<ul>\n")
-      }
+      buf.write_string("<ul>\n")
       for item in items {
-        render_list_item_html(item, buf, tight, has_task, ctx)
+        render_list_item_html(item, buf, tight, ctx)
       }
       buf.write_string("</ul>\n")
     }
     Block::OrderedList(items~, start~, tight~, ..) => {
       buf.cr()
-      let has_task = items.iter().any(fn(item) { !(item.checked is None) })
       if start == 1 {
-        if has_task {
-          buf.write_string("<ol class=\"contains-task-list\">\n")
-        } else {
-          buf.write_string("<ol>\n")
-        }
+        buf.write_string("<ol>\n")
       } else {
-        if has_task {
-          buf.write_string("<ol class=\"contains-task-list\" start=\"")
-        } else {
-          buf.write_string("<ol start=\"")
-        }
+        buf.write_string("<ol start=\"")
         buf.write_string(start.to_string())
         buf.write_string("\">\n")
       }
       for item in items {
-        render_list_item_html(item, buf, tight, has_task, ctx)
+        render_list_item_html(item, buf, tight, ctx)
       }
       buf.write_string("</ol>\n")
     }
     Block::HtmlBlock(html~, ..) => {
       buf.cr()
-      buf.write_string(html)
+      buf.write_string(if ctx.tagfilter { gfm_tagfilter(html) } else { html })
       if !html.has_suffix("\n") {
         buf.write_char('\n')
       }
@@ -184,6 +302,9 @@ fn render_block_html(block : Block, buf : HtmlBuf, ctx : RenderCtx) -> Unit {
         for row in rows {
           buf.write_string("<tr>\n")
           for i, cell in row {
+            if i >= alignments.length() {
+              break
+            }
             let align = if i < alignments.length() {
               alignments[i]
             } else {
@@ -198,16 +319,108 @@ fn render_block_html(block : Block, buf : HtmlBuf, ctx : RenderCtx) -> Unit {
       buf.write_string("</table>\n")
     }
     Block::BlankLines(..) => () // Blank lines don't produce HTML output
-    Block::FootnoteDefinition(label~, children~, ..) => {
+    Block::FootnoteDefinition(..) => ()
+  }
+}
+
+///| Render attributes on common semantic blocks; use a neutral wrapper for
+
+///|
+/// block kinds whose opening tag is owned by a specialized renderer.
+fn render_attributed_block(
+  block : Block,
+  attributes : Array[MarkdownAttribute],
+  buf : HtmlBuf,
+  ctx : RenderCtx,
+) -> Unit {
+  match block {
+    Block::FootnoteDefinition(..) => ()
+    Block::Heading(level~, children~, ..) => {
       buf.cr()
-      buf.write_string("<div class=\"footnote\" id=\"fn-")
-      buf.write_string(escape_html(label))
-      buf.write_string("\">\n")
-      for child in children {
-        render_block_html(child, buf, ctx)
-      }
+      buf.write_string("<h")
+      buf.write_string(level.to_string())
+      write_markdown_attributes(attributes, buf)
+      buf.write_char('>')
+      render_inlines_html(children, buf, ctx)
+      buf.write_string("</h")
+      buf.write_string(level.to_string())
+      buf.write_string(">\n")
+    }
+    Block::Paragraph(children~, ..) => {
+      buf.cr()
+      buf.write_string("<p")
+      write_markdown_attributes(attributes, buf)
+      buf.write_char('>')
+      render_inlines_html(children, buf, ctx)
+      buf.write_string("</p>\n")
+    }
+    _ => {
+      buf.cr()
+      buf.write_string("<div")
+      write_markdown_attributes(attributes, buf)
+      buf.write_string(">\n")
+      render_block_html(block, buf, ctx)
       buf.write_string("</div>\n")
     }
+  }
+}
+
+///|
+/// Emit safe normalized attributes, merging repeated class shorthands.
+fn write_markdown_attributes(
+  attributes : Array[MarkdownAttribute],
+  buf : HtmlBuf,
+) -> Unit {
+  let classes = StringBuilder()
+  for attribute in attributes {
+    if attribute.name == "id" {
+      buf.write_string(" id=\"")
+      buf.write_string(escape_html(attribute.value))
+      buf.write_char('"')
+    } else if attribute.name == "class" {
+      if !classes.to_string().is_empty() {
+        classes.write_char(' ')
+      }
+      classes.write_string(attribute.value)
+    }
+  }
+  let class_value = classes.to_string()
+  if !class_value.is_empty() {
+    buf.write_string(" class=\"")
+    buf.write_string(escape_html(class_value))
+    buf.write_char('"')
+  }
+  for attribute in attributes {
+    let lower = attribute.name.to_lower()
+    if lower == "id" ||
+      lower == "class" ||
+      lower == "style" ||
+      lower.has_prefix("on") {
+      continue
+    }
+    buf.write_char(' ')
+    buf.write_string(attribute.name)
+    if !attribute.value.is_empty() {
+      buf.write_string("=\"")
+      buf.write_string(escape_html(attribute.value))
+      buf.write_char('"')
+    }
+  }
+}
+
+///|
+fn alert_kind_slug(kind : AlertKind) -> String {
+  kind.slug()
+}
+
+///|
+fn alert_kind_title(kind : AlertKind) -> String {
+  match kind {
+    Note => "Note"
+    Tip => "Tip"
+    Important => "Important"
+    Warning => "Warning"
+    Caution => "Caution"
   }
 }
 
@@ -247,22 +460,16 @@ fn render_list_item_html(
   item : ListItem,
   buf : HtmlBuf,
   tight : Bool,
-  is_task_list : Bool,
   ctx : RenderCtx,
 ) -> Unit {
   buf.cr()
-  // Task list items get a special class
-  if is_task_list && !(item.checked is None) {
-    buf.write_string("<li class=\"task-list-item\">")
-  } else {
-    buf.write_string("<li>")
-  }
+  buf.write_string("<li>")
 
   // Task list checkbox
   match item.checked {
     Some(true) =>
-      buf.write_string("<input type=\"checkbox\" checked disabled> ")
-    Some(false) => buf.write_string("<input type=\"checkbox\" disabled> ")
+      buf.write_string("<input checked=\"\" disabled=\"\" type=\"checkbox\"> ")
+    Some(false) => buf.write_string("<input disabled=\"\" type=\"checkbox\"> ")
     None => ()
   }
   for child in item.children {
@@ -336,23 +543,21 @@ fn render_text_html(
   let len = content.length()
   let mut pos = 0
   while pos < len {
-    match find_next_url_start(content, pos) {
-      Some(start) => {
-        write_escaped_text_range(content, pos, start, buf)
-        let raw_end = find_url_raw_end(content, start)
-        let url_end = trim_url_end(content, start, raw_end)
-        if url_end > start {
-          let url = content.unsafe_substring(start~, end=url_end)
-          buf.write_string("<a href=\"")
-          write_escaped_href(url, buf)
-          buf.write_string("\">")
-          buf.write_string(escape_html(url))
-          buf.write_string("</a>")
-          pos = url_end
-        } else {
-          write_escaped_text_range(content, start, raw_end, buf)
-          pos = raw_end
+    match find_next_autolink(content, pos) {
+      Some(found) => {
+        write_escaped_text_range(content, pos, found.start, buf)
+        let display = content.unsafe_substring(start=found.start, end=found.end)
+        buf.write_string("<a href=\"")
+        match found.kind {
+          Www => buf.write_string("http://")
+          Email => buf.write_string("mailto:")
+          Url => ()
         }
+        write_escaped_href(display, buf)
+        buf.write_string("\">")
+        buf.write_string(escape_html(display))
+        buf.write_string("</a>")
+        pos = found.end
       }
       None => {
         write_escaped_text_range(content, pos, len, buf)
@@ -390,6 +595,15 @@ fn render_inline_html(inline : Inline, buf : HtmlBuf, ctx : RenderCtx) -> Unit {
       buf.write_string("<code>")
       buf.write_string(escape_html(normalize_code_span(content)))
       buf.write_string("</code>")
+    }
+    Inline::Directive(name~, label~, attributes~, ..) => {
+      buf.write_string("<span data-directive=\"")
+      buf.write_string(escape_html(name, attr=true))
+      buf.write_char('"')
+      write_markdown_attributes(attributes, buf)
+      buf.write_char('>')
+      buf.write_string(escape_html(label))
+      buf.write_string("</span>")
     }
     Inline::WikiLink(target~, label~, fragment~, ..) => {
       let href = render_wikilink_destination(target, fragment)
@@ -451,19 +665,98 @@ fn render_inline_html(inline : Inline, buf : HtmlBuf, ctx : RenderCtx) -> Unit {
           buf.write_char(']')
         }
       }
-    Inline::HtmlInline(html~, ..) => buf.write_string(html)
+    Inline::HtmlInline(html~, ..) =>
+      buf.write_string(if ctx.tagfilter { gfm_tagfilter(html) } else { html })
     Inline::SoftBreak(..) => buf.write_char('\n')
     Inline::HardBreak(..) => buf.write_string("<br />\n")
     Inline::FootnoteReference(label~, ..) => {
+      let key = normalize_label(label)
+      guard ctx.footnote_defs.contains(key) else {
+        buf.write_string("[^")
+        buf.write_string(escape_html(label))
+        buf.write_char(']')
+        return
+      }
+      let number = match ctx.footnote_numbers.get(key) {
+        Some(number) => number
+        None => {
+          let number = ctx.footnote_order.length() + 1
+          ctx.footnote_order.push(key)
+          ctx.footnote_numbers[key] = number
+          number
+        }
+      }
+      let occurrence = match ctx.footnote_ref_counts.get(key) {
+        Some(count) => count + 1
+        None => 1
+      }
+      ctx.footnote_ref_counts[key] = occurrence
       buf.write_string("<sup><a href=\"#fn-")
-      write_escaped_href(label, buf)
+      write_escaped_href(key, buf)
       buf.write_string("\" id=\"fnref-")
-      write_escaped_href(label, buf)
-      buf.write_string("\">")
-      buf.write_string(escape_html(label))
+      write_escaped_href(key, buf)
+      if occurrence > 1 {
+        buf.write_char('-')
+        buf.write_string(occurrence.to_string())
+      }
+      buf.write_string(
+        "\" data-footnote-ref=\"\" aria-describedby=\"footnote-label\">",
+      )
+      buf.write_string(number.to_string())
       buf.write_string("</a></sup>")
     }
   }
+}
+
+///|
+/// Render referenced footnotes at the end of the document in reference order.
+fn render_footnote_section(buf : HtmlBuf, ctx : RenderCtx) -> Unit {
+  guard !ctx.footnote_order.is_empty() else { return }
+  buf.cr()
+  buf.write_string("<section data-footnotes=\"\" class=\"footnotes\">\n")
+  buf.write_string(
+    "<h2 class=\"sr-only\" id=\"footnote-label\">Footnotes</h2>\n<ol>\n",
+  )
+  for key in ctx.footnote_order {
+    guard ctx.footnote_defs.get(key) is Some(def) else { continue }
+    let number = ctx.footnote_numbers[key]
+    buf.write_string("<li id=\"fn-")
+    buf.write_string(escape_html(key))
+    buf.write_string("\">\n")
+    for child in def.children {
+      render_block_html(child, buf, ctx)
+    }
+    let count = match ctx.footnote_ref_counts.get(key) {
+      Some(count) => count
+      None => 0
+    }
+    if count > 0 {
+      buf.write_string("<p class=\"footnote-backrefs\">")
+      for occurrence = 1; occurrence <= count; occurrence = occurrence + 1 {
+        if occurrence > 1 {
+          buf.write_char(' ')
+        }
+        buf.write_string("<a href=\"#fnref-")
+        write_escaped_href(key, buf)
+        if occurrence > 1 {
+          buf.write_char('-')
+          buf.write_string(occurrence.to_string())
+        }
+        buf.write_string(
+          "\" data-footnote-backref=\"\" aria-label=\"Back to reference ",
+        )
+        buf.write_string(number.to_string())
+        if occurrence > 1 {
+          buf.write_char('-')
+          buf.write_string(occurrence.to_string())
+        }
+        buf.write_string("\" class=\"data-footnote-backref\">↩</a>")
+      }
+      buf.write_string("</p>\n")
+    }
+    buf.write_string("</li>\n")
+  }
+  buf.write_string("</ol>\n</section>\n")
 }
 
 ///|
@@ -524,6 +817,7 @@ fn write_plain_text(inlines : Array[Inline], buf : StringBuilder) -> Unit {
       Inline::Text(content~, ..) => buf.write_string(content)
       Inline::Code(content~, ..) =>
         buf.write_string(normalize_code_span(content))
+      Inline::Directive(label~, ..) => buf.write_string(label)
       Inline::HtmlInline(html~, ..) => buf.write_string(html)
       Inline::SoftBreak(..) | Inline::HardBreak(..) => buf.write_char('\n')
       Inline::Emphasis(children~, ..)
@@ -656,9 +950,10 @@ pub fn md_to_html(
   source : String,
   wikilinks? : Bool = false,
   autolink? : Bool = true,
+  tagfilter? : Bool = true,
 ) -> String {
   let result = parse(source, wikilinks~)
-  render_html(result.document, autolink~)
+  render_html(result.document, autolink~, tagfilter~)
 }
 
 ///|
@@ -669,6 +964,7 @@ pub fn md_to_html_strict(
   source : String,
   wikilinks? : Bool = false,
   autolink? : Bool = true,
+  tagfilter? : Bool = true,
 ) -> String {
-  md_to_html(source, wikilinks~, autolink~)
+  md_to_html(source, wikilinks~, autolink~, tagfilter~)
 }

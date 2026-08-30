@@ -412,6 +412,19 @@ fn InlineCtx::scan(self : InlineCtx) -> Unit {
           i = i + n
         }
       }
+      ':' =>
+        match parse_inline_directive(text, i) {
+          Some((inline, end)) => {
+            flush(i)
+            let _ = self.push_inline(inline, i)
+            i = end
+            run_start = end
+          }
+          None => {
+            buf.write_char(':')
+            i = i + 1
+          }
+        }
       '[' =>
         if self.wikilinks && i + 1 < len && text.unsafe_get(i + 1) == '[' {
           match parse_wikilink(text, i) {
@@ -504,7 +517,8 @@ fn trim_trailing_spaces(buf : StringBuilder) -> Unit {
 ///|
 fn is_inline_marker_code_unit(c : UInt16) -> Bool {
   match c {
-    '\\' | '`' | '*' | '_' | '~' | '[' | ']' | '!' | '<' | '&' | '\n' => true
+    '\\' | '`' | '*' | '_' | '~' | ':' | '[' | ']' | '!' | '<' | '&' | '\n' =>
+      true
     _ => false
   }
 }
@@ -723,35 +737,15 @@ fn parse_raw_html(text : String, start : Int) -> Int? {
       return parse_html_comment(text, start)
     }
     if c2 == '[' && matches_at(text, start + 2, "[CDATA[") {
-      let mut i = start + 9
-      while i + 2 < len {
-        if text.unsafe_get(i) == ']' &&
-          text.unsafe_get(i + 1) == ']' &&
-          text.unsafe_get(i + 2) == '>' {
-          return Some(i + 3)
-        }
-        i = i + 1
-      }
-      return None
+      return find_exact_end_from(text, start + 9, "]]>")
     }
     if is_ascii_letter_unit(c2) {
-      let mut i = start + 2
-      while i < len && text.unsafe_get(i) != '>' {
-        i = i + 1
-      }
-      return if i < len { Some(i + 1) } else { None }
+      return find_exact_end_from(text, start + 2, ">")
     }
     return None
   }
   if next == '?' {
-    let mut i = start + 2
-    while i + 1 < len {
-      if text.unsafe_get(i) == '?' && text.unsafe_get(i + 1) == '>' {
-        return Some(i + 2)
-      }
-      i = i + 1
-    }
-    return None
+    return find_exact_end_from(text, start + 2, "?>")
   }
   if next == '/' {
     let mut i = start + 2
@@ -793,23 +787,13 @@ fn is_html_space(c : UInt16) -> Bool {
 ///|
 /// `<!-->`, `<!--->` or `<!--` … `-->`.
 fn parse_html_comment(text : String, start : Int) -> Int? {
-  let len = text.length()
   if matches_at(text, start, "<!-->") {
     return Some(start + 5)
   }
   if matches_at(text, start, "<!--->") {
     return Some(start + 6)
   }
-  let mut i = start + 4
-  while i + 2 < len {
-    if text.unsafe_get(i) == '-' &&
-      text.unsafe_get(i + 1) == '-' &&
-      text.unsafe_get(i + 2) == '>' {
-      return Some(i + 3)
-    }
-    i = i + 1
-  }
-  None
+  find_exact_end_from(text, start + 4, "-->")
 }
 
 ///|

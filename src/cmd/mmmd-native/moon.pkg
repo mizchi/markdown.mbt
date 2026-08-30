@@ -1,0 +1,12 @@
+supported_targets = "native"
+
+import {
+  "mizchi/markdown/mmmd_native_core" @renderer,
+  "moonbitlang/async",
+  "moonbitlang/async/io",
+  "moonbitlang/async/stdio",
+  "moonbitlang/core/env",
+  "moonbitlang/x/sys",
+}
+
+pkgtype(kind: "executable")

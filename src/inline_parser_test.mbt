@@ -311,6 +311,17 @@ test "parse autolink email" {
 }
 
 ///|
+test "parse inline directive" {
+  let inlines = parse_inlines("Use :badge[stable]{.green level=high} now")
+  guard inlines[1] is Inline::Directive(name~, label~, attributes~, ..) else {
+    fail("Expected inline Directive")
+  }
+  inspect(name, content="badge")
+  inspect(label, content="stable")
+  inspect(attributes.length(), content="2")
+}
+
+///|
 test "parse strikethrough" {
   let inlines = parse_inlines("Hello ~~deleted~~ world")
   @debug.debug_inspect(inlines.length(), content="3")

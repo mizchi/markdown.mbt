@@ -27,6 +27,11 @@ test "serialize heading with closing hashes" {
 }
 
 ///|
+test "serialize normalizes setext headings to ATX" {
+  inspect(serialize(parse("Title\n=====\n").document), content="# Title\n")
+}
+
+///|
 test "serialize paragraph" {
   let source = "Hello world.\n"
   let result = parse(source)
@@ -179,7 +184,7 @@ test "serialize: table cells re-escape pipes nested in inline elements" {
   @debug.debug_inspect(
     output,
     content=(
-      #|"| f\\|oo |\n| --- |\n| b `\\|` az |\n| b **\\|** im |\n| [a \\| b](x) |\n"
+      #|"| f\\|oo       |\n| ----------- |\n| b `\\|` az   |\n| b **\\|** im |\n| [a \\| b](x) |\n"
     ),
   )
   // Re-parsing the serialized table has to give the same HTML back.
@@ -193,4 +198,100 @@ test "serialize: table cell keeps a literal backslash before a pipe" {
   let source = "| a |\n| --- |\n| x \\\\\\| y |\n"
   let output = serialize(parse(source).document)
   @debug.debug_inspect(md_to_html(output) == md_to_html(source), content="true")
+}
+
+///|
+test "serialize emits parsed link definitions in a canonical trailing section" {
+  let source = "[foo][ref]\n\n[ref]: /url \"title\"\n"
+  inspect(
+    serialize(parse(source).document),
+    content="[foo][ref]\n\n[ref]: /url \"title\"\n",
+  )
+}
+
+///|
+fn assert_normalized_serializer_contract(source : String) -> Unit raise {
+  let parsed = parse(source).document
+  let normalized = serialize(parsed)
+  let reparsed = parse(normalized).document
+  inspect(serialize(reparsed), content=normalized)
+  inspect(
+    render_html(reparsed, autolink=false),
+    content=render_html(parsed, autolink=false),
+  )
+}
+
+///|
+test "normalized serializer is idempotent and semantics-preserving" {
+  let corpus = [
+    "Title\n=====\n\nParagraph.\n", "* one\n* two\n", "[foo][]\n\n[foo]: /url \"title\"\n",
+    "![foo *bar*][]\n\n[foo *bar*]: train.jpg\n", "> quote\n>\n> - nested\n", "~~~moonbit\nlet answer = 42\n~~~\n",
+    "| a | b |\n|---|---|\nrow\n", "| abc | def |\n| --- | --- |\n| bar |\n| bar | baz | boo |\n",
+  ]
+  for source in corpus {
+    assert_normalized_serializer_contract(source)
+  }
+}
+
+///|
+test "serialize preserves literal bang before link-like text" {
+  let cases = [
+    (
+      "![[foo]]\n\n[[foo]]: /url \"title\"\n", "!\\[\\[foo]]\n\n\\[\\[foo]]: /url \"title\"\n",
+    ),
+    (
+      "!\\[foo]\n\n[foo]: /url \"title\"\n", "!\\[foo]\n\n[foo]: /url \"title\"\n",
+    ),
+    (
+      "\\![foo]\n\n[foo]: /url \"title\"\n", "\\![foo]\n\n[foo]: /url \"title\"\n",
+    ),
+  ]
+  for case in cases {
+    inspect(serialize(parse(case.0).document), content=case.1)
+  }
+}
+
+///|
+test "serialize GitHub alert" {
+  inspect(
+    serialize(parse("> [!TIP]\n> Keep it simple.\n").document),
+    content="> [!TIP]\n> Keep it simple.\n",
+  )
+}
+
+///|
+test "serialize display math" {
+  inspect(serialize(parse("$$\nx^2\n$$\n").document), content="$$\nx^2\n$$\n")
+}
+
+///|
+test "serialize fenced directive" {
+  inspect(
+    serialize(parse(":::note Optional title\nBody\n:::\n").document),
+    content=":::note Optional title\nBody\n:::\n",
+  )
+}
+
+///|
+test "serialize definition list" {
+  inspect(
+    serialize(parse("Term\n: First\n: Second\n").document),
+    content="Term\n: First\n: Second\n",
+  )
+}
+
+///|
+test "serialize block attributes" {
+  inspect(
+    serialize(parse("# Heading\n\n{#intro .wide}\n").document),
+    content="# Heading\n{#intro .wide}\n",
+  )
+}
+
+///|
+test "serialize inline directive" {
+  inspect(
+    serialize(parse("Use :badge[stable]{.green}.\n").document),
+    content="Use :badge[stable]{.green}.\n",
+  )
 }

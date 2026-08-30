@@ -1,7 +1,7 @@
 ///| Typed declarative MDX schema tests.
 
 ///|
-/// Build the schema Folddown needs without allowing arbitrary JavaScript.
+/// Build a closed declaration schema without allowing arbitrary JavaScript.
 fn fold_schema() -> MdxSchema {
   MdxSchema::closed([
     ComponentSchema::new("Fold", [

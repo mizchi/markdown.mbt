@@ -8,7 +8,7 @@ A cross-platform (JS/WASM/native) Markdown compiler optimized for real-time edit
 
 - **Fast**: Edit-position based incremental updates inspired by [CRDTs Go Brrr](https://josephg.com/blog/crdts-go-brrr/)
 - **CommonMark compliant**: passes all 652 examples of the CommonMark 0.31.2 spec
-- **Lossless CST**: Preserves all whitespace, markers, and formatting
+- **Source-oriented CST**: Retains node spans so byte-preserving tools can edit the original source
 - **Incremental parsing**: Re-parses only changed blocks (up to 42x faster)
 - **GFM**: GitHub Flavored Markdown support (tables, task lists, strikethrough)
 - **Cross-platform**: Works on JS, WASM-GC, and native targets
@@ -59,6 +59,38 @@ const ast = parse("[[MoonBit#syntax|MoonBit syntax]]", { wikilinks: true });
 const html = toHtml("[[MoonBit|MoonBit notes]]", { wikilinks: true });
 // => '<p><a href="MoonBit">MoonBit notes</a></p>\n'
 ```
+
+### Extended syntax
+
+The parser also exposes semantic nodes for GitHub alerts, footnotes, display
+math, container/text directives, definition lists, and block attributes:
+
+```markdown
+> [!WARNING]
+> Check this first.[^details]
+
+$$
+E = mc^2
+$$
+
+:::note Optional title
+Markdown stays available inside the container.
+:::
+
+Use :badge[stable]{.green level=high}.
+
+Term
+: Definition
+
+# Attributed heading
+{#intro .wide}
+
+[^details]: Footnote content.
+```
+
+Display math is represented as a `math` block with a raw `value`. The default
+HTML output is an escaped `<pre>` fallback, so JavaScript consumers can instead
+send the AST value to KaTeX or another math renderer.
 
 ### Incremental Parsing
 
@@ -113,7 +145,7 @@ moon add mizchi/markdown
 let result = @markdown.parse("# Hello\n\nWorld")
 let doc = result.document
 
-// Serialize back (lossless)
+// Serialize back to canonical, normalized Markdown
 let output = @markdown.serialize(doc)
 
 // Render to HTML
@@ -124,9 +156,42 @@ let html = @markdown.md_to_html("# Hello\n\nWorld")
 let linked = @markdown.md_to_html("See https://example.com/docs\n")
 let plain = @markdown.md_to_html("See https://example.com/docs\n", autolink=false)
 
+// Disable the GFM tagfilter when matching plain CommonMark raw-HTML output
+let commonmark_html = @markdown.md_to_html("<script>raw</script>\n", tagfilter=false)
+
 // Enable the WikiLink extension explicitly
 let wiki_html = @markdown.md_to_html("[[MoonBit|MoonBit notes]]", wikilinks=true)
 ```
+
+### Display-math renderer
+
+The MoonBit HTML renderer has an explicit display-math boundary. The callback
+receives the raw block contents and returns trusted HTML, making KaTeX or a
+different backend replaceable without coupling it to the parser:
+
+```moonbit
+let document = @markdown.parse("$$\nx^2\n$$\n").document
+let options = @markdown.RenderOptions::default().with_math_block_renderer(
+  fn(source) { render_with_katex(source) },
+)
+let html = @markdown.render_html_with_options(document, options)
+```
+
+Without a callback, math is safely HTML-escaped in
+`<pre class="math math-display"><code>…</code></pre>`.
+
+### Native CLI
+
+Build the native command with `just build-native`. The executable is produced
+from `src/cmd/mmmd-native` and can be installed or renamed as `mmmd`:
+
+```bash
+_build/native/release/build/cmd/mmmd-native/mmmd-native.exe --format html < document.md
+_build/native/release/build/cmd/mmmd-native/mmmd-native.exe --format tui < document.md
+```
+
+The native TUI format emits normalized Markdown. Mermaid remains an ordinary
+fenced code block; diagram rendering is available in the JavaScript/Wasm CLI.
 
 ### Incremental Parsing
 
@@ -181,21 +246,6 @@ let source = #|<Fold id="auth.mfa" kind="procedure" requires={["auth.login"]} />
 let checked = @mdx.type_check_mdx(@markdown.parse(source).document, schema)
 let is_valid = checked.is_valid()
 ```
-
-### Folddown
-
-`mizchi/markdown/x/folddown` defines the typed `Fold` declaration vocabulary
-for structured, reader-adaptive Markdown. It validates declarations and emits a
-canonical manifest that retains each Markdown child source; reader selection and
-rendering consume that manifest. See [Folddown](./docs/folddown.md) for its
-grammar and boundary. Local external documents use typed `<Include>`
-declarations; [Folddown drift review](./docs/folddown-drift.md) defines the
-provider-neutral LLM review packet and response contract. Its two reader
-states and two content filters are generated from the entry document's
-frontmatter DSL. `familiarTo` marks direct source-language correspondences, so
-an interest-focused view can omit material already familiar to its reader.
-
-----
 
 ## Playground
 
@@ -261,11 +311,12 @@ spec](https://spec.commonmark.org/0.31.2/) byte for byte, which
 `scripts/gen-spec-tests.js` checks on every run of the test suite. Bare-URL
 autolinking, tables, strikethrough, task lists and footnotes are GFM extensions
 on top of that; the spec suite runs with `autolink=false` so it measures plain
-CommonMark.
+CommonMark, and with `tagfilter=false` because tagfilter is a GFM extension.
 
-Markdown output (`md_to_markdown`) is normalized rather than byte-preserving:
-it is compared against remark in a separate suite, where link reference
-definitions and a few escaping details still differ.
+Markdown output (`md_to_markdown`) is normalized rather than byte-preserving.
+It uses stable markers and block spacing, and emits parsed link reference
+definitions in a canonical trailing section. Use node spans and the original
+source when an editor needs byte-preserving updates.
 
 ## Credits
 

@@ -196,6 +196,23 @@ fn adjust_spans(blocks : Array[Block], offset : Int) -> Array[Block] {
 }
 
 ///|
+/// Shift list items and every nested block by the same document offset.
+fn shift_list_item_spans(
+  items : Array[ListItem],
+  delta : Int,
+) -> Array[ListItem] {
+  let result : Array[ListItem] = []
+  for item in items {
+    result.push({
+      ..item,
+      children: adjust_spans(item.children, delta),
+      span: Span::new(item.span.from + delta, item.span.to + delta),
+    })
+  }
+  result
+}
+
+///|
 /// Shift a block's span by delta
 fn shift_block_span(block : Block, delta : Int) -> Block {
   match block {
@@ -258,6 +275,51 @@ fn shift_block_span(block : Block, delta : Int) -> Block {
         leading_trivia~,
         trailing_trivia~,
       )
+    Block::MathBlock(
+      value~,
+      fence_length~,
+      span~,
+      leading_trivia~,
+      trailing_trivia~
+    ) =>
+      Block::MathBlock(
+        value~,
+        fence_length~,
+        span=Span::new(span.from + delta, span.to + delta),
+        leading_trivia~,
+        trailing_trivia~,
+      )
+    Block::Directive(
+      name~,
+      meta~,
+      children~,
+      fence_length~,
+      span~,
+      leading_trivia~,
+      trailing_trivia~
+    ) =>
+      Block::Directive(
+        name~,
+        meta~,
+        children=adjust_spans(children, delta),
+        fence_length~,
+        span=Span::new(span.from + delta, span.to + delta),
+        leading_trivia~,
+        trailing_trivia~,
+      )
+    Block::DefinitionList(items~, span~, leading_trivia~, trailing_trivia~) =>
+      Block::DefinitionList(
+        items~,
+        span=Span::new(span.from + delta, span.to + delta),
+        leading_trivia~,
+        trailing_trivia~,
+      )
+    Block::Attributed(block~, attributes~, span~) =>
+      Block::Attributed(
+        block=shift_block_span(block, delta),
+        attributes~,
+        span=Span::new(span.from + delta, span.to + delta),
+      )
     Block::IndentedCode(code~, span~, leading_trivia~, trailing_trivia~) =>
       Block::IndentedCode(
         code~,
@@ -267,6 +329,14 @@ fn shift_block_span(block : Block, delta : Int) -> Block {
       )
     Block::Blockquote(children~, span~, leading_trivia~, trailing_trivia~) =>
       Block::Blockquote(
+        children=adjust_spans(children, delta),
+        span=Span::new(span.from + delta, span.to + delta),
+        leading_trivia~,
+        trailing_trivia~,
+      )
+    Block::Alert(kind~, children~, span~, leading_trivia~, trailing_trivia~) =>
+      Block::Alert(
+        kind~,
         children=adjust_spans(children, delta),
         span=Span::new(span.from + delta, span.to + delta),
         leading_trivia~,
@@ -283,7 +353,7 @@ fn shift_block_span(block : Block, delta : Int) -> Block {
       Block::BulletList(
         marker~,
         tight~,
-        items~, // TODO: adjust item spans
+        items=shift_list_item_spans(items, delta),
         span=Span::new(span.from + delta, span.to + delta),
         leading_trivia~,
         trailing_trivia~,
@@ -301,7 +371,7 @@ fn shift_block_span(block : Block, delta : Int) -> Block {
         start~,
         delimiter~,
         tight~,
-        items~, // TODO: adjust item spans
+        items=shift_list_item_spans(items, delta),
         span=Span::new(span.from + delta, span.to + delta),
         leading_trivia~,
         trailing_trivia~,
@@ -359,8 +429,13 @@ fn Block::get_span(self : Block) -> Span {
     Block::Heading(span~, ..) => span
     Block::Paragraph(span~, ..) => span
     Block::FencedCode(span~, ..) => span
+    Block::MathBlock(span~, ..) => span
+    Block::Directive(span~, ..) => span
+    Block::DefinitionList(span~, ..) => span
+    Block::Attributed(span~, ..) => span
     Block::IndentedCode(span~, ..) => span
     Block::Blockquote(span~, ..) => span
+    Block::Alert(span~, ..) => span
     Block::BulletList(span~, ..) => span
     Block::OrderedList(span~, ..) => span
     Block::Table(span~, ..) => span

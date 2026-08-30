@@ -60,12 +60,14 @@ pub fn parse_code_block_info(info : String) -> CodeBlockInfo {
 pub struct RenderOptions {
   /// Custom code block highlighter
   code_highlighter : ((CodeBlockInfo, String) -> String)?
+  /// Trusted HTML renderer for display-math source (for example KaTeX).
+  math_block_renderer : ((String) -> String)?
 }
 
 ///|
 /// Create default render options
 pub fn RenderOptions::default() -> RenderOptions {
-  { code_highlighter: None }
+  { code_highlighter: None, math_block_renderer: None }
 }
 
 ///|
@@ -73,7 +75,7 @@ pub fn RenderOptions::default() -> RenderOptions {
 pub fn RenderOptions::with_highlighter(
   highlighter : (CodeBlockInfo, String) -> String,
 ) -> RenderOptions {
-  { code_highlighter: Some(highlighter) }
+  { code_highlighter: Some(highlighter), math_block_renderer: None }
 }
 
 ///|
@@ -85,5 +87,17 @@ pub fn RenderOptions::with_simple_highlighter(
     code_highlighter: Some(fn(info : CodeBlockInfo, code : String) -> String {
       highlighter(info.lang, code)
     }),
+    math_block_renderer: None,
   }
+}
+
+///| Return options that render display math through the supplied HTML hook.
+
+///|
+/// The hook result is treated as trusted HTML; escaping belongs to the hook.
+pub fn RenderOptions::with_math_block_renderer(
+  self : RenderOptions,
+  renderer : (String) -> String,
+) -> RenderOptions {
+  { ..self, math_block_renderer: Some(renderer) }
 }

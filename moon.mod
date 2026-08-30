@@ -1,8 +1,9 @@
 name = "mizchi/markdown"
 
-version = "0.8.0"
+version = "0.8.1"
 
 import {
+  "moonbitlang/async@0.20.3",
   "moonbitlang/parser@0.3.18",
   "moonbitlang/x@0.5.1",
   "mizchi/syntree@0.2.4",
@@ -23,4 +24,4 @@ source = "src"
 
 preferred_target = "js"
 
-supported_targets = "js+wasm"
+supported_targets = "js+wasm+native"
