@@ -66,6 +66,21 @@ This subpath requires an ESM runtime with Wasm GC, JS String Builtins, and
 top-level `await` support. The handle-based incremental API remains available
 from the default `@mizchi/markdown` entry point.
 
+### Cloudflare Workers
+
+The default `@mizchi/markdown` entry point cannot currently run inside a
+Cloudflare Worker. It imports the SIMD module through WebAssembly ESM
+Integration named exports, while Wrangler exposes imported `.wasm` files as a
+default-exported `WebAssembly.Module`. Supporting workerd therefore requires a
+workerd-specific bridge that instantiates that module, selected through a
+`workerd` conditional export. See Cloudflare's documentation for
+[Wasm module bundling](https://developers.cloudflare.com/workers/wrangler/bundling/#including-non-javascript-modules)
+and [conditional exports](https://developers.cloudflare.com/workers/wrangler/bundling/#conditional-exports).
+
+The repository's current playground deployment is unaffected because its
+Worker only serves prebuilt static assets; it does not import the parser into
+the workerd runtime.
+
 ### Optional WikiLinks
 
 WikiLinks are disabled by default to keep CommonMark-compatible behavior.
