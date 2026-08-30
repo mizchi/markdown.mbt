@@ -1,6 +1,6 @@
 name = "mizchi/markdown"
 
-version = "0.8.1"
+version = "0.8.2"
 
 import {
   "moonbitlang/async@0.20.3",

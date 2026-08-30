@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.8.2 - 2026-08-31
+
 ### Performance
 
 - Build JavaScript and Wasm GC AST objects directly instead of materializing an intermediate `Json` tree; the Wasm path uses JS String Builtins and `externref` imports without a JSON round trip.
