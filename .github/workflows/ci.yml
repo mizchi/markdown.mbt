@@ -89,12 +89,14 @@ jobs:
           moon build --target js --release
       - name: Install Playwright browsers
         run: pnpm playwright install --with-deps chromium
-      - name: Run VRT (width geometry gate)
+      - name: Run editor overlay gates (width geometry + highlight sync)
         # Screenshot VRT (e2e/vrt-screenshot.spec.ts) is intentionally NOT
         # included here yet: its PNG baselines must first be generated on a
         # Linux Chromium runner and committed in a follow-up change. Until
-        # then, the width geometry spec is the authoritative gate.
-        run: pnpm playwright test e2e/vrt-width.spec.ts --reporter=line
+        # then, these two specs are the authoritative gate: width geometry
+        # keeps the overlay aligned with the caret, highlight sync keeps it
+        # showing the same highlighting regardless of which edit produced it.
+        run: pnpm playwright test e2e/vrt-width.spec.ts e2e/highlight-sync.spec.ts --reporter=line
       - name: Upload Playwright report on failure
         if: failure()
         uses: actions/upload-artifact@v4

@@ -25,6 +25,7 @@
     "build:editor": "pnpm run build:moon && tsc -p tsconfig.editor.json && node scripts/prepare-editor-package.mjs",
     "bench:literal": "node --experimental-strip-types e2e/literal-benchmark.ts",
     "bench:literal:core": "moon bench --target js -p mizchi/markdown -f bench_renderer_literal.mbt",
+    "check:visual": "vlmkit check integrity http://localhost:5173/",
     "prepack": "pnpm run build:editor && pnpm run build:wasm",
     "pretest": "pnpm run build:editor && pnpm run build:wasm",
     "test": "vitest run"
@@ -113,6 +114,7 @@
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
     "@luna_ui/luna": "^0.23.0",
+    "@mizchi/vlmkit": "^0.22.0",
     "@playwright/test": "^1.62.1",
     "@types/mdast": "^4.0.4",
     "@types/unist": "^3.0.3",
