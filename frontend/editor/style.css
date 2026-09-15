@@ -22,12 +22,21 @@
   padding: 0 12px 0 8px;
 }
 
+/*
+ * No overflow control here on purpose. The textarea is the editor's only
+ * scroller, and the highlight overlay clips itself inside its own viewport, so
+ * nothing overflows this wrapper. Giving it `auto` would make the editor a
+ * scroller nested inside a second one, and scrolling that outer one would slide
+ * the overlay out of alignment with the text.
+ */
 .editor-wrapper {
   flex: 1;
   position: relative;
-  overflow: auto;
   display: flex;
   justify-content: center;
+  /* Size container so the scroll-past-end padding below can be expressed
+     against the editor pane rather than the viewport. */
+  container-type: size;
 }
 
 .editor-content {
@@ -38,12 +47,18 @@
   border-right: 1px solid var(--mnemo-editor-border, var(--border-color, #d0d7de));
 }
 
+/*
+ * The bottom padding is scroll-past-end room, so the last line can be brought
+ * to the middle of the editor. It is half the PANE (50cqh), not half the
+ * viewport: with 50vh a pane shorter than the viewport gets padding taller than
+ * its own box, which forces the textarea past the bottom of the editor.
+ */
 .editor-textarea,
 .editor-highlight {
   font-family: Monaco, Menlo, Consolas, monospace;
   font-size: 14px;
   line-height: 1.5;
-  padding: 16px 16px 50vh 24px;
+  padding: 16px 16px 50cqh 24px;
   margin: 0;
   border: none;
   white-space: pre-wrap;
@@ -70,14 +85,24 @@
   background: rgba(56, 139, 253, 0.3);
 }
 
-.editor-highlight {
+/* Fixed-size window over the overlay. It never moves, so it can clip the part
+   of the surface that is scrolled out of view without cutting off anything the
+   reader should see. */
+.editor-highlight-viewport {
   position: absolute;
   top: 0;
   left: 0;
   width: 100%;
-  min-height: 100%;
+  height: 100%;
+  overflow: hidden;
   pointer-events: none;
   z-index: 1;
+}
+
+/* The scrolled surface: as tall as the document, translated by syncScroll. */
+.editor-highlight {
+  width: 100%;
+  min-height: 100%;
   color: var(--mnemo-editor-text, var(--text-primary, #24292f));
 }
 

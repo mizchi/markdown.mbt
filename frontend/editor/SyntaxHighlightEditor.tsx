@@ -305,7 +305,11 @@ export function SyntaxHighlightEditor(props: SyntaxHighlightEditorProps) {
       )}
       <div class="editor-wrapper" ref={(el) => { wrapperRef = el as HTMLDivElement; }}>
         <div class="editor-content">
-          <div class="editor-highlight" ref={(el) => { highlightRef = el as HTMLDivElement; }}></div>
+          {/* The viewport is a fixed-size window; .editor-highlight is the full-height
+              surface inside it that syncScroll translates to follow the textarea. */}
+          <div class="editor-highlight-viewport">
+            <div class="editor-highlight" ref={(el) => { highlightRef = el as HTMLDivElement; }}></div>
+          </div>
           <textarea
             ref={(el) => setupEditor(el as HTMLTextAreaElement)}
             class="editor-textarea"
