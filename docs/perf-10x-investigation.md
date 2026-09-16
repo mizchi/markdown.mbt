@@ -5,9 +5,11 @@ Measured 2026-09-15 on the JS backend (`preferred_target = "js"`), commit
 it.
 
 **Short answer: not on the full-parse path — the Amdahl ceiling there is about
-2.4x. But 10x already exists for editor-shaped workloads and is not wired up:
-`parse_incremental` is 16–33x faster than a full re-parse, and the playground
-does a full `parse()` on every edit.**
+2.4x. The win is in not re-parsing at all: `parse_incremental` is 16–33x faster
+than a full re-parse, but nothing outside MoonBit could reach it. That is now
+wired up, and the playground gets 6.7–9.1x per edit; see
+[What it actually buys](#what-it-actually-buys-and-what-the-new-ceiling-is) for
+why it is not the full 16–33x.**
 
 ## Where the time goes today
 
@@ -95,19 +97,53 @@ sections):
 
 That is the 10x, and it is already implemented in `parse_incremental`.
 
-### What blocks it
+### What blocked it — now fixed
 
-1. **The playground never calls it.** `playground/main.tsx` `handleChange` runs
+1. **The playground never called it.** `playground/main.tsx` `handleChange` ran
    `setAst(parse(newSource))` — a full parse per edit, debounced 100 ms.
-2. **The JS handle API cannot serve an AST incrementally.**
-   `createDocument(...).ast` is a getter that falls back to a full
-   `parse(source)`, so it is *slower* than calling `parse()` directly:
-   30.7 ms vs 15.2 ms on the 89 KB document. Incremental only pays off through
+2. **The JS handle API could not serve an AST incrementally.**
+   `createDocument(...).ast` was a getter that fell back to a full
+   `parse(source)`, so it was *slower* than calling `parse()` directly:
+   30.7 ms vs 15.2 ms on the 89 KB document. Incremental only paid off through
    `toHtml()` / `toMarkdown()`.
-3. **Chained edits fall back.** The handle returned by `update()` defines
+3. **Chained edits fell back.** The handle returned by `update()` defined
    `update: (s, e) => createDocument(s, options).update(s, e)` (marked
-   "Simplified" in `js/api.js`), so the second and later edits re-parse from
+   "Simplified" in `js/api.js`), so the second and later edits re-parsed from
    scratch.
+
+All three are addressed: `md_ast_object(handle)` materialises the mdast from a
+document that is already parsed, `documentFromHandle` gives every revision a
+real incremental `update()`, and `diffEdit(oldSource, newSource)` derives the
+edit for callers who only have the two texts. The playground keeps one document
+alive and advances it.
+
+### What it actually buys, and what the new ceiling is
+
+Measured in Chromium against `js/api.js`, interleaved to cancel drift:
+
+| Document | Before (full parse → mdast) | After (incremental → mdast) | Speedup |
+|---|---|---|---|
+| 241 lines / 3.8 KB | 0.437 ms | 0.048 ms | 9.1x |
+| 1201 lines / 19.1 KB | 1.638 ms | 0.230 ms | 7.1x |
+| 4801 lines / 76.6 KB | 6.402 ms | 0.955 ms | 6.7x |
+
+Less than the 16–33x the parse benchmark suggests, and the breakdown says why
+(76.6 KB, Node):
+
+| Step | Time | vs full parse |
+|---|---|---|
+| full parse → mdast | 10.91 ms | 1.0x |
+| `update()` only | 0.24 ms | 44.8x |
+| `update()` + `.ast` | 1.34 ms | 8.1x |
+| `update()` + `.toHtml()` | 1.51 ms | 7.2x |
+
+The incremental parse itself is ~45x, but handing a JS consumer a full mdast
+tree costs 1.10 ms regardless of how small the edit was, and rendering the whole
+document to HTML costs 1.27 ms. **Output materialisation, not parsing, is now
+the bottleneck.** Going past ~8x means making the output incremental too —
+patching the previous mdast for the blocks that changed, or re-rendering only
+those blocks — which the CST's block spans already carry enough information
+to do.
 
 ## FFI layer: not the problem
 
@@ -129,12 +165,14 @@ JSON API on a hot path.
 
 | # | Change | Expected | Risk |
 |---|---|---|---|
-| 1 | Make incremental parsing reachable for AST consumers (fix `ast` getter and chained `update`), then use it in the playground | **16–33x** on edits | Low — the engine already exists |
+| ~~1~~ | Make incremental parsing reachable for AST consumers, then use it in the playground — **done** | 6.7–9.1x measured | Low — the engine already existed |
+| 1b | Make the *output* incremental too: patch the previous mdast / re-render only changed blocks | up to ~8x again | Medium |
 | 2 | Ship wasm-gc instead of js for the playground bundle | 1.3x | Low |
 | 3 | Cut allocations: presize the arrays behind `Array::push`, avoid rebuilding container subtrees in the extension passes | 1.3–2x, capped at 2.4x | Medium |
 | 4 | Flat arena / event-stream CST | 10x | Rewrite; conflicts with the lossless-CST premise |
 
-Items 1 and 2 are worth doing. Item 3 is ordinary tuning with a known ceiling.
+Item 1 is done; 1b is where the next real win is. Item 2 is still worth doing.
+Item 3 is ordinary tuning with a known ceiling.
 Item 4 should only be considered as a separate, explicitly-scoped project.
 
 ## Notes

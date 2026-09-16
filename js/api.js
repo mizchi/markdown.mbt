@@ -15,6 +15,7 @@ import {
   md_to_ast_json_with_wikilinks,
   md_to_ast_object,
   md_to_ast_object_with_wikilinks,
+  md_ast_object,
   md_render_html_with_options,
   md_serialize,
   md_parse_with_source,
@@ -126,31 +127,55 @@ export function toHtmlLiteral(source, options = {}) {
  */
 export function createDocument(source, options = {}) {
   const wikilinks = useWikilinks(options);
-  const renderFlags = rendererFlags(options);
   const handle = wikilinks
     ? md_parse_with_source_with_wikilinks(source)
     : md_parse_with_source(source);
+  return documentFromHandle(handle, options);
+}
+
+/**
+ * Wrap an existing CST handle as a DocumentHandle.
+ *
+ * Every accessor reads the handle the caller already paid to build. In
+ * particular `ast` calls md_ast_object rather than re-parsing the source: a
+ * re-parse costs more than the incremental update saved, which would make
+ * update() pointless for anyone consuming the AST.
+ *
+ * @param {number} handle - Live CST handle
+ * @param {{ wikilinks?: boolean, autolink?: boolean, tagfilter?: boolean }} options
+ * @returns {import('./api').DocumentHandle}
+ */
+function documentFromHandle(handle, options) {
+  const renderFlags = rendererFlags(options);
   let cachedAst = null;
+  let disposed = false;
+
+  const live = () => {
+    if (disposed) {
+      throw new Error("Document handle has already been disposed");
+    }
+    return handle;
+  };
 
   return {
     get ast() {
       if (cachedAst === null) {
-        cachedAst = parse(source, options);
+        cachedAst = md_ast_object(live());
       }
       return cachedAst;
     },
 
     toHtml() {
-      return md_render_html_with_options(handle, renderFlags);
+      return md_render_html_with_options(live(), renderFlags);
     },
 
     toMarkdown() {
-      return md_serialize(handle);
+      return md_serialize(live());
     },
 
     update(newSource, edit) {
       const newHandle = md_parse_incremental(
-        handle,
+        live(),
         newSource,
         edit.start,
         edit.oldEnd,
@@ -159,24 +184,15 @@ export function createDocument(source, options = {}) {
       if (newHandle === 0) {
         throw new Error("Incremental parse failed");
       }
-      // Return a new document handle
-      let newCachedAst = null;
-      return {
-        get ast() {
-          if (newCachedAst === null) {
-            newCachedAst = parse(newSource, options);
-          }
-          return newCachedAst;
-        },
-        toHtml: () => md_render_html_with_options(newHandle, renderFlags),
-        toMarkdown: () => md_serialize(newHandle),
-        update: (s, e) => createDocument(s, options).update(s, e), // Simplified
-        dispose: () => md_free(newHandle),
-      };
+      // The result is a full document in its own right, so it updates
+      // incrementally too - a chain of edits never falls back to a full parse.
+      return documentFromHandle(newHandle, options);
     },
 
     dispose() {
+      if (disposed) return;
       md_free(handle);
+      disposed = true;
       cachedAst = null;
     },
   };
@@ -215,4 +231,45 @@ export function deleteEdit(start, end) {
  */
 export function replaceEdit(start, oldEnd, newLength) {
   return { start, oldEnd, newEnd: start + newLength };
+}
+
+/**
+ * Derive an EditInfo from two revisions of a document.
+ *
+ * Editors usually hand you the new text, not the edit that produced it. This
+ * narrows old -> new to the single replaced range by trimming the common
+ * prefix and suffix, which is what an incremental parse needs. A run of
+ * keystrokes collapses into one range, so it is safe to call once per
+ * debounced update rather than once per keystroke.
+ *
+ * @param {string} oldSource - Source the document was last parsed from
+ * @param {string} newSource - Current source
+ * @returns {import('./api').EditInfo | null} The edit, or null if unchanged
+ */
+export function diffEdit(oldSource, newSource) {
+  if (oldSource === newSource) return null;
+
+  const oldLen = oldSource.length;
+  const newLen = newSource.length;
+  const maxCommon = Math.min(oldLen, newLen);
+
+  let prefix = 0;
+  while (
+    prefix < maxCommon &&
+    oldSource.charCodeAt(prefix) === newSource.charCodeAt(prefix)
+  ) {
+    prefix++;
+  }
+
+  let suffix = 0;
+  const maxSuffix = maxCommon - prefix;
+  while (
+    suffix < maxSuffix &&
+    oldSource.charCodeAt(oldLen - 1 - suffix) ===
+      newSource.charCodeAt(newLen - 1 - suffix)
+  ) {
+    suffix++;
+  }
+
+  return { start: prefix, oldEnd: oldLen - suffix, newEnd: newLen - suffix };
 }

@@ -169,7 +169,12 @@ export type MarkdownRoot = Omit<import("mdast").Root, "children"> & {
  * A parsed markdown document with handle-based management.
  */
 export interface DocumentHandle {
-  /** Get the parsed AST (cached after first access) */
+  /**
+   * The parsed AST (cached after first access).
+   *
+   * Read from the document's existing CST — it does not re-parse the source,
+   * so it stays cheap after an incremental `update()`.
+   */
   readonly ast: MarkdownRoot;
 
   /** Render the document to HTML */
@@ -180,7 +185,11 @@ export interface DocumentHandle {
 
   /**
    * Apply an incremental edit and return a new document.
-   * The original document is not modified.
+   * The original document is not modified, and stays usable until disposed.
+   *
+   * The returned document updates incrementally too, so a chain of edits
+   * never falls back to a full parse. Each document owns its own resources:
+   * dispose the previous one when you no longer need it.
    */
   update(newSource: string, edit: EditInfo): DocumentHandle;
 
@@ -315,3 +324,19 @@ export function deleteEdit(start: number, end: number): EditInfo;
  * const edit = replaceEdit(5, 10, 8); // Replace 5-10 with 8 chars
  */
 export function replaceEdit(start: number, oldEnd: number, newLength: number): EditInfo;
+
+/**
+ * Derive an EditInfo from two revisions of a document, by trimming the common
+ * prefix and suffix down to the single replaced range.
+ *
+ * Use this when your editor hands you the new text rather than the edit that
+ * produced it. A run of keystrokes collapses into one range, so it is safe to
+ * call once per debounced update.
+ *
+ * @example
+ * const edit = diffEdit(lastParsed, current);
+ * if (edit) doc = doc.update(current, edit);
+ *
+ * @returns The edit, or null when the two revisions are identical.
+ */
+export function diffEdit(oldSource: string, newSource: string): EditInfo | null;

@@ -1,5 +1,6 @@
 import { render, createSignal, createEffect, createMemo, onMount, onCleanup, Show, batch } from "@luna_ui/luna";
-import { parse } from "../js/api.js";
+import { createDocument, diffEdit } from "../js/api.js";
+import type { DocumentHandle } from "../js/api";
 import type { Root } from "mdast";
 import type { RendererCallbacks } from "./ast-renderer";
 import { SyntaxHighlightEditor, type SyntaxHighlightEditorHandle } from "../frontend/editor/SyntaxHighlightEditor";
@@ -319,6 +320,47 @@ function App() {
   let simpleEditorRef: HTMLTextAreaElement | null = null;
   let previewRef: HTMLDivElement | null = null;
 
+  // Incremental parsing state. The playground used to run a full parse on every
+  // edit; instead we keep the parsed document alive and advance it with the
+  // edit that actually happened, which is what parse_incremental is for.
+  let docHandle: DocumentHandle | null = null;
+  let lastParsedSource = "";
+
+  /**
+   * Bring the AST up to date with `nextSource`.
+   *
+   * Diffs against the source the document was last parsed from - not the
+   * previous keystroke - so a debounced run of edits collapses into one range,
+   * and a source change that skipped the AST (the SVG editor does that) is
+   * still covered by the next refresh.
+   */
+  const refreshAst = (nextSource: string) => {
+    if (docHandle) {
+      const edit = diffEdit(lastParsedSource, nextSource);
+      if (edit === null) return; // nothing changed
+      try {
+        const updated = docHandle.update(nextSource, edit);
+        docHandle.dispose();
+        docHandle = updated;
+        lastParsedSource = nextSource;
+        setAst(docHandle.ast);
+        return;
+      } catch {
+        // Incremental parse refused this edit; fall back to a full parse.
+        docHandle.dispose();
+        docHandle = null;
+      }
+    }
+    docHandle = createDocument(nextSource);
+    lastParsedSource = nextSource;
+    setAst(docHandle.ast);
+  };
+
+  onCleanup(() => {
+    docHandle?.dispose();
+    docHandle = null;
+  });
+
   // Track if content has been modified since load
   let hasModified = false;
   let lastSyncedTimestamp = 0;
@@ -424,10 +466,9 @@ function App() {
         // ignore IndexedDB load errors and fall back to initial content
       }
 
-      const parsedAst = parse(content);
       batch(() => {
         setSource(content);
-        setAst(parsedAst);
+        refreshAst(content);
         setIsInitialized(true);
       });
       lastSyncedTimestamp = timestamp;
@@ -507,7 +548,7 @@ function App() {
     // Update source and AST synchronously (bypass debounce for immediate feedback)
     hasModified = true;
     setSource(newSource);
-    setAst(parse(newSource));
+    refreshAst(newSource);
 
     // Sync editor text with targeted update using span
     if (editorMode() === "highlight" && editorRef) {
@@ -624,7 +665,7 @@ function App() {
     // Debounce AST parsing - preview doesn't need to update on every keystroke
     clearTimeout(astParseTimer);
     astParseTimer = window.setTimeout(() => {
-      setAst(parse(newSource));
+      refreshAst(newSource);
     }, AST_PARSE_DELAY);
   };
 
