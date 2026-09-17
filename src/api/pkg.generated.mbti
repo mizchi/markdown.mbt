@@ -8,6 +8,8 @@ import {
 // Values
 pub fn document_to_json(@markdown.Document) -> String
 
+pub fn md_ast_incremental_patch(Int) -> JsValue
+
 pub fn md_ast_object(Int) -> JsValue
 
 pub fn md_free(Int) -> Unit

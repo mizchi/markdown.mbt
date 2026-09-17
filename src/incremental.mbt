@@ -56,7 +56,11 @@ pub fn parse_incremental(
   let old_blocks = old_doc.children
 
   // Find blocks affected by the edit
-  let (before_idx, after_idx) = find_affected_range(old_blocks, edit)
+  let (before_idx, after_idx) = find_affected_range(
+    old_blocks,
+    edit,
+    old_source.length(),
+  )
 
   // Determine the source range to re-parse
   let reparse_start = if before_idx > 0 {
@@ -77,14 +81,49 @@ pub fn parse_incremental(
   let delta = edit.new_len - edit.old_len
   let reparse_end_new = reparse_end_old + delta
 
-  // Extract the region to re-parse from new source
+  // Re-parse the region with the first reused block appended, so the parse
+  // itself can show whether the edit leaked past the region.
+  //
+  // A construct the edit leaves open - an unterminated fence is the usual one -
+  // swallows whatever follows, so the blocks we were about to reuse would not
+  // survive a full parse of the same text. When that happens the appended block
+  // is absorbed and no block starts at the old boundary any more; when nothing
+  // leaked, a block starts exactly there and everything past it is unchanged.
+  let region_end = clamp_int(reparse_end_new, reparse_start, new_source.length())
+  let has_guard_block = after_idx < old_blocks.length()
+  let guard_end = if has_guard_block {
+    clamp_int(
+      old_blocks[after_idx].get_span().to + delta,
+      region_end,
+      new_source.length(),
+    )
+  } else {
+    region_end
+  }
   let reparse_region = new_source.unsafe_substring(
     start=reparse_start,
-    end=clamp_int(reparse_end_new, reparse_start, new_source.length()),
+    end=guard_end,
   )
 
   // Re-parse just this region
   let region_result = parse(reparse_region, wikilinks~)
+
+  // Where the appended block has to start for the reuse to be sound.
+  let boundary = region_end - reparse_start
+  let leaked = has_guard_block &&
+    not(has_block_starting_at(region_result.document.children, boundary))
+  if leaked {
+    let full = parse(new_source, wikilinks~)
+    return {
+      document: full.document,
+      reused_before: 0,
+      reparsed: full.document.children.length(),
+      reused_after: 0,
+    }
+  }
+  // The appended block was re-parsed along with the region, so the reused tail
+  // starts after it.
+  let after_idx = if has_guard_block { after_idx + 1 } else { after_idx }
 
   // Link reference definitions are document-scoped: a reused block can hold a
   // reference that this edit resolves or breaks, and the definition itself may
@@ -138,51 +177,85 @@ pub fn parse_incremental(
   }
 }
 
+///|
+/// Is this block nothing but blank lines?
+fn is_blank_lines(block : Block) -> Bool {
+  match block {
+    Block::BlankLines(..) => true
+    _ => false
+  }
+}
+
+///|
+/// Is there a block starting exactly at `offset`?
+///
+/// Used to tell whether a re-parsed region still breaks where it used to. If
+/// nothing starts at the old boundary, an open construct absorbed what followed
+/// and the blocks past it can no longer be reused.
+fn has_block_starting_at(blocks : Array[Block], offset : Int) -> Bool {
+  for block in blocks {
+    if block.get_span().from == offset {
+      return true
+    }
+  }
+  false
+}
+
 ///| Find the range of blocks affected by the edit
 
 ///|
 /// Returns (first_affected_idx, first_unaffected_after_idx)
-fn find_affected_range(blocks : Array[Block], edit : EditInfo) -> (Int, Int) {
+///
+/// Blocks are matched on their *extent*, not their span. `get_span()` covers
+/// only the block proper: a fenced block's closing fence and the blank lines
+/// after any block are trivia that sit outside it, so an edit there belongs to
+/// no span at all and used to be attributed to whichever block came next -
+/// which left the block it actually changed out of the re-parse. Giving each
+/// block everything up to where the next one starts makes every offset in the
+/// document belong to exactly one block.
+///
+/// Bounds are inclusive so that an insertion, which has `edit_start ==
+/// edit_end`, affects the block starting at the caret as well as the one
+/// ending there: typing "> " or "- " at the start of a paragraph turns that
+/// paragraph into a quote or a list item.
+fn find_affected_range(
+  blocks : Array[Block],
+  edit : EditInfo,
+  source_len : Int,
+) -> (Int, Int) {
+  let n = blocks.length()
+  if n == 0 {
+    return (0, 0)
+  }
   let edit_start = edit.offset
   let edit_end = edit.offset + edit.old_len
-  let mut first_affected = blocks.length()
-  let mut first_unaffected = blocks.length()
-  for i, block in blocks {
-    let span = block.get_span()
-
-    // Check if block overlaps with edit
-    if span.to > edit_start && span.from < edit_end {
-      if first_affected == blocks.length() {
-        first_affected = i
-      }
-      first_unaffected = i + 1
-    } else if span.from >= edit_end {
-      // Block is entirely after the edit
-      if first_unaffected == blocks.length() || first_unaffected <= i {
-        first_unaffected = i
-      }
-      break
-    }
-  }
-
-  // If edit is in a blank region between blocks, we still need to re-parse
-  if first_affected == blocks.length() {
-    // Find where the edit falls
-    for i, block in blocks {
-      let span = block.get_span()
-      if span.from > edit_start {
-        first_affected = i
-        first_unaffected = i
-        break
-      }
-      if span.to >= edit_start {
-        first_affected = i
-        first_unaffected = i + 1
+  let mut first = n
+  let mut last_plus_one = 0
+  for i = 0; i < n; i = i + 1 {
+    let extent_from = if i == 0 { 0 } else { blocks[i].get_span().from }
+    // Run on to the next block that carries content. Blank-line blocks sit in
+    // the gap where a fenced block's closing fence also lives, and letting one
+    // of them own that gap is what hid an edit on a closing fence from the
+    // block it actually belongs to.
+    let mut extent_to = source_len
+    for j = i + 1; j < n; j = j + 1 {
+      if not(is_blank_lines(blocks[j])) {
+        extent_to = blocks[j].get_span().from
         break
       }
     }
+    if edit_start <= extent_to && edit_end >= extent_from {
+      if first == n {
+        first = i
+      }
+      last_plus_one = i + 1
+    }
   }
-  (first_affected, first_unaffected)
+  if first == n {
+    (n, n)
+  } else {
+    (first, last_plus_one)
+  }
 }
 
 ///|

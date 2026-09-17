@@ -391,6 +391,84 @@ describe("createDocument", () => {
   });
 });
 
+describe("incremental parse fidelity", () => {
+  const blocks = (ast) =>
+    ast.children.map(
+      (c) => `${c.type}@${c.position.start.offset}-${c.position.end.offset}`,
+    ).join(" ");
+
+  /** Apply one edit through the incremental path and return both readings. */
+  const applyEdit = (before, after, { materialise = true } = {}) => {
+    const doc = createDocument(before);
+    if (materialise) doc.ast; // enables the reuse path on the next update
+    const updated = doc.update(after, diffEdit(before, after));
+    const result = { incremental: blocks(updated.ast), full: blocks(parse(after)) };
+    doc.dispose();
+    updated.dispose();
+    return result;
+  };
+
+  // Each of these edits changes how the text AFTER it parses, so a re-parse
+  // limited to the edited block alone gets the document wrong.
+  const STRUCTURAL = [
+    ["quoting a paragraph", "# T\n\npara one\n\ntail\n", (s) => s.replace("para one", "> para one")],
+    ["turning a paragraph into a list item", "# T\n\npara one\n\ntail\n", (s) => s.replace("para one", "- para one")],
+    ["opening a fence", "# T\n\npara one\n\ntail\n", (s) => s.replace("para one", "```ts")],
+    ["breaking a closing fence", "# T\n\n```ts\ncode\n```\n\ntail\n", (s) => s.replace("\n```\n\ntail", "\n``\n\ntail")],
+    ["breaking a table delimiter", "# T\n\n| a | b |\n|---|---|\n| 1 | 2 |\n\ntail\n", (s) => s.replace("|---|---|", "|---|")],
+    ["adding a setext underline", "# T\n\npara one\n\ntail\n", (s) => s.replace("para one\n", "para one\n===\n")],
+  ];
+
+  for (const [name, before, mutate] of STRUCTURAL) {
+    it(`matches a full parse after ${name}`, () => {
+      const after = mutate(before);
+      expect(after).not.toBe(before);
+      const { incremental, full } = applyEdit(before, after);
+      expect(incremental).toBe(full);
+    });
+  }
+
+  it("keeps a chain of edits in step with a full parse", () => {
+    let source = "# Title\n\nintro *text*\n\n- one\n- two\n\n> quote\n";
+    let doc = createDocument(source);
+    doc.ast;
+    const steps = [
+      (s) => s.replace("intro", "> intro"),
+      (s) => s.replace("- one", "1. one"),
+      (s) => s + "\ntail paragraph\n",
+      (s) => s.replace("quote", "quote **bold**"),
+      (s) => s.replace("# Title", "## Title"),
+    ];
+    for (const step of steps) {
+      const next = step(source);
+      const updated = doc.update(next, diffEdit(source, next));
+      doc.dispose();
+      doc = updated;
+      source = next;
+      expect(blocks(doc.ast)).toBe(blocks(parse(source)));
+    }
+    doc.dispose();
+  });
+
+  it("reuses AST nodes that the edit did not touch", () => {
+    const before = "# Title\n\nfirst para\n\nsecond para\n\nthird para\n";
+    const after = before + "\nfourth para\n";
+    const doc = createDocument(before);
+    const oldAst = doc.ast;
+    const updated = doc.update(after, diffEdit(before, after));
+    const newAst = updated.ast;
+
+    // Appending at the end leaves every earlier block untouched, so the very
+    // same node objects come back rather than freshly built copies.
+    expect(newAst.children[0]).toBe(oldAst.children[0]);
+    expect(newAst.children[1]).toBe(oldAst.children[1]);
+    expect(blocks(newAst)).toBe(blocks(parse(after)));
+
+    doc.dispose();
+    updated.dispose();
+  });
+});
+
 describe("diffEdit", () => {
   const apply = (source, edit, inserted) =>
     source.slice(0, edit.start) + inserted + source.slice(edit.oldEnd);
