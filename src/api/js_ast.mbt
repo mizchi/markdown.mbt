@@ -550,6 +550,102 @@ pub fn md_to_ast_object_with_wikilinks(source : String) -> JsValue {
 }
 
 ///|
+/// Does this block contribute a node to the mdast output?
+///
+/// Mirrors `block_to_js`: every block maps to exactly one mdast node except
+/// `BlankLines`, which is trivia the mdast shape has no place for. Callers need
+/// this to translate CST block indices into mdast child indices without
+/// building the nodes.
+fn block_emits_ast(block : @markdown.Block) -> Bool {
+  match block {
+    @markdown.Block::BlankLines(..) => false
+    _ => true
+  }
+}
+
+///|
+/// Count mdast children produced by CST blocks in `[from, to)`.
+fn count_ast_children(
+  blocks : Array[@markdown.Block],
+  from : Int,
+  to : Int,
+) -> Int {
+  let mut count = 0
+  for i = from; i < to; i = i + 1 {
+    if block_emits_ast(blocks[i]) {
+      count = count + 1
+    }
+  }
+  count
+}
+
+///|
+/// What a consumer needs to rebuild its mdast from the previous revision's,
+/// instead of materialising the whole document again.
+///
+/// `md_parse_incremental` re-parses only the blocks the edit touched and
+/// carries the rest over, but `md_ast_object` still walks every block, so the
+/// output costs the same as a full parse no matter how small the edit was.
+/// This returns the split instead: reuse the first `before` children of the
+/// previous AST and its last `after`, and take everything between them from
+/// `rest`.
+///
+/// Deciding which nodes survive is done here rather than in the consumer on
+/// purpose. Spans are shifted by `shift_block_span`, which moves block spans
+/// but leaves inline spans alone (they are block-relative) and leaves table
+/// rows and cells alone as well. A consumer that shifted offsets itself would
+/// have to mirror those rules and keep mirroring them as block types are added.
+/// So a reused tail is offered only when the edit moved nothing (`delta == 0`);
+/// otherwise the tail is rebuilt here, where the span rules live.
+///
+/// Returns JS `null` when the handle is unknown or was not produced by an
+/// incremental parse, in which case the caller must fall back to
+/// `md_ast_object`.
+pub fn md_ast_incremental_patch(handle : Int) -> JsValue {
+  match ast_store.get(handle) {
+    Some(entry) =>
+      match entry.reuse {
+        Some(reuse) => {
+          let blocks = entry.document.children
+          let total = blocks.length()
+          let reparse_end = reuse.reused_before + reuse.reparsed
+          // The full-parse fallback inside parse_incremental reports everything
+          // as reparsed; the split still describes it (before = after = 0).
+          guard reparse_end <= total else { return js_null() }
+          let reuse_tail = reuse.delta == 0
+          let rest_end = if reuse_tail { reparse_end } else { total }
+          let rest = js_array_new()
+          for i = reuse.reused_before; i < rest_end; i = i + 1 {
+            match block_to_js(blocks[i]) {
+              Some(value) => js_array_push(rest, value)
+              None => ()
+            }
+          }
+          let after = if reuse_tail {
+            count_ast_children(blocks, reparse_end, total)
+          } else {
+            0
+          }
+          let object = js_object_new()
+          set(
+            object,
+            "before",
+            js_number(
+              count_ast_children(blocks, 0, reuse.reused_before).to_double(),
+            ),
+          )
+          set(object, "after", js_number(after.to_double()))
+          set(object, "rest", rest)
+          set(object, "position", position_to_js(entry.document.span))
+          object
+        }
+        None => js_null()
+      }
+    None => js_null()
+  }
+}
+
+///|
 /// Return the mdast-compatible JavaScript object for a document that is
 /// already parsed behind `handle`, without re-parsing its source.
 ///

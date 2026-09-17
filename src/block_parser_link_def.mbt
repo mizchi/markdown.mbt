@@ -154,7 +154,7 @@ fn BlockParser::try_footnote_definition(
   guard self.peek_line(self.next_nonspace + 1) == '^' else { return None }
   let mut i = self.next_nonspace + 2
   while i < self.line_len {
-    let c = self.line.unsafe_get(i)
+    let c = self.line_char(i)
     if c == ']' {
       break
     }
@@ -164,11 +164,11 @@ fn BlockParser::try_footnote_definition(
     i = i + 1
   }
   guard i < self.line_len && i > self.next_nonspace + 2 else { return None }
-  guard i + 1 < self.line_len && self.line.unsafe_get(i + 1) == ':' else {
+  guard i + 1 < self.line_len && self.line_char(i + 1) == ':' else {
     return None
   }
-  let label = self.line
-    .unsafe_substring(start=self.next_nonspace + 2, end=i)
+  let label = self
+    .line_slice(self.next_nonspace + 2, i)
     .trim(chars=" \t")
     .to_owned()
   guard !label.is_empty() else { return None }

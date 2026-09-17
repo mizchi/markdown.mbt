@@ -16,6 +16,7 @@ import {
   md_to_ast_object,
   md_to_ast_object_with_wikilinks,
   md_ast_object,
+  md_ast_incremental_patch,
   md_render_html_with_options,
   md_serialize,
   md_parse_with_source,
@@ -141,11 +142,16 @@ export function createDocument(source, options = {}) {
  * re-parse costs more than the incremental update saved, which would make
  * update() pointless for anyone consuming the AST.
  *
+ * `previous` is the AST of the revision this document was updated from, when
+ * there is one. An incremental parse only rebuilds the blocks the edit touched,
+ * so the nodes on either side can be carried over instead of built again.
+ *
  * @param {number} handle - Live CST handle
  * @param {{ wikilinks?: boolean, autolink?: boolean, tagfilter?: boolean }} options
+ * @param {import('./api').MarkdownRoot | null} [previous] - Previous revision's AST
  * @returns {import('./api').DocumentHandle}
  */
-function documentFromHandle(handle, options) {
+function documentFromHandle(handle, options, previous = null) {
   const renderFlags = rendererFlags(options);
   let cachedAst = null;
   let disposed = false;
@@ -157,10 +163,44 @@ function documentFromHandle(handle, options) {
     return handle;
   };
 
+  /**
+   * Rebuild the mdast children array from the previous revision's, taking only
+   * the nodes the edit actually changed from the parser.
+   *
+   * The split comes from md_ast_incremental_patch, which only offers nodes for
+   * reuse when they are byte-identical to before - it never asks this side to
+   * adjust offsets, because the rules for which spans move live with the
+   * parser. Returns null when this document did not come from an incremental
+   * parse, or when the split does not fit the AST we were handed, and the
+   * caller then builds the whole document.
+   */
+  const patchedAst = (h) => {
+    if (previous === null) return null;
+    const patch = md_ast_incremental_patch(h);
+    if (patch === null) return null;
+
+    const oldChildren = previous.children;
+    const { before, after, rest } = patch;
+    if (before + after > oldChildren.length) return null;
+
+    const children = new Array(before + rest.length + after);
+    for (let i = 0; i < before; i++) children[i] = oldChildren[i];
+    for (let i = 0; i < rest.length; i++) children[before + i] = rest[i];
+    const tailStart = oldChildren.length - after;
+    for (let i = 0; i < after; i++) {
+      children[before + rest.length + i] = oldChildren[tailStart + i];
+    }
+
+    return { type: "root", children, position: patch.position };
+  };
+
   return {
     get ast() {
       if (cachedAst === null) {
-        cachedAst = md_ast_object(live());
+        const h = live();
+        cachedAst = patchedAst(h) ?? md_ast_object(h);
+        // The previous AST is only needed for the first build.
+        previous = null;
       }
       return cachedAst;
     },
@@ -186,7 +226,9 @@ function documentFromHandle(handle, options) {
       }
       // The result is a full document in its own right, so it updates
       // incrementally too - a chain of edits never falls back to a full parse.
-      return documentFromHandle(newHandle, options);
+      // Hand it this revision's AST, if we built one, so it can carry over the
+      // nodes the edit did not touch instead of materialising them again.
+      return documentFromHandle(newHandle, options, cachedAst);
     },
 
     dispose() {

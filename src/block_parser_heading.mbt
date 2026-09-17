@@ -5,12 +5,12 @@
 fn BlockParser::try_atx_heading(self : BlockParser, container : Node) -> Node? {
   let mut i = self.next_nonspace
   let mut level = 0
-  while i < self.line_len && self.line.unsafe_get(i) == '#' && level < 7 {
+  while i < self.line_len && self.line_char(i) == '#' && level < 7 {
     level = level + 1
     i = i + 1
   }
   guard level >= 1 && level <= 6 else { return None }
-  guard i >= self.line_len || is_space_or_tab(self.line.unsafe_get(i)) else {
+  guard i >= self.line_len || is_space_or_tab(self.line_char(i)) else {
     return None
   }
   let node = self.add_child(
@@ -58,11 +58,11 @@ fn BlockParser::try_setext_heading(
   let c = self.peek_line(self.next_nonspace)
   guard c == '=' || c == '-' else { return false }
   let mut i = self.next_nonspace
-  while i < self.line_len && self.line.unsafe_get(i) == c {
+  while i < self.line_len && self.line_char(i) == c {
     i = i + 1
   }
   guard i > self.next_nonspace else { return false }
-  while i < self.line_len && is_space_or_tab(self.line.unsafe_get(i)) {
+  while i < self.line_len && is_space_or_tab(self.line_char(i)) {
     i = i + 1
   }
   guard i >= self.line_len else { return false }

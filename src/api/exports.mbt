@@ -5,13 +5,26 @@
 // =============================================================================
 
 ///|
+/// Which blocks an incremental parse carried over from the previous document.
+/// Indices are into the CST block array; `delta` is how far the reused tail
+/// moved in the source.
+priv struct ReuseInfo {
+  reused_before : Int
+  reparsed : Int
+  delta : Int
+}
+
+///|
 /// Per-handle state. `source` is populated only when the caller intends to do
 /// incremental parsing later; one-shot AST handles leave it as `""`.
+/// `reuse` is set only by `md_parse_incremental`, so a consumer can rebuild its
+/// output for the changed blocks alone instead of the whole document.
 priv struct AstEntry {
   document : @markdown.Document
   source : String
   has_source : Bool
   wikilinks : Bool
+  reuse : ReuseInfo?
 }
 
 ///|
@@ -52,6 +65,7 @@ pub fn md_parse_to_ast(source : String) -> Int {
     source: "",
     has_source: false,
     wikilinks: false,
+    reuse: None,
   })
 }
 
@@ -216,6 +230,7 @@ pub fn md_parse_with_source(source : String) -> Int {
     source,
     has_source: true,
     wikilinks: false,
+    reuse: None,
   })
 }
 
@@ -228,6 +243,7 @@ pub fn md_parse_with_source_with_wikilinks(source : String) -> Int {
     source,
     has_source: true,
     wikilinks: true,
+    reuse: None,
   })
 }
 
@@ -261,6 +277,12 @@ pub fn md_parse_incremental(
         source: new_source,
         has_source: true,
         wikilinks: entry.wikilinks,
+        // reused_after is derivable from the block count, so it is not stored.
+        reuse: Some({
+          reused_before: inc_result.reused_before,
+          reparsed: inc_result.reparsed,
+          delta: new_end - old_end,
+        }),
       })
     }
     _ => 0

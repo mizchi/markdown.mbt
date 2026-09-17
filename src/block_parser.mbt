@@ -185,7 +185,6 @@ priv struct BlockParser {
   doc : Node
   /// The deepest block left open by the previous line.
   mut tip : Node
-  mut line : String
   mut line_len : Int
   mut line_start : Int
   mut line_end : Int
@@ -201,6 +200,7 @@ priv struct BlockParser {
 ///|
 fn BlockParser::new(source : String, wikilinks : Bool) -> BlockParser {
   let doc = Node::new(NodeKind::DocNode, 0)
+  let source = sanitize_source(source)
   {
     source,
     len: source.length(),
@@ -209,7 +209,6 @@ fn BlockParser::new(source : String, wikilinks : Bool) -> BlockParser {
     pending_inlines: [],
     doc,
     tip: doc,
-    line: "",
     line_len: 0,
     line_start: 0,
     line_end: 0,
@@ -272,9 +271,27 @@ fn BlockParser::resolve_inlines(self : BlockParser) -> Unit {
 // =============================================================================
 
 ///|
+/// The `i`-th character of the current line. Callers must keep `i` within
+/// `line_len`; `peek_line` is the checked form.
+#inline
+fn BlockParser::line_char(self : BlockParser, i : Int) -> UInt16 {
+  self.source.unsafe_get(self.line_start + i)
+}
+
+///|
+/// The current line from `from` up to `to`, as a fresh string.
+#inline
+fn BlockParser::line_slice(self : BlockParser, from : Int, to : Int) -> String {
+  self.source.unsafe_substring(
+    start=self.line_start + from,
+    end=self.line_start + to,
+  )
+}
+
+///|
 fn BlockParser::peek_line(self : BlockParser, i : Int) -> UInt16 {
   if i >= 0 && i < self.line_len {
-    self.line.unsafe_get(i)
+    self.line_char(i)
   } else {
     0
   }
@@ -295,7 +312,7 @@ fn BlockParser::advance_offset(
 ) -> Unit {
   let mut remaining = count
   while remaining > 0 && self.offset < self.line_len {
-    if self.line.unsafe_get(self.offset) == '\t' {
+    if self.line_char(self.offset) == '\t' {
       let chars_to_tab = TabStop - self.column % TabStop
       if columns {
         self.partially_consumed_tab = chars_to_tab > remaining
@@ -331,7 +348,7 @@ fn BlockParser::find_next_nonspace(self : BlockParser) -> Unit {
     self.next_nonspace = self.offset
     self.next_nonspace_column = self.column
     while self.next_nonspace < self.line_len {
-      let c = self.line.unsafe_get(self.next_nonspace)
+      let c = self.line_char(self.next_nonspace)
       if c == ' ' {
         self.next_nonspace = self.next_nonspace + 1
         self.next_nonspace_column = self.next_nonspace_column + 1
@@ -358,7 +375,7 @@ fn BlockParser::find_next_nonspace(self : BlockParser) -> Unit {
 fn BlockParser::rest_of_line(self : BlockParser) -> String {
   let mut from = self.offset
   if !self.partially_consumed_tab {
-    return self.line.unsafe_substring(start=from, end=self.line_len)
+    return self.line_slice(from, self.line_len)
   }
   let buf = StringBuilder()
   from = from + 1
@@ -366,7 +383,7 @@ fn BlockParser::rest_of_line(self : BlockParser) -> String {
   for i = 0; i < chars_to_tab; i = i + 1 {
     buf.write_char(' ')
   }
-  buf.write_string(self.line.unsafe_substring(start=from, end=self.line_len))
+  buf.write_string(self.line_slice(from, self.line_len))
   buf.to_string()
 }
 
@@ -448,11 +465,7 @@ fn BlockParser::parse_document(self : BlockParser) -> ParseResult {
   }
   let mut done = pos >= self.len
   while !done {
-    let (text, next) = self.read_line(pos)
-    self.line = text
-    self.line_len = text.length()
-    self.line_start = pos
-    self.line_end = next
+    let next = self.read_line(pos)
     self.process_line()
     done = next >= self.len
     pos = next
@@ -856,11 +869,11 @@ fn extract_alert(children : Array[Block]) -> (AlertKind, Array[Block])? {
 }
 
 ///|
-/// Read the line starting at `pos`, returning its text (without the line
-/// ending) and the offset of the next line.
-fn BlockParser::read_line(self : BlockParser, pos : Int) -> (String, Int) {
+/// Where the line starting at `pos` ends and where the next one starts. The
+/// end excludes the line ending; `next` is past it. Pure - it does not move
+/// the parser, so lookahead can use it too.
+fn BlockParser::scan_line(self : BlockParser, pos : Int) -> (Int, Int) {
   let i = find_line_end(self.source, pos, self.len)
-  let text = self.source.unsafe_substring(start=pos, end=i)
   let mut next = i
   if next < self.len {
     if self.source.unsafe_get(next) == '\r' {
@@ -872,25 +885,34 @@ fn BlockParser::read_line(self : BlockParser, pos : Int) -> (String, Int) {
       next = next + 1
     }
   }
-  (sanitize_line(text), next)
+  (i, next)
 }
 
 ///|
-/// The spec replaces U+0000 with the replacement character.
-fn sanitize_line(text : String) -> String {
+/// Position the parser on the line starting at `pos` and return where the
+/// next one starts. The line itself is never materialised: it is
+/// `source[line_start ..< line_start + line_len]`, read through `line_char`.
+fn BlockParser::read_line(self : BlockParser, pos : Int) -> Int {
+  let (end, next) = self.scan_line(pos)
+  self.line_start = pos
+  self.line_len = end - pos
+  self.line_end = next
+  next
+}
+
+///|
+/// The spec replaces U+0000 with the replacement character. Both are a single
+/// UTF-16 code unit, so doing it once for the whole source keeps every offset
+/// where it was and saves doing it per line.
+fn sanitize_source(text : String) -> String {
+  let first_nul = match text.find("\u{0}") {
+    Some(i) => i
+    None => return text
+  }
   let len = text.length()
-  let mut has_nul = false
-  for i = 0; i < len; i = i + 1 {
-    if text.unsafe_get(i) == 0 {
-      has_nul = true
-      break
-    }
-  }
-  if !has_nul {
-    return text
-  }
   let buf = StringBuilder()
-  for i = 0; i < len; i = i + 1 {
+  buf.write_string(text.unsafe_substring(start=0, end=first_nul))
+  for i = first_nul; i < len; i = i + 1 {
     if text.unsafe_get(i) == 0 {
       buf.write_string(ReplacementChar)
     } else {
@@ -1208,8 +1230,8 @@ fn BlockParser::blank_lines_node(
   let mut pos = from
   let mut count = 0
   while pos < to {
-    let (line, next) = self.read_line(pos)
-    if is_blank_text(line) {
+    let (end, next) = self.scan_line(pos)
+    if is_blank_range(self.source, pos, end) {
       count = count + 1
     }
     if next <= pos {
@@ -1326,8 +1348,15 @@ fn trimmed_code_lines(node : Node) -> String {
 
 ///|
 fn is_blank_text(line : String) -> Bool {
-  for i = 0; i < line.length(); i = i + 1 {
-    let c = line.unsafe_get(i)
+  is_blank_range(line, 0, line.length())
+}
+
+///|
+/// Whether `text[from ..< to]` holds nothing but spaces, tabs and line
+/// endings. Taking a range avoids cutting the slice out first.
+fn is_blank_range(text : String, from : Int, to : Int) -> Bool {
+  for i = from; i < to; i = i + 1 {
+    let c = text.unsafe_get(i)
     if !is_space_or_tab(c) && c != '\n' && c != '\r' {
       return false
     }
@@ -1620,7 +1649,7 @@ fn BlockParser::try_thematic_break(
   let mut i = self.next_nonspace
   let mut count = 0
   while i < self.line_len {
-    let ch = self.line.unsafe_get(i)
+    let ch = self.line_char(i)
     if ch == c {
       count = count + 1
     } else if !is_space_or_tab(ch) {

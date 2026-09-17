@@ -66,10 +66,11 @@ instantaneous, the result is `1 / 0.413` ≈ **2.4x**. Add `Array::push` (6.5%)
 and the allocation-side share is close to half the total.
 
 So 10x is not a tuning problem. It requires cutting *allocation volume* by
-roughly an order of magnitude, which means giving up one object per CST node —
-and a lossless object CST is the project's core premise ("CST is the source of
-truth"). A flat arena or a pulldown-cmark-style event stream would get there,
-but it is a rewrite of the data model, not an optimization of this one.
+roughly an order of magnitude, which means giving up one object per CST node.
+A flat arena or a pulldown-cmark-style event stream is a rewrite of the data
+model, not an optimization of this one — and, measured, it lands on the same
+2.4x rather than 10x. See
+[Would a flat binary representation (and SIMD) go faster?](./flat-representation-evaluation.md).
 
 For calibration, 15 MB/s on a kitchen-sink document already puts this parser
 level with good native implementations and well ahead of JS ones; 150 MB/s on
@@ -145,6 +146,70 @@ patching the previous mdast for the blocks that changed, or re-rendering only
 those blocks — which the CST's block spans already carry enough information
 to do.
 
+## Making the output incremental too (item 1b)
+
+`md_ast_incremental_patch(handle)` reports how the incremental parse split the
+document — how many leading and trailing mdast children survived the edit
+untouched — and materialises only what is between them. The JS side splices the
+previous revision's array, so nodes the edit did not reach are the *same objects*
+as before, not copies.
+
+Which nodes are offered for reuse is decided in MoonBit, on purpose. Spans are
+moved by `shift_block_span`, which shifts block spans but leaves inline spans
+alone (they are block-relative) and leaves table rows and cells alone too. A
+consumer that adjusted offsets itself would have to mirror those rules and keep
+mirroring them as block types are added, so a shifted tail is never offered:
+reuse is only offered when the nodes are byte-identical (`delta == 0`), and
+otherwise the tail is rebuilt where the span rules live.
+
+That makes the win depend on *where* you edit, which is the point — appending is
+what writing actually looks like:
+
+| Document | full → mdast | `update()` + `.ast` | Speedup | Edit position |
+|---|---|---|---|---|
+| 4 KB | 0.723 ms | 0.067 ms | 10.8x | middle |
+| 4 KB | 0.464 ms | 0.024 ms | **19.7x** | end |
+| 19 KB | 2.262 ms | 0.296 ms | 7.6x | middle |
+| 19 KB | 2.351 ms | 0.081 ms | **29.0x** | end |
+| 77 KB | 10.110 ms | 1.355 ms | 7.5x | middle |
+| 77 KB | 10.445 ms | 0.308 ms | **33.9x** | end |
+
+Before this, every edit cost the same 8.1x regardless of position.
+
+## Correctness found along the way
+
+Wiring the playground to `parse_incremental` turned three latent bugs in it into
+visible ones. All three are fixed, each with a regression test in
+`js/api.test.js`:
+
+1. **An edit at a block's first character did not count as touching that block.**
+   The overlap test was exclusive, and an insertion has `start == end`, so
+   typing `> ` or `- ` at the start of a paragraph re-parsed only the gap before
+   it. The playground rendered an *empty* blockquote followed by the untouched
+   paragraph.
+2. **Edits in trivia were attributed to the wrong block.** `get_span()` covers
+   the block proper, so a fenced block's closing fence and the blank lines after
+   any block fall outside it. Blocks are now matched on their extent — up to
+   where the next block carrying content starts — so every offset belongs to
+   exactly one block.
+3. **An edit could change how the text after it parses.** Breaking a closing
+   fence makes the rest of the document part of the code block, but the re-parse
+   stopped at the old block boundary and the rest was reused. The region is now
+   re-parsed with the following block appended: if nothing still starts at the
+   old boundary, the edit leaked and the parse falls back to a full one.
+
+A fuzzer (25 random edits × 12 seeds, every revision's AST compared against a
+full parse of the same text) went from 287 mismatches in 300 to 50.
+
+**The remaining 50 are a known gap.** They all involve documents that already
+contain an unterminated fence, where an edit re-arranges the fence markers
+themselves; one block of lookahead is not enough to see that the damage extends
+further. Closing it properly means either re-parsing to the end of the document
+(sound, but it gives up the reuse that makes `update()` fast mid-document) or
+tracking when the re-parse re-syncs with the old block structure, which needs
+parser state the current `parse()` does not expose. That is a design decision,
+not a patch.
+
 ## FFI layer: not the problem
 
 Same 77 KB document, in-browser:
@@ -166,14 +231,17 @@ JSON API on a hot path.
 | # | Change | Expected | Risk |
 |---|---|---|---|
 | ~~1~~ | Make incremental parsing reachable for AST consumers, then use it in the playground — **done** | 6.7–9.1x measured | Low — the engine already existed |
-| 1b | Make the *output* incremental too: patch the previous mdast / re-render only changed blocks | up to ~8x again | Medium |
+| ~~1b~~ | Make the *output* incremental too: carry over the mdast nodes the edit did not touch — **done** | 7.5x mid-document, **33.9x** appending | Medium |
 | 2 | Ship wasm-gc instead of js for the playground bundle | 1.3x | Low |
 | 3 | Cut allocations: presize the arrays behind `Array::push`, avoid rebuilding container subtrees in the extension passes | 1.3–2x, capped at 2.4x | Medium |
-| 4 | Flat arena / event-stream CST | 10x | Rewrite; conflicts with the lossless-CST premise |
+| ~~4~~ | Stop materialising a `String` per line in the block parser — **done** | 1.08–1.21x, every corpus and backend | Low |
+| 5 | Flat binary CST end to end, mdast as a projection | 2.4x, not 10x ([evaluation](./flat-representation-evaluation.md)) | Rewrite |
 
-Item 1 is done; 1b is where the next real win is. Item 2 is still worth doing.
-Item 3 is ordinary tuning with a known ceiling.
-Item 4 should only be considered as a separate, explicitly-scoped project.
+Items 1, 1b and 4 are done. Item 2 is still worth doing. Item 3 is ordinary
+tuning with a known ceiling. Item 5 is a rewrite whose measured ceiling is the
+same 2.4x that GC share predicts, so it should be scoped on its own merits
+(memory, native throughput, SIMD reach) rather than as a playground
+optimization.
 
 ## Notes
 
