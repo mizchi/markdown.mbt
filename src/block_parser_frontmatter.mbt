@@ -15,7 +15,8 @@ fn BlockParser::try_parse_frontmatter(self : BlockParser) -> Frontmatter? {
   let mut found_closing = false
   let mut end = i
   while i < self.len {
-    let (line, next) = self.read_line(i)
+    let (line_end, next) = self.scan_line(i)
+    let line = self.source.unsafe_substring(start=i, end=line_end)
     if line.has_prefix("---") &&
       is_blank_text(line.unsafe_substring(start=3, end=line.length())) {
       found_closing = true

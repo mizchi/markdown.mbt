@@ -21,10 +21,9 @@ fn BlockParser::parse_list_marker(
   pos : Int,
   interrupts_paragraph : Bool,
 ) -> ListMarker? {
-  let line = self.line
   let len = self.line_len
   guard pos < len else { return None }
-  let c = line.unsafe_get(pos)
+  let c = self.line_char(pos)
   let mut i = pos
   let mut ordered = false
   let mut bullet = '-'
@@ -37,28 +36,28 @@ fn BlockParser::parse_list_marker(
     ordered = true
     let mut digits = 0
     number = 0
-    while i < len && line.unsafe_get(i) >= '0' && line.unsafe_get(i) <= '9' {
-      number = number * 10 + (line.unsafe_get(i).to_int() - '0'.to_int())
+    while i < len && self.line_char(i) >= '0' && self.line_char(i) <= '9' {
+      number = number * 10 + (self.line_char(i).to_int() - '0'.to_int())
       digits = digits + 1
       i = i + 1
     }
     guard digits <= 9 else { return None }
     guard i < len else { return None }
-    let d = line.unsafe_get(i)
+    let d = self.line_char(i)
     guard d == '.' || d == ')' else { return None }
     delim = d.unsafe_to_char()
     i = i + 1
   } else {
     return None
   }
-  guard i >= len || is_space_or_tab(line.unsafe_get(i)) else { return None }
+  guard i >= len || is_space_or_tab(self.line_char(i)) else { return None }
   if interrupts_paragraph {
     if ordered && number != 1 {
       return None
     }
     // An empty list item cannot interrupt a paragraph.
     let mut j = i
-    while j < len && is_space_or_tab(line.unsafe_get(j)) {
+    while j < len && is_space_or_tab(self.line_char(j)) {
       j = j + 1
     }
     if j >= len {
@@ -143,7 +142,7 @@ fn BlockParser::would_be_thematic_break(self : BlockParser) -> Bool {
   let mut i = self.next_nonspace
   let mut count = 0
   while i < self.line_len {
-    let ch = self.line.unsafe_get(i)
+    let ch = self.line_char(i)
     if ch == c {
       count = count + 1
     } else if !is_space_or_tab(ch) {

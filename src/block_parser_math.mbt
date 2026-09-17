@@ -8,12 +8,12 @@ fn BlockParser::try_open_math_block(
 ) -> Node? {
   guard self.peek_line(self.next_nonspace) == '$' else { return None }
   let mut i = self.next_nonspace
-  while i < self.line_len && self.line.unsafe_get(i) == '$' {
+  while i < self.line_len && self.line_char(i) == '$' {
     i = i + 1
   }
   let length = i - self.next_nonspace
   guard length >= 2 else { return None }
-  while i < self.line_len && is_space_or_tab(self.line.unsafe_get(i)) {
+  while i < self.line_len && is_space_or_tab(self.line_char(i)) {
     i = i + 1
   }
   guard i >= self.line_len else { return None }
@@ -35,11 +35,11 @@ fn BlockParser::try_open_math_block(
 fn BlockParser::scan_close_math_fence(self : BlockParser, node : Node) -> Bool {
   guard self.peek_line(self.next_nonspace) == '$' else { return false }
   let mut i = self.next_nonspace
-  while i < self.line_len && self.line.unsafe_get(i) == '$' {
+  while i < self.line_len && self.line_char(i) == '$' {
     i = i + 1
   }
   guard i - self.next_nonspace >= node.fence_length else { return false }
-  while i < self.line_len && is_space_or_tab(self.line.unsafe_get(i)) {
+  while i < self.line_len && is_space_or_tab(self.line_char(i)) {
     i = i + 1
   }
   i >= self.line_len

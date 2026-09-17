@@ -66,10 +66,11 @@ instantaneous, the result is `1 / 0.413` ≈ **2.4x**. Add `Array::push` (6.5%)
 and the allocation-side share is close to half the total.
 
 So 10x is not a tuning problem. It requires cutting *allocation volume* by
-roughly an order of magnitude, which means giving up one object per CST node —
-and a lossless object CST is the project's core premise ("CST is the source of
-truth"). A flat arena or a pulldown-cmark-style event stream would get there,
-but it is a rewrite of the data model, not an optimization of this one.
+roughly an order of magnitude, which means giving up one object per CST node.
+A flat arena or a pulldown-cmark-style event stream is a rewrite of the data
+model, not an optimization of this one — and, measured, it lands on the same
+2.4x rather than 10x. See
+[Would a flat binary representation (and SIMD) go faster?](./flat-representation-evaluation.md).
 
 For calibration, 15 MB/s on a kitchen-sink document already puts this parser
 level with good native implementations and well ahead of JS ones; 150 MB/s on
@@ -233,11 +234,14 @@ JSON API on a hot path.
 | ~~1b~~ | Make the *output* incremental too: carry over the mdast nodes the edit did not touch — **done** | 7.5x mid-document, **33.9x** appending | Medium |
 | 2 | Ship wasm-gc instead of js for the playground bundle | 1.3x | Low |
 | 3 | Cut allocations: presize the arrays behind `Array::push`, avoid rebuilding container subtrees in the extension passes | 1.3–2x, capped at 2.4x | Medium |
-| 4 | Flat arena / event-stream CST | 10x | Rewrite; conflicts with the lossless-CST premise |
+| ~~4~~ | Stop materialising a `String` per line in the block parser — **done** | 1.08–1.21x, every corpus and backend | Low |
+| 5 | Flat binary CST end to end, mdast as a projection | 2.4x, not 10x ([evaluation](./flat-representation-evaluation.md)) | Rewrite |
 
-Items 1 and 1b are done. Item 2 is still worth doing. Item 3 is ordinary tuning
-with a known ceiling.
-Item 4 should only be considered as a separate, explicitly-scoped project.
+Items 1, 1b and 4 are done. Item 2 is still worth doing. Item 3 is ordinary
+tuning with a known ceiling. Item 5 is a rewrite whose measured ceiling is the
+same 2.4x that GC share predicts, so it should be scoped on its own merits
+(memory, native throughput, SIMD reach) rather than as a playground
+optimization.
 
 ## Notes
 

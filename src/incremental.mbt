@@ -111,7 +111,7 @@ pub fn parse_incremental(
   // Where the appended block has to start for the reuse to be sound.
   let boundary = region_end - reparse_start
   let leaked = has_guard_block &&
-    not(has_block_starting_at(region_result.document.children, boundary))
+    !has_block_starting_at(region_result.document.children, boundary)
   if leaked {
     let full = parse(new_source, wikilinks~)
     return {
@@ -239,7 +239,7 @@ fn find_affected_range(
     // block it actually belongs to.
     let mut extent_to = source_len
     for j = i + 1; j < n; j = j + 1 {
-      if not(is_blank_lines(blocks[j])) {
+      if !is_blank_lines(blocks[j]) {
         extent_to = blocks[j].get_span().from
         break
       }

@@ -11,12 +11,12 @@ fn BlockParser::try_open_code_fence(
   let c = self.peek_line(self.next_nonspace)
   guard c == '`' || c == '~' else { return None }
   let mut i = self.next_nonspace
-  while i < self.line_len && self.line.unsafe_get(i) == c {
+  while i < self.line_len && self.line_char(i) == c {
     i = i + 1
   }
   let length = i - self.next_nonspace
   guard length >= 3 else { return None }
-  let info_raw = self.line.unsafe_substring(start=i, end=self.line_len)
+  let info_raw = self.line_slice(i, self.line_len)
   if c == '`' {
     for j = 0; j < info_raw.length(); j = j + 1 {
       if info_raw.unsafe_get(j) == '`' {
@@ -48,11 +48,11 @@ fn BlockParser::scan_close_code_fence(self : BlockParser, node : Node) -> Bool {
   let c = self.peek_line(self.next_nonspace)
   guard c.to_int() == node.marker.to_int() else { return false }
   let mut i = self.next_nonspace
-  while i < self.line_len && self.line.unsafe_get(i) == c {
+  while i < self.line_len && self.line_char(i) == c {
     i = i + 1
   }
   guard i - self.next_nonspace >= node.fence_length else { return false }
-  while i < self.line_len && is_space_or_tab(self.line.unsafe_get(i)) {
+  while i < self.line_len && is_space_or_tab(self.line_char(i)) {
     i = i + 1
   }
   i >= self.line_len

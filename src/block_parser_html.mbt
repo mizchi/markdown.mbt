@@ -108,7 +108,8 @@ fn BlockParser::try_html_block_start(
   container : Node,
 ) -> Node? {
   guard self.peek_line(self.next_nonspace) == '<' else { return None }
-  let line = self.line
+  // Only lines that already look like HTML get materialised.
+  let line = self.line_slice(0, self.line_len)
   let start = self.next_nonspace
   let kind = html_block_kind(line, start, container)
   guard kind != HtmlBlockKind::None else { return None }
@@ -233,7 +234,8 @@ fn scan_complete_tag(line : String, start : Int) -> Int? {
 ///|
 /// Whether the line just added closes the block.
 fn BlockParser::html_block_ends(self : BlockParser, node : Node) -> Bool {
-  let line = self.line
+  // Reached only inside an open HTML block.
+  let line = self.line_slice(0, self.line_len)
   let from = if self.next_nonspace < line.length() {
     self.next_nonspace
   } else {
