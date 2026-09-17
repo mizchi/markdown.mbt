@@ -5,6 +5,7 @@ import {
   toHtmlLiteral,
   toMarkdown,
   createDocument,
+  diffEdit,
   insertEdit,
   deleteEdit,
   replaceEdit,
@@ -345,5 +346,97 @@ describe("createDocument", () => {
 
     doc.dispose();
     newDoc.dispose();
+  });
+
+  it("exposes the updated AST without re-parsing", () => {
+    const doc = createDocument("# Hello");
+    const newDoc = doc.update("# Hello World", insertEdit(7, 6));
+
+    expect(newDoc.ast.type).toBe("root");
+    expect(newDoc.ast.children[0].type).toBe("heading");
+    expect(newDoc.ast.children[0].children[0].value).toBe("Hello World");
+    // The original document keeps its own revision.
+    expect(doc.ast.children[0].children[0].value).toBe("Hello");
+
+    doc.dispose();
+    newDoc.dispose();
+  });
+
+  it("chains updates without falling back to a full parse", () => {
+    let doc = createDocument("# A\n\nbody\n");
+    const revisions = ["# AB\n\nbody\n", "# ABC\n\nbody\n", "# ABCD\n\nbody\n"];
+    let previous = "# A\n\nbody\n";
+
+    for (const next of revisions) {
+      const edit = diffEdit(previous, next);
+      expect(edit).not.toBeNull();
+      const updated = doc.update(next, edit);
+      doc.dispose();
+      doc = updated;
+      previous = next;
+      expect(doc.toMarkdown()).toBe(next);
+    }
+
+    expect(doc.ast.children[0].children[0].value).toBe("ABCD");
+    doc.dispose();
+  });
+
+  it("rejects use after dispose", () => {
+    const doc = createDocument("# Hello");
+    doc.dispose();
+    expect(() => doc.toHtml()).toThrow(/disposed/);
+    expect(() => doc.ast).toThrow(/disposed/);
+    // dispose is idempotent
+    expect(() => doc.dispose()).not.toThrow();
+  });
+});
+
+describe("diffEdit", () => {
+  const apply = (source, edit, inserted) =>
+    source.slice(0, edit.start) + inserted + source.slice(edit.oldEnd);
+
+  it("returns null when nothing changed", () => {
+    expect(diffEdit("same", "same")).toBeNull();
+  });
+
+  it("narrows an insertion to the inserted range", () => {
+    expect(diffEdit("ac", "abc")).toEqual({ start: 1, oldEnd: 1, newEnd: 2 });
+  });
+
+  it("narrows a deletion to the removed range", () => {
+    expect(diffEdit("abc", "ac")).toEqual({ start: 1, oldEnd: 2, newEnd: 1 });
+  });
+
+  it("narrows a replacement spanning lines", () => {
+    expect(diffEdit("A\nBC\nD", "A\nXY")).toEqual({
+      start: 2,
+      oldEnd: 6,
+      newEnd: 4,
+    });
+  });
+
+  it("describes the edit that turns old into new", () => {
+    const pairs = [
+      ["# Hello", "# Hello World"],
+      ["a\n\nb\n", "a\n\nb\nc\n"],
+      ["one two three", "one three"],
+      ["", "fresh"],
+      ["gone", ""],
+    ];
+    for (const [oldSource, newSource] of pairs) {
+      const edit = diffEdit(oldSource, newSource);
+      const inserted = newSource.slice(edit.start, edit.newEnd);
+      expect(apply(oldSource, edit, inserted)).toBe(newSource);
+    }
+  });
+
+  it("produces an edit an incremental parse accepts", () => {
+    const before = "# Title\n\nfirst\n\nsecond\n";
+    const after = "# Title\n\nfirst edited\n\nsecond\n";
+    const doc = createDocument(before);
+    const updated = doc.update(after, diffEdit(before, after));
+    expect(updated.toMarkdown()).toBe(after);
+    doc.dispose();
+    updated.dispose();
   });
 });

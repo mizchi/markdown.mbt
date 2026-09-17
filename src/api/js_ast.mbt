@@ -548,3 +548,18 @@ pub fn md_to_ast_object_with_wikilinks(source : String) -> JsValue {
   let result = @markdown.parse(source, wikilinks=true)
   document_to_js_value(result.document)
 }
+
+///|
+/// Return the mdast-compatible JavaScript object for a document that is
+/// already parsed behind `handle`, without re-parsing its source.
+///
+/// This is what makes `md_parse_incremental` worth anything to an AST
+/// consumer: without it the only way back to an AST is a full parse, which
+/// costs more than the incremental update saved. Returns JS `null` for an
+/// unknown handle.
+pub fn md_ast_object(handle : Int) -> JsValue {
+  match ast_store.get(handle) {
+    Some(entry) => document_to_js_value(entry.document)
+    None => js_null()
+  }
+}
