@@ -3,9 +3,9 @@ name = "mizchi/markdown"
 version = "0.8.3"
 
 import {
-  "moonbitlang/async@0.20.3",
-  "moonbitlang/parser@0.3.18",
-  "moonbitlang/x@0.5.1",
+  "moonbitlang/async@0.22.1",
+  "moonbitlang/parser@0.4.0",
+  "moonbitlang/x@0.5.5",
   "mizchi/syntree@0.2.4",
   "mizchi/moomaid@0.4.0",
 }

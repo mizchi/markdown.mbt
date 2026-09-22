@@ -1,3 +1,7 @@
-onlyBuiltDependencies:
-  - esbuild
-  - puppeteer
+allowBuilds:
+  esbuild: true
+  puppeteer: true
+  workerd: false
+minimumReleaseAgeExclude:
+  - '@cloudflare/unenv-preset@2.16.2'
+  - wrangler@4.136.2

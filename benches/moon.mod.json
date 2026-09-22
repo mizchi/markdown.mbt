@@ -5,7 +5,7 @@
     "mizchi/markdown": {
       "path": ".."
     },
-    "moonbitlang/x": "0.4.38"
+    "moonbitlang/x": "0.5.5"
   },
   "preferred-target": "js"
 }

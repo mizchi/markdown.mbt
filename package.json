@@ -102,7 +102,7 @@
   ],
   "author": "mizchi <miz404@gmail.com>",
   "license": "MIT",
-  "packageManager": "pnpm@10.23.0",
+  "packageManager": "pnpm@12.5.1",
   "peerDependencies": {
     "@luna_ui/luna": "^0.23.0"
   },
@@ -113,25 +113,25 @@
   },
   "devDependencies": {
     "@axe-core/playwright": "^4.13.0",
-    "@luna_ui/luna": "^0.23.0",
+    "@luna_ui/luna": "^0.23.2",
     "@mizchi/vlmkit": "^0.22.0",
-    "@playwright/test": "^1.62.1",
+    "@playwright/test": "^1.63.0",
     "@types/mdast": "^4.0.4",
     "@types/unist": "^3.0.3",
     "axe-core": "^4.13.0",
-    "playwright": "^1.62.1",
+    "playwright": "^1.63.0",
     "preact": "^10.29.8",
-    "puppeteer": "^25.9.0",
+    "puppeteer": "^25.11.0",
     "remark": "^15.0.1",
     "remark-gfm": "^4.0.1",
     "remark-html": "^16.0.1",
     "remark-stringify": "^11.0.0",
     "typescript": "^7.0.2",
     "unified": "^11.0.5",
-    "vite": "^8.2.2",
+    "vite": "^8.3.0",
     "vite-plugin-moonbit": "0.5.1",
-    "vitest": "^4.1.11",
-    "wrangler": "^4.127.1"
+    "vitest": "^5.0.1",
+    "wrangler": "^4.136.2"
   },
   "files": [
     "js/api.js",
