@@ -21,6 +21,8 @@ for (const theme of ["light", "dark"] as const) {
     await page.goto("/", { waitUntil: "domcontentloaded" });
     await page.evaluate((t) => {
       localStorage.clear();
+      // Preserve the original two-pane width for the no-wrap geometry fixture.
+      localStorage.setItem("markdown-editor-ui", JSON.stringify({ sidebarOpen: false }));
       localStorage.setItem("theme", t);
       indexedDB.deleteDatabase("markdown-editor");
     }, theme);

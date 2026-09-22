@@ -1,15 +1,13 @@
-import { render, createSignal, createEffect, createMemo, onMount, onCleanup, Show, batch } from "@luna_ui/luna";
+import { render, createSignal, createEffect, createMemo, onMount, onCleanup, Show, For, batch } from "@luna_ui/luna";
 import { createDocument, diffEdit } from "../js/api.js";
 import type { DocumentHandle } from "../js/api";
 import type { Root } from "mdast";
 import type { RendererCallbacks } from "./ast-renderer";
 import { SyntaxHighlightEditor, type SyntaxHighlightEditorHandle } from "../frontend/editor/SyntaxHighlightEditor";
 import { PreviewPane } from "./PreviewPane";
+import { ResizeHandle } from "./ResizeHandle";
 
-// IndexedDB for content (reliable async storage)
-const IDB_NAME = "markdown-editor";
-const IDB_STORE = "documents";
-const IDB_KEY = "current";
+import { listDocuments, saveDocument, deleteDocument, compareDocuments, type SavedDocument } from "./document-store";
 
 // localStorage for UI state (sync access for initial render)
 const UI_STATE_KEY = "markdown-editor-ui";
@@ -85,50 +83,6 @@ Click the checkboxes below - they update the source in real-time!
 Source: [github.com/mizchi/markdown.mbt](https://github.com/mizchi/markdown.mbt)
 `;
 
-// IndexedDB helpers
-function openDB(): Promise<IDBDatabase> {
-  return new Promise((resolve, reject) => {
-    const request = indexedDB.open(IDB_NAME, 1);
-    request.onerror = () => reject(request.error);
-    request.onsuccess = () => resolve(request.result);
-    request.onupgradeneeded = () => {
-      const db = request.result;
-      if (!db.objectStoreNames.contains(IDB_STORE)) {
-        db.createObjectStore(IDB_STORE);
-      }
-    };
-  });
-}
-
-async function saveToIDB(content: string): Promise<number> {
-  const db = await openDB();
-  const timestamp = Date.now();
-  return new Promise((resolve, reject) => {
-    const tx = db.transaction(IDB_STORE, "readwrite");
-    const store = tx.objectStore(IDB_STORE);
-    const request = store.put({ content, timestamp }, IDB_KEY);
-    request.onerror = () => reject(request.error);
-    request.onsuccess = () => resolve(timestamp);
-    tx.oncomplete = () => db.close();
-  });
-}
-
-async function loadFromIDB(): Promise<{ content: string; timestamp: number } | null> {
-  try {
-    const db = await openDB();
-    return new Promise((resolve, reject) => {
-      const tx = db.transaction(IDB_STORE, "readonly");
-      const store = tx.objectStore(IDB_STORE);
-      const request = store.get(IDB_KEY);
-      request.onerror = () => reject(request.error);
-      request.onsuccess = () => resolve(request.result || null);
-      tx.oncomplete = () => db.close();
-    });
-  } catch {
-    return null;
-  }
-}
-
 // Mobile detection
 function isMobile(): boolean {
   return window.innerWidth < 768 || /Android|iPhone|iPad|iPod/i.test(navigator.userAgent);
@@ -139,6 +93,10 @@ interface UIState {
   viewMode: "split" | "editor" | "preview";
   editorMode: "highlight" | "simple";
   cursorPosition: number;
+  sidebarOpen: boolean;
+  activeDocumentId: string;
+  sidebarWidth: number;
+  previewRatio: number;
 }
 
 function loadUIState(): UIState {
@@ -155,6 +113,10 @@ function loadUIState(): UIState {
         viewMode,
         editorMode,
         cursorPosition: parsed.cursorPosition || 0,
+        sidebarOpen: parsed.sidebarOpen ?? !mobile,
+        activeDocumentId: parsed.activeDocumentId ?? "current",
+        sidebarWidth: Number.isFinite(parsed.sidebarWidth) ? Math.max(160, Math.min(window.innerWidth * 0.45, parsed.sidebarWidth)) : 240,
+        previewRatio: Number.isFinite(parsed.previewRatio) ? Math.max(0.15, Math.min(0.85, parsed.previewRatio)) : 0.5,
       };
     }
   } catch {
@@ -165,6 +127,10 @@ function loadUIState(): UIState {
     viewMode: mobile ? "editor" : "split",
     editorMode: mobile ? "simple" : "highlight",
     cursorPosition: 0,
+    sidebarOpen: !mobile,
+    activeDocumentId: "current",
+    sidebarWidth: 240,
+    previewRatio: 0.5,
   };
 }
 
@@ -250,6 +216,13 @@ function Icon(props: { svg: string }) {
   return <span dangerouslySetInnerHTML={{ __html: props.svg }} style={{ display: "flex", alignItems: "center" }} />;
 }
 
+const DELETE_ICON = `<svg viewBox="0 0 20 20" width="18" height="18" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true"><path d="M3 5h14M7 5V2h6v3M5 5l1 13h8l1-13M8 8v7M12 8v7"/></svg>`;
+
+const NEW_DOCUMENT_ICON = `<svg viewBox="0 0 20 20" width="20" height="20" fill="none" stroke="currentColor" stroke-width="1.5" aria-hidden="true">
+  <path d="M11 2H4a1 1 0 0 0-1 1v14a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1V8l-6-6Z"/>
+  <path d="M11 2v6h6M7 12h6M10 9v6"/>
+</svg>`;
+
 const SPLIT_ICON = `<svg viewBox="0 0 20 20" width="18" height="18" fill="currentColor">
   <rect x="1" y="2" width="8" height="16" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/>
   <rect x="11" y="2" width="8" height="16" rx="1" stroke="currentColor" stroke-width="1.5" fill="none"/>
@@ -302,9 +275,24 @@ function App() {
     if (saved) return saved === "dark";
     return window.matchMedia("(prefers-color-scheme: dark)").matches;
   })());
-  const [saveStatus, setSaveStatus] = createSignal<"saved" | "saving" | "idle">("idle");
+  const [saveStatus, setSaveStatus] = createSignal<"saved" | "saving" | "idle" | "error">("idle");
   const [viewMode, setViewMode] = createSignal<ViewMode>(initialUIState.viewMode);
   const [editorMode, setEditorMode] = createSignal<EditorMode>(initialUIState.editorMode);
+  const [sidebarOpen, setSidebarOpen] = createSignal(initialUIState.sidebarOpen);
+  const [documents, setDocuments] = createSignal<SavedDocument[]>([]);
+  const [documentId, setDocumentId] = createSignal(initialUIState.activeDocumentId);
+  const [switching, setSwitching] = createSignal(false);
+  const [sidebarWidth, setSidebarWidth] = createSignal(initialUIState.sidebarWidth);
+  const [previewRatio, setPreviewRatio] = createSignal(initialUIState.previewRatio);
+  const [pendingDelete, setPendingDelete] = createSignal<SavedDocument | null>(null);
+  const [deleteError, setDeleteError] = createSignal("");
+  let deleteDialog: HTMLDialogElement | null = null;
+  const savePanelWidths = () => saveUIState({ sidebarWidth: sidebarWidth(), previewRatio: previewRatio() });
+  const toggleSidebar = () => {
+    setSidebarOpen(!sidebarOpen());
+    saveUIState({ sidebarOpen: sidebarOpen() });
+  };
+
 
   // Memoized class names for reactivity
   const containerClass = createMemo(() => `container view-${viewMode()} editor-mode-${editorMode()}`);
@@ -319,6 +307,11 @@ function App() {
   let editorRef: SyntaxHighlightEditorHandle | null = null;
   let simpleEditorRef: HTMLTextAreaElement | null = null;
   let previewRef: HTMLDivElement | null = null;
+  let editorPanelRef: HTMLDivElement | null = null;
+  createEffect(() => {
+    const disabled = switching();
+    if (editorPanelRef) editorPanelRef.inert = disabled;
+  });
 
   // Incremental parsing state. The playground used to run a full parse on every
   // edit; instead we keep the parsed document alive and advance it with the
@@ -361,24 +354,121 @@ function App() {
     docHandle = null;
   });
 
-  // Track if content has been modified since load
+  let activeCreatedAt = Date.now();
   let hasModified = false;
-  let lastSyncedTimestamp = 0;
-  let isSaving = false;
-
-  // Debounced source for saving
-  const [debouncedSource, setDebouncedSource] = createSignal("");
   let debounceTimer: number | undefined;
-
-  createEffect(() => {
-    const value = source();
-    clearTimeout(debounceTimer);
-    debounceTimer = window.setTimeout(() => {
-      setDebouncedSource(value);
-    }, DEBOUNCE_DELAY);
+  let saveQueue: Promise<void> = Promise.resolve();
+  const snapshot = (): SavedDocument => ({
+    id: documentId(), content: source(), timestamp: Date.now(), createdAt: activeCreatedAt,
   });
-
-  // AST parsing moved to handleChange with batch() for efficiency
+  const persist = (doc: SavedDocument) => {
+    setSaveStatus("saving");
+    const operation = saveQueue.then(() => saveDocument(doc));
+    saveQueue = operation.catch(() => {});
+    return operation.then(() => {
+      setDocuments(items => [doc, ...items.filter(item => item.id !== doc.id)].sort(compareDocuments));
+      if (documentId() === doc.id && source() === doc.content) {
+        hasModified = false;
+        setSaveStatus("saved");
+      }
+    }).catch((error) => {
+      setSaveStatus("error");
+      throw error;
+    });
+  };
+  const flushSave = () => {
+    clearTimeout(debounceTimer);
+    return persist(snapshot());
+  };
+  const activate = (doc: SavedDocument) => {
+    activeCreatedAt = doc.createdAt;
+    clearTimeout(astParseTimer);
+    clearTimeout(debounceTimer);
+    batch(() => {
+      setDocumentId(doc.id);
+      setSource(doc.content);
+      refreshAst(doc.content);
+      setCursorPosition(0);
+    });
+    hasModified = false;
+    saveUIState({ activeDocumentId: doc.id, cursorPosition: 0 });
+    editorRef?.setValue(doc.content);
+    editorRef?.setCursorPosition(0);
+    editorRef?.setScrollTop(0);
+    if (simpleEditorRef) simpleEditorRef.scrollTop = 0;
+  };
+  const focusDocumentStart = () => {
+    setCursorPosition(0);
+    saveUIState({ cursorPosition: 0 });
+    if (viewMode() === "preview") handleViewModeChange("split");
+    requestAnimationFrame(() => {
+      if (editorMode() === "highlight") {
+        editorRef?.focus();
+        editorRef?.setCursorPosition(0);
+        editorRef?.setScrollTop(0);
+      } else if (simpleEditorRef) {
+        simpleEditorRef.focus();
+        simpleEditorRef.setSelectionRange(0, 0);
+        simpleEditorRef.scrollTop = 0;
+      }
+      if (previewRef) previewRef.scrollTop = 0;
+    });
+  };
+  const selectDocument = async (doc?: SavedDocument) => {
+    if (switching()) return;
+    if (doc?.id === documentId()) { focusDocumentStart(); return; }
+    setSwitching(true);
+    try {
+      await flushSave();
+      const next = doc ?? { id: crypto.randomUUID(), content: "", timestamp: Date.now(), createdAt: Date.now() };
+      if (!doc) await persist(next);
+      activate(next);
+      focusDocumentStart();
+    } catch {
+      // Keep the current editor intact if its save failed.
+    } finally {
+      setSwitching(false);
+    }
+  };
+  const askDelete = (doc: SavedDocument) => {
+    if (switching()) return;
+    setPendingDelete(doc);
+    setDeleteError("");
+    deleteDialog?.showModal();
+  };
+  const confirmDelete = async () => {
+    const target = pendingDelete();
+    if (!target || switching()) return;
+    setSwitching(true);
+    clearTimeout(debounceTimer);
+    try {
+      if (target.id !== documentId() && hasModified) await flushSave();
+      await saveQueue;
+      const remaining = documents().filter(doc => doc.id !== target.id);
+      const replacement = remaining.length ? undefined : {
+        id: crypto.randomUUID(), content: "", timestamp: Date.now(), createdAt: Date.now(),
+      };
+      await deleteDocument(target.id, replacement);
+      const nextDocuments = replacement ? [replacement] : remaining;
+      setDocuments(nextDocuments);
+      if (target.id === documentId()) activate(nextDocuments[0]!);
+      deleteDialog?.close();
+      setPendingDelete(null);
+      focusDocumentStart();
+    } catch {
+      setDeleteError("Could not delete the document. Please retry.");
+    } finally {
+      setSwitching(false);
+    }
+  };
+  createEffect(() => {
+    const doc = snapshot();
+    const ready = isInitialized();
+    clearTimeout(debounceTimer);
+    if (!ready || !hasModified) return;
+    debounceTimer = window.setTimeout(() => { void persist(doc).catch(() => {}); }, DEBOUNCE_DELAY);
+  });
+  onCleanup(() => { clearTimeout(debounceTimer); });
 
   const toggleDark = () => {
     setIsDark((v) => !v);
@@ -433,97 +523,56 @@ function App() {
   // Keyboard shortcuts for view mode
   onMount(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey || e.metaKey) {
-        if (e.key === "1") {
-          e.preventDefault();
-          handleViewModeChange("split");
-        } else if (e.key === "2") {
-          e.preventDefault();
-          handleViewModeChange("editor");
-        } else if (e.key === "3") {
-          e.preventDefault();
-          handleViewModeChange("preview");
-        }
+      if (!e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || e.isComposing || e.repeat) return;
+      if (e.key.toLowerCase() === "b") {
+        e.preventDefault();
+        toggleSidebar();
+      } else if (e.code === "Backquote" || e.key === "`") {
+        e.preventDefault();
+        handleViewModeChange(viewMode() === "editor" ? "split" : "editor");
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     onCleanup(() => { window.removeEventListener("keydown", handleKeyDown); });
   });
 
-  // Load initial content from IndexedDB
   onMount(() => {
-    (async () => {
-      let content = initialMarkdown;
-      let timestamp = 0;
-
+    void (async () => {
       try {
-        const idbData = await loadFromIDB();
-        if (idbData && idbData.content) {
-          content = idbData.content;
-          timestamp = idbData.timestamp;
+        let items = await listDocuments();
+        if (!items.length) {
+          const doc = { id: "current", content: initialMarkdown, timestamp: Date.now(), createdAt: Date.now() };
+          await saveDocument(doc);
+          items = [doc];
         }
+        setDocuments(items);
+        activate(items.find(doc => doc.id === initialUIState.activeDocumentId) ?? items[0]!);
       } catch {
-        // ignore IndexedDB load errors and fall back to initial content
+        setSource(initialMarkdown);
+        refreshAst(initialMarkdown);
+        setSaveStatus("error");
       }
-
-      batch(() => {
-        setSource(content);
-        refreshAst(content);
-        setIsInitialized(true);
-      });
-      lastSyncedTimestamp = timestamp;
-
-      requestAnimationFrame(() => {
-        editorRef?.focus();
-      });
+      setIsInitialized(true);
+      requestAnimationFrame(() => editorRef?.focus());
     })();
-  });
-
-  // Handle visibility change for tab sync
-  onMount(() => {
-    async function handleVisibilityChange() {
-      if (document.visibilityState !== "visible") return;
-      if (isSaving || hasModified) return;
-
-      try {
-        const idbData = await loadFromIDB();
-        if (!idbData) return;
-
-        if (idbData.timestamp > lastSyncedTimestamp) {
-          setSource(idbData.content);
-          // AST will be parsed by debounce effect
-          lastSyncedTimestamp = idbData.timestamp;
-        }
-      } catch (e) {
-        console.error("Failed to sync from IndexedDB:", e);
+    const sync = async () => {
+      if (document.visibilityState !== "visible") {
+        if (hasModified) void flushSave().catch(() => {});
+        return;
       }
-    }
-
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    onCleanup(() => { document.removeEventListener("visibilitychange", handleVisibilityChange); });
-  });
-
-  // Save content to IndexedDB with debounce
-  createEffect(() => {
-    const debounced = debouncedSource();
-    if (!isInitialized()) return;
-    if (!hasModified) return;
-
-    isSaving = true;
-    setSaveStatus("saving");
-    saveToIDB(debounced)
-      .then((timestamp) => {
-        lastSyncedTimestamp = timestamp;
-        hasModified = false;
-        isSaving = false;
-        setSaveStatus("saved");
-        setTimeout(() => setSaveStatus("idle"), 1000);
-      })
-      .catch((e) => {
-        console.error("Failed to save to IndexedDB:", e);
-        isSaving = false;
-        setSaveStatus("idle");
-      });
+      if (hasModified || switching()) return;
+      const id = documentId();
+      try {
+        await saveQueue;
+        const items = await listDocuments();
+        if (hasModified || switching() || id !== documentId()) return;
+        setDocuments(items);
+        const doc = items.find(item => item.id === id);
+        if (doc && doc.content !== source()) activate(doc);
+      } catch { setSaveStatus("error"); }
+    };
+    document.addEventListener("visibilitychange", sync);
+    onCleanup(() => { document.removeEventListener("visibilitychange", sync); });
   });
 
   // Track last rendered AST version for scroll synchronization
@@ -686,12 +735,14 @@ function App() {
         <div class="app-container">
           <header class="toolbar">
             <div class="toolbar-left">
+              <button type="button" class="panel-toggle" title="Toggle sidebar (Ctrl+B)" aria-label="Toggle sidebar" aria-expanded={sidebarOpen} onClick={toggleSidebar}>☰</button>
+              <button type="button" class="panel-toggle" title="Toggle preview (Ctrl+`)" aria-label="Toggle preview" onClick={() => handleViewModeChange(viewMode() === "editor" ? "split" : "editor")}>Preview</button>
               <div class="view-mode-buttons">
                 {!mobile && (
                   <button
                     class={splitBtnClass}
                     onClick={() => handleViewModeChange("split")}
-                    title="Split view (Ctrl+1)"
+                    title="Split view"
                   >
                     <Icon svg={SPLIT_ICON} />
                   </button>
@@ -699,14 +750,14 @@ function App() {
                 <button
                   class={editorBtnClass}
                   onClick={() => handleViewModeChange("editor")}
-                  title="Editor only (Ctrl+2)"
+                  title="Editor only"
                 >
                   <Icon svg={EDITOR_ICON} />
                 </button>
                 <button
                   class={previewBtnClass}
                   onClick={() => handleViewModeChange("preview")}
-                  title="Preview only (Ctrl+3)"
+                  title="Preview only"
                 >
                   <Icon svg={PREVIEW_ICON} />
                 </button>
@@ -727,9 +778,8 @@ function App() {
                   <Icon svg={SIMPLE_ICON} />
                 </button>
               </div>
-              <span class={saveStatusClass}>
-                {saveStatus() === "saving" && "Saving..."}
-                {saveStatus() === "saved" && "Saved"}
+              <span class={saveStatusClass} role="status" aria-live="polite">
+                {() => ({ saving: "Saving...", saved: "Saved", error: "Save unavailable. Please retry.", idle: "" })[saveStatus()]}
               </span>
             </div>
             <div class="toolbar-actions">
@@ -747,9 +797,28 @@ function App() {
               </a>
             </div>
           </header>
-          <div class={containerClass}>
+          <div class={containerClass} style={() => ({ "--sidebar-width": `${sidebarWidth()}px`, "--preview-ratio": String(previewRatio()), "--editor-ratio": String(1 - previewRatio()) })}>
+            <aside class={() => sidebarOpen() ? "document-sidebar" : "document-sidebar collapsed"} aria-label="Documents">
+              <div class="document-actions">
+                <button type="button" class="new-document" aria-label="New document" title="New document" disabled={switching} onClick={() => void selectDocument()}>
+                  <Icon svg={NEW_DOCUMENT_ICON} />
+                </button>
+              </div>
+              <nav aria-label="Saved documents">
+                <For each={documents}>{doc => (
+                  <div class="document-row">
+                  <button type="button" class={() => `document-item${documentId() === doc.id ? " active" : ""}`} disabled={switching} aria-current={() => documentId() === doc.id ? "page" : "false"} onClick={() => void selectDocument(doc)}>
+                    <span class="document-excerpt" title={doc.content.split(/\r?\n/, 1)[0] ?? ""}>{doc.content.split(/\r?\n/, 1)[0] || "Empty document"}</span>
+                  </button>
+                  <button type="button" class="delete-document" aria-label={`Delete ${doc.content.split(/\r?\n/, 1)[0] || "Empty document"}`} title="Delete document" disabled={switching} onClick={() => askDelete(doc)}><Icon svg={DELETE_ICON} /></button>
+                  </div>
+                )}</For>
+              </nav>
+            </aside>
+            <ResizeHandle label="Resize sidebar" class="sidebar-resizer" value={sidebarWidth} min={() => 160} max={() => Math.floor(window.innerWidth * 0.45)}
+              onDelta={delta => setSidebarWidth(Math.max(160, Math.min(window.innerWidth * 0.45, sidebarWidth() + delta)))} onCommit={savePanelWidths} />
             {/* Editor panel - visibility controlled by CSS class */}
-            <div class="editor">
+            <div class="editor" ref={(el) => { editorPanelRef = el as HTMLDivElement; editorPanelRef.inert = switching(); }}>
               {/* Syntax highlight editor - always mounted, visibility controlled by CSS */}
               <div class="editor-highlight-wrapper">
                 <SyntaxHighlightEditor
@@ -770,6 +839,11 @@ function App() {
                 />
               </div>
             </div>
+            <ResizeHandle label="Resize preview" class="preview-resizer" value={() => Math.round(previewRatio() * 100)} min={() => 15} max={() => 85}
+              onDelta={delta => {
+                const width = (editorPanelRef?.getBoundingClientRect().width ?? 0) + (previewRef?.getBoundingClientRect().width ?? 0);
+                if (width) setPreviewRatio(Math.max(0.15, Math.min(0.85, previewRatio() - delta / width)));
+              }} onCommit={savePanelWidths} />
             {/* Preview panel */}
             <PreviewPane
               ast={ast}
@@ -781,6 +855,17 @@ function App() {
               }}
             />
           </div>
+          <dialog class="delete-dialog" ref={el => { deleteDialog = el as HTMLDialogElement; }} aria-labelledby="delete-heading" aria-describedby="delete-description"
+            onCancel={(event: Event) => { if (switching()) event.preventDefault(); }}>
+            <h2 id="delete-heading">Delete document?</h2>
+            <p id="delete-description">This document will be permanently deleted.</p>
+            <p class="delete-title">{() => pendingDelete()?.content.split(/\r?\n/, 1)[0] || "Empty document"}</p>
+            <p role="alert">{deleteError}</p>
+            <div class="dialog-actions">
+              <button type="button" autofocus disabled={switching} onClick={() => deleteDialog?.close()}>Cancel</button>
+              <button type="button" disabled={switching} onClick={() => void confirmDelete()}>Delete</button>
+            </div>
+          </dialog>
         </div>
       )}
     </Show>

@@ -9,21 +9,21 @@ test.describe('UI Toggle Buttons', () => {
     const container = page.locator('.container').first();
 
     // Click editor-only button
-    await page.click('button[title="Editor only (Ctrl+2)"]');
+    await page.click('button[title="Editor only"]');
     await page.waitForTimeout(100);
 
     // Check if container has view-editor class
     await expect(container).toHaveClass(/view-editor/);
 
     // Click preview-only button
-    await page.click('button[title="Preview only (Ctrl+3)"]');
+    await page.click('button[title="Preview only"]');
     await page.waitForTimeout(100);
 
     // Check if container has view-preview class
     await expect(container).toHaveClass(/view-preview/);
 
     // Click split button
-    await page.click('button[title="Split view (Ctrl+1)"]');
+    await page.click('button[title="Split view"]');
     await page.waitForTimeout(100);
 
     // Check if container has view-split class
@@ -56,7 +56,7 @@ test.describe('UI Toggle Buttons', () => {
     await page.waitForSelector('.view-mode-btn');
 
     // Click editor-only button
-    const editorBtn = page.locator('button[title="Editor only (Ctrl+2)"]');
+    const editorBtn = page.locator('button[title="Editor only"]');
     await editorBtn.click();
     await page.waitForTimeout(100);
 
@@ -64,7 +64,7 @@ test.describe('UI Toggle Buttons', () => {
     await expect(editorBtn).toHaveClass(/active/);
 
     // Split button should not have active class
-    const splitBtn = page.locator('button[title="Split view (Ctrl+1)"]');
+    const splitBtn = page.locator('button[title="Split view"]');
     await expect(splitBtn).not.toHaveClass(/active/);
   });
 
