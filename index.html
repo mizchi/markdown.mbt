@@ -159,7 +159,79 @@
       background: var(--bg-tertiary);
     }
 
+    .panel-toggle {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 32px;
+      padding: 6px 10px;
+      border: 1px solid var(--border-color);
+      border-radius: 6px;
+      background: var(--bg-secondary);
+      color: var(--text-primary);
+      cursor: pointer;
+    }
+    .panel-toggle:hover { background: var(--bg-tertiary); }
+    .document-sidebar {
+      flex: 0 0 clamp(160px, var(--sidebar-width, 240px), 45vw);
+      width: clamp(160px, var(--sidebar-width, 240px), 45vw);
+      min-width: 0;
+      padding: 12px;
+      box-sizing: border-box;
+      border-right: 1px solid var(--border-color);
+      background: var(--bg-secondary);
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .document-sidebar.collapsed { display: none; }
+    .document-sidebar button {
+      font: inherit;
+      color: var(--text-primary);
+      background: var(--bg-primary);
+      border: 1px solid var(--border-color);
+      border-radius: 0;
+      padding: 8px;
+      min-width: 0;
+    }
+    .document-sidebar button { cursor: pointer; }
+    .document-sidebar nav { display: flex; flex-direction: column; gap: 6px; }
+    .document-row { display: flex; min-width: 0; }
+    .document-item { flex: 1; min-width: 0; text-align: left; }
+    .document-sidebar .delete-document { flex: 0 0 32px; padding: 6px; display: flex; align-items: center; justify-content: center; border-left: 0; }
+    .delete-document:hover { color: #d73a49; }
+    .resize-handle { flex: 0 0 6px; cursor: col-resize; touch-action: none; background: var(--border-color); }
+    .resize-handle:hover, .resize-handle:focus-visible { background: var(--text-secondary); outline: none; }
+    .document-sidebar.collapsed + .sidebar-resizer,
+    .view-editor .preview-resizer, .view-preview .preview-resizer { display: none; }
+    .container.view-split > .editor { flex: var(--editor-ratio, .5) 1 0; box-sizing: border-box; }
+    .container.view-split > .preview { flex: var(--preview-ratio, .5) 1 0; box-sizing: border-box; }
+    .delete-dialog { max-width: min(400px, 85vw); padding: 24px; border: 1px solid var(--border-color); background: var(--bg-primary); color: var(--text-primary); }
+    .delete-dialog::backdrop { background: #0008; }
+    .delete-dialog h2 { margin-top: 0; }
+    .delete-title { overflow-wrap: anywhere; max-height: 100px; overflow: auto; }
+    .dialog-actions { display: flex; justify-content: flex-end; gap: 12px; }
+    .dialog-actions button { font: inherit; padding: 8px 16px; border: 1px solid var(--border-color); background: var(--bg-secondary); color: var(--text-primary); cursor: pointer; }
+    .document-item.active { border-color: var(--text-primary); }
+    .document-excerpt {
+      display: block;
+      overflow: hidden;
+      white-space: nowrap;
+      text-overflow: ellipsis;
+    }
+    .document-actions { display: flex; align-items: center; justify-content: flex-start; gap: 6px; }
+    .document-sidebar .new-document { display: flex; align-items: center; justify-content: center; width: 36px; height: 36px; }
+    .save-status.error { opacity: 1; color: #d73a49; }
+    @media (max-width: 768px) {
+      .sidebar-resizer { display: none; }
+      .document-sidebar { position: absolute; inset: 0 auto 0 0; z-index: 20; box-shadow: 4px 0 12px #0002; }
+      .toolbar { flex-wrap: wrap; }
+      .toolbar-left { flex-wrap: wrap; }
+    }
     .container {
+      position: relative;
+      min-height: 0;
       display: flex;
       flex: 1;
       overflow: hidden;
@@ -185,6 +257,7 @@
     }
 
     .editor, .preview {
+      min-width: 0;
       flex: 1;
       padding: 16px;
       overflow: auto;
@@ -584,7 +657,7 @@
       }
     }
   </style>
-  <script type="module" crossorigin src="/markdown.mbt/assets/index-Thuev-oq.js"></script>
+  <script type="module" crossorigin src="/markdown.mbt/assets/index-NlTir6Ln.js"></script>
   <link rel="modulepreload" crossorigin href="/markdown.mbt/assets/SyntaxHighlightEditor-Bu8ozfb_.js">
 </head>
 <body>
