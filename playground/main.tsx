@@ -401,18 +401,16 @@ function App() {
     setCursorPosition(0);
     saveUIState({ cursorPosition: 0 });
     if (viewMode() === "preview") handleViewModeChange("split");
-    requestAnimationFrame(() => {
-      if (editorMode() === "highlight") {
-        editorRef?.focus();
-        editorRef?.setCursorPosition(0);
-        editorRef?.setScrollTop(0);
-      } else if (simpleEditorRef) {
-        simpleEditorRef.focus();
-        simpleEditorRef.setSelectionRange(0, 0);
-        simpleEditorRef.scrollTop = 0;
-      }
-      if (previewRef) previewRef.scrollTop = 0;
-    });
+    if (editorMode() === "highlight") {
+      editorRef?.focus();
+      editorRef?.setCursorPosition(0);
+      editorRef?.setScrollTop(0);
+    } else if (simpleEditorRef) {
+      simpleEditorRef.focus();
+      simpleEditorRef.setSelectionRange(0, 0);
+      simpleEditorRef.scrollTop = 0;
+    }
+    if (previewRef) previewRef.scrollTop = 0;
   };
   const selectDocument = async (doc?: SavedDocument) => {
     if (switching()) return;
@@ -423,6 +421,7 @@ function App() {
       const next = doc ?? { id: crypto.randomUUID(), content: "", timestamp: Date.now(), createdAt: Date.now() };
       if (!doc) await persist(next);
       activate(next);
+      setSwitching(false);
       focusDocumentStart();
     } catch {
       // Keep the current editor intact if its save failed.
@@ -454,6 +453,7 @@ function App() {
       if (target.id === documentId()) activate(nextDocuments[0]!);
       deleteDialog?.close();
       setPendingDelete(null);
+      setSwitching(false);
       focusDocumentStart();
     } catch {
       setDeleteError("Could not delete the document. Please retry.");

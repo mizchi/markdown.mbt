@@ -104,3 +104,16 @@ test('deleting another document preserves the current draft and reports failures
   await expect(editor).toHaveValue('Current draft');
   await expect(page.locator('.document-item')).toHaveText(['Current draft']);
 });
+
+test('document selection does not reset a subsequent text selection on the next frame', async ({ page }) => {
+  await page.goto('/');
+  await page.locator('.document-item.active').waitFor();
+  const selection = await page.evaluate(async () => {
+    (document.querySelector('.document-item.active') as HTMLButtonElement).click();
+    const editor = document.querySelector('.editor-textarea') as HTMLTextAreaElement;
+    editor.setSelectionRange(1, 4);
+    await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+    return [editor.selectionStart, editor.selectionEnd];
+  });
+  expect(selection).toEqual([1, 4]);
+});
