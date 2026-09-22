@@ -258,12 +258,16 @@
       padding: 0 12px 0 8px;
     }
 
+    /* No overflow control on purpose: the textarea is the only scroller and the
+       overlay clips itself, so nothing overflows here. `auto` would nest a
+       second scroller around the editor and slide the overlay out of alignment. */
     .editor-wrapper {
       flex: 1;
       position: relative;
-      overflow: auto;
       display: flex;
       justify-content: center;
+      /* Size container so scroll-past-end padding can be pane-relative (50cqh). */
+      container-type: size;
     }
 
     .editor-content {
@@ -282,12 +286,15 @@
       }
     }
 
+    /* Bottom padding is scroll-past-end room: half the PANE (50cqh), not half the
+       viewport. With 50vh a pane shorter than the viewport gets padding taller
+       than its own box, pushing the textarea past the bottom of the editor. */
     .editor-textarea,
     .editor-highlight {
       font-family: 'Monaco', 'Menlo', 'Consolas', monospace;
       font-size: 14px;
       line-height: 1.5;
-      padding: 16px 16px 50vh 24px;
+      padding: 16px 16px 50cqh 24px;
       margin: 0;
       border: none;
       white-space: pre-wrap;
@@ -314,14 +321,23 @@
       background: rgba(56, 139, 253, 0.3);
     }
 
-    .editor-highlight {
+    /* Fixed-size window over the overlay; never moves, so clipping the
+       scrolled-out part cuts off nothing the reader should see. */
+    .editor-highlight-viewport {
       position: absolute;
       top: 0;
       left: 0;
       width: 100%;
-      min-height: 100%;
+      height: 100%;
+      overflow: hidden;
       pointer-events: none;
       z-index: 1;
+    }
+
+    /* The scrolled surface: as tall as the document, translated by syncScroll. */
+    .editor-highlight {
+      width: 100%;
+      min-height: 100%;
       color: var(--text-primary);
     }
 
@@ -336,6 +352,7 @@
     /* Simple editor (plain textarea) */
     .editor-simple-wrapper {
       justify-content: center;
+      container-type: size;
     }
 
     .simple-editor {
@@ -346,7 +363,7 @@
       font-size: 14px;
       line-height: 1.5;
       padding: 16px;
-      padding-bottom: 50vh;
+      padding-bottom: 50cqh;
       margin: 0;
       border: none;
       border-left: 1px solid var(--border-color);
@@ -567,10 +584,8 @@
       }
     }
   </style>
-  <script type="module" crossorigin src="/markdown.mbt/assets/index-h7xuR8XD.js"></script>
-  <link rel="modulepreload" crossorigin href="/markdown.mbt/assets/jsx-runtime-CbumG8MQ.js">
-  <link rel="modulepreload" crossorigin href="/markdown.mbt/assets/SyntaxHighlightEditor-B4T4D3xh.js">
-  <link rel="modulepreload" crossorigin href="/markdown.mbt/assets/ast-renderer-_jVmtlou.js">
+  <script type="module" crossorigin src="/markdown.mbt/assets/index-Thuev-oq.js"></script>
+  <link rel="modulepreload" crossorigin href="/markdown.mbt/assets/SyntaxHighlightEditor-Bu8ozfb_.js">
 </head>
 <body>
   <div id="app"></div>
