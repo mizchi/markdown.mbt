@@ -1,6 +1,11 @@
 bench:
     moon bench
 
+# Verify the exact Mooncakes archive in a clean consumer workspace.
+check-package:
+    moon package
+    node scripts/check-moon-package.mjs
+
 # Run JavaScript benchmarks with the external Wasm ESM bridge preloaded.
 bench-js:
     NODE_OPTIONS="--import=./js/inline-marker-simd.js" moon bench --target js

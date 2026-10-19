@@ -11,4 +11,3 @@ pub fn generate_heading_id(String) -> String
 // Type aliases
 
 // Traits
-

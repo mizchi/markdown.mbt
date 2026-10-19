@@ -42,4 +42,3 @@ pub fn HighlightTheme::get_color(Self, @syntree.HighlightTag) -> String
 // Type aliases
 
 // Traits
-

@@ -11,4 +11,3 @@ pub fn highlight_json(String) -> String
 // Type aliases
 
 // Traits
-

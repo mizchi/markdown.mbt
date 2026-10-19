@@ -1,0 +1,18 @@
+// Generated using `moon info`, DON'T EDIT IT
+package "mizchi/markdown/mmmd_core"
+
+// Values
+pub fn render(String, OutputFormat) -> String
+
+// Errors
+
+// Types and methods
+pub(all) enum OutputFormat {
+  Tui
+  Html
+}
+pub fn OutputFormat::parse(String) -> Self?
+
+// Type aliases
+
+// Traits

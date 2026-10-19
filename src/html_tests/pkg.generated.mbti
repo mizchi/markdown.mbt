@@ -15,4 +15,3 @@ pub fn remark_html(String) -> String
 // Type aliases
 
 // Traits
-

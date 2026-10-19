@@ -11,4 +11,3 @@ pub fn highlight_rust(String) -> String
 // Type aliases
 
 // Traits
-

@@ -64,22 +64,22 @@ pub fn AlertKind::slug(Self) -> String
 pub impl Show for AlertKind
 
 pub(all) enum Block {
-  ThematicBreak(marker~ : Char, count~ : Int, span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
-  Heading(level~ : Int, style~ : HeadingStyle, children~ : Array[Inline], closing_hashes~ : Int, span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
+  ThematicBreak(marker~ : Char, count~ : Int32, span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
+  Heading(level~ : Int32, style~ : HeadingStyle, children~ : Array[Inline], closing_hashes~ : Int32, span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
   Paragraph(children~ : Array[Inline], span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
-  FencedCode(fence_marker~ : FenceMarker, fence_length~ : Int, info~ : String, code~ : String, indent~ : Int, span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
-  MathBlock(value~ : String, fence_length~ : Int, span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
-  Directive(name~ : String, meta~ : String, children~ : Array[Block], fence_length~ : Int, span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
+  FencedCode(fence_marker~ : FenceMarker, fence_length~ : Int32, info~ : String, code~ : String, indent~ : Int32, span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
+  MathBlock(value~ : String, fence_length~ : Int32, span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
+  Directive(name~ : String, meta~ : String, children~ : Array[Block], fence_length~ : Int32, span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
   DefinitionList(items~ : Array[DefinitionItem], span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
   Attributed(block~ : Block, attributes~ : Array[MarkdownAttribute], span~ : Span)
   IndentedCode(code~ : String, span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
   Blockquote(children~ : Array[Block], span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
   Alert(kind~ : AlertKind, children~ : Array[Block], span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
   BulletList(marker~ : BulletMarker, tight~ : Bool, items~ : Array[ListItem], span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
-  OrderedList(start~ : Int, delimiter~ : OrderedDelimiter, tight~ : Bool, items~ : Array[ListItem], span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
+  OrderedList(start~ : Int32, delimiter~ : OrderedDelimiter, tight~ : Bool, items~ : Array[ListItem], span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
   HtmlBlock(html~ : String, span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
   Table(header~ : Array[TableCell], alignments~ : Array[TableAlign], rows~ : Array[Array[TableCell]], span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
-  BlankLines(count~ : Int, span~ : Span)
+  BlankLines(count~ : Int32, span~ : Span)
   FootnoteDefinition(label~ : String, children~ : Array[Block], span~ : Span, leading_trivia~ : Trivia, trailing_trivia~ : Trivia)
 }
 
@@ -109,13 +109,13 @@ pub(all) struct Document {
 }
 
 pub(all) struct EditInfo {
-  offset : Int
-  old_len : Int
-  new_len : Int
+  offset : Int32
+  old_len : Int32
+  new_len : Int32
 }
-pub fn EditInfo::delete(Int, Int) -> Self
-pub fn EditInfo::insert(Int, Int) -> Self
-pub fn EditInfo::replace(Int, Int, Int) -> Self
+pub fn EditInfo::delete(Int32, Int32) -> Self
+pub fn EditInfo::insert(Int32, Int32) -> Self
+pub fn EditInfo::replace(Int32, Int32, Int32) -> Self
 
 pub(all) enum EmphasisMarker {
   Asterisk
@@ -149,9 +149,9 @@ pub impl Show for HeadingStyle
 
 pub(all) struct IncrementalResult {
   document : Document
-  reused_before : Int
-  reparsed : Int
-  reused_after : Int
+  reused_before : Int32
+  reparsed : Int32
+  reused_after : Int32
 }
 
 pub(all) enum Inline {
@@ -161,7 +161,7 @@ pub(all) enum Inline {
   Emphasis(marker~ : EmphasisMarker, children~ : Array[Inline], span~ : Span)
   Strong(marker~ : EmphasisMarker, children~ : Array[Inline], span~ : Span)
   Strikethrough(children~ : Array[Inline], span~ : Span)
-  Code(content~ : String, backtick_count~ : Int, span~ : Span)
+  Code(content~ : String, backtick_count~ : Int32, span~ : Span)
   Directive(name~ : String, label~ : String, attributes~ : Array[MarkdownAttribute], span~ : Span)
   WikiLink(target~ : String, label~ : String, fragment~ : String, span~ : Span)
   Link(children~ : Array[Inline], url~ : String, title~ : String, span~ : Span)
@@ -183,8 +183,8 @@ pub(all) struct LinkDefinition {
 pub(all) struct ListItem {
   children : Array[Block]
   checked : Bool?
-  marker_offset : Int
-  content_offset : Int
+  marker_offset : Int32
+  content_offset : Int32
   span : Span
 }
 
@@ -222,35 +222,35 @@ pub fn RenderOptions::with_simple_highlighter((String, String) -> String) -> Sel
 pub(all) struct Scanner {
   source : String
   chars : Array[Char]
-  mut pos : Int
-  len : Int
-  utf16_offsets : Array[Int]?
+  mut pos : Int32
+  len : Int32
+  utf16_offsets : Array[Int32]?
 }
-pub fn Scanner::advance(Self, Int) -> Unit
+pub fn Scanner::advance(Self, Int32) -> Unit
 pub fn Scanner::consume(Self) -> Char?
 pub fn Scanner::consume_str(Self, String) -> Bool
-pub fn Scanner::count_char(Self, Char) -> Int
-pub fn Scanner::count_leading_spaces(Self) -> Int
+pub fn Scanner::count_char(Self, Char) -> Int32
+pub fn Scanner::count_leading_spaces(Self) -> Int32
 pub fn Scanner::is_blank_line(Self) -> Bool
 pub fn Scanner::is_eof(Self) -> Bool
 pub fn Scanner::matches(Self, String) -> Bool
 pub fn Scanner::new(String) -> Self
 pub fn Scanner::peek(Self) -> Char?
-pub fn Scanner::peek_at(Self, Int) -> Char?
+pub fn Scanner::peek_at(Self, Int32) -> Char?
 pub fn Scanner::read_line(Self) -> String
 pub fn Scanner::remaining(Self) -> String
-pub fn Scanner::restore(Self, Int) -> Unit
-pub fn Scanner::save(Self) -> Int
+pub fn Scanner::restore(Self, Int32) -> Unit
+pub fn Scanner::save(Self) -> Int32
 pub fn Scanner::skip_line(Self) -> Unit
-pub fn Scanner::skip_spaces(Self) -> Int
-pub fn Scanner::substring(Self, Int, Int) -> String
+pub fn Scanner::skip_spaces(Self) -> Int32
+pub fn Scanner::substring(Self, Int32, Int32) -> String
 
 pub(all) struct Span {
-  from : Int
-  to : Int
+  from : Int32
+  to : Int32
 } derive(Eq, @debug.Debug)
 pub fn Span::empty() -> Self
-pub fn Span::new(Int, Int) -> Self
+pub fn Span::new(Int32, Int32) -> Self
 pub impl Show for Span
 
 pub(all) enum TableAlign {
@@ -276,4 +276,3 @@ pub impl Show for Trivia
 // Type aliases
 
 // Traits
-

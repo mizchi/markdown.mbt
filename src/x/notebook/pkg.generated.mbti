@@ -188,4 +188,3 @@ pub trait Evaluator {
   fn language(Self) -> String
   fn can_handle(Self, String) -> Bool
 }
-

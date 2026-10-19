@@ -1,28 +1,29 @@
-{
+import {
+  "markdown-component/gen/cabi",
+  "mizchi/markdown",
+  "mizchi/markdown/api",
+}
+
+options(
   "is-main": true,
-  "import": [
-    { "path": "markdown-component/gen/cabi", "alias": "cabi" },
-    { "path": "mizchi/markdown", "alias": "markdown" },
-    { "path": "mizchi/markdown/api", "alias": "api" }
-  ],
-  "link": {
+  link: {
     "wasm": {
       "exports": [
         "cabi_realloc:cabi_realloc",
         "wasmExportMdSerialize:mizchi:markdown/markdown@0.1.0#md-serialize",
         "wasmExportMdToAstJson:mizchi:markdown/markdown@0.1.0#md-to-ast-json",
-        "wasmExportMdToHtml:mizchi:markdown/markdown@0.1.0#md-to-html"
+        "wasmExportMdToHtml:mizchi:markdown/markdown@0.1.0#md-to-html",
       ],
-      "export-memory-name": "memory"
+      "export-memory-name": "memory",
     },
     "wasm-gc": {
       "exports": [
         "cabi_realloc:cabi_realloc",
         "wasmExportMdSerialize:mizchi:markdown/markdown@0.1.0#md-serialize",
         "wasmExportMdToAstJson:mizchi:markdown/markdown@0.1.0#md-to-ast-json",
-        "wasmExportMdToHtml:mizchi:markdown/markdown@0.1.0#md-to-html"
+        "wasmExportMdToHtml:mizchi:markdown/markdown@0.1.0#md-to-html",
       ],
-      "export-memory-name": "memory"
-    }
-  }
-}
+      "export-memory-name": "memory",
+    },
+  },
+)

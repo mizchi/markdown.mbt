@@ -11,4 +11,3 @@ pub fn highlight_typescript(String) -> String
 // Type aliases
 
 // Traits
-

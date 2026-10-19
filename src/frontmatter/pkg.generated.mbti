@@ -8,7 +8,7 @@ import {
 // Values
 pub fn get_bool(@markdown.Frontmatter, String) -> Bool?
 
-pub fn get_int(@markdown.Frontmatter, String) -> Int?
+pub fn get_int(@markdown.Frontmatter, String) -> Int32?
 
 pub fn get_list(@markdown.Frontmatter, String) -> Array[String]
 
@@ -25,4 +25,3 @@ pub fn keys(@markdown.Frontmatter) -> Array[String]
 // Type aliases
 
 // Traits
-

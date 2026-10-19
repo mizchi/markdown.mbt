@@ -11,4 +11,3 @@ pub fn highlight_bash(String) -> String
 // Type aliases
 
 // Traits
-

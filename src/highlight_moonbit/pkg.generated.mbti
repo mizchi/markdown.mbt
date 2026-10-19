@@ -11,4 +11,3 @@ pub fn highlight_moonbit(String) -> String
 // Type aliases
 
 // Traits
-

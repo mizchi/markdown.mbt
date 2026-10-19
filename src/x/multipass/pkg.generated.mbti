@@ -15,4 +15,3 @@ pub fn parse_inlines_multipass(String) -> Array[@markdown.Inline]
 // Type aliases
 
 // Traits
-

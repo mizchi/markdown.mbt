@@ -181,6 +181,12 @@ console.log(heading.level); // 1
 moon add mizchi/markdown
 ```
 
+Version 0.8.4 and later use `moon.mod` / `moon.pkg` throughout the package
+and select migrated transitive dependencies. The release is verified with
+MoonBit 0.10.16 (2026-10-16). Run `just check-package` to build the Mooncakes
+archive and check it, its docs, the benchmark and component modules, and a
+fresh consumer on all four supported targets.
+
 ### Usage
 
 ```moonbit

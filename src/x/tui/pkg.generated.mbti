@@ -93,4 +93,3 @@ pub fn TuiOptions::with_simple_highlighter((String, String) -> String) -> Self
 // Type aliases
 
 // Traits
-

@@ -11,4 +11,3 @@ pub fn highlight_html(String) -> String
 // Type aliases
 
 // Traits
-

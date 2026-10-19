@@ -25,7 +25,7 @@ pub fn is_mdx_tag(String) -> Bool
 
 pub fn is_web_component(String) -> Bool
 
-pub fn parse_attributes(String, Int) -> (Array[MdxAttribute], Int)
+pub fn parse_attributes(String, Int32) -> (Array[MdxAttribute], Int32)
 
 pub fn parse_mdx_blocks(@markdown.Document) -> Array[MdxBlock]
 
@@ -168,4 +168,3 @@ pub(all) struct TypedMdxElement {
 // Type aliases
 
 // Traits
-

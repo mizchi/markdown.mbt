@@ -12,9 +12,9 @@ pub fn parse(String) -> SlideDocument
 
 // Types and methods
 pub(all) struct Slide {
-  index : Int
-  start : Int
-  end : Int
+  index : Int32
+  start : Int32
+  end : Int32
   blocks : Array[@markdown.Block]
 }
 
@@ -22,12 +22,11 @@ pub(all) struct SlideDocument {
   slides : Array[Slide]
   source : String
 }
-pub fn SlideDocument::find_slide_at_position(Self, Int) -> Int
-pub fn SlideDocument::get_slide(Self, Int) -> Slide?
-pub fn SlideDocument::get_slide_source(Self, Int) -> String
-pub fn SlideDocument::slide_count(Self) -> Int
+pub fn SlideDocument::find_slide_at_position(Self, Int32) -> Int32
+pub fn SlideDocument::get_slide(Self, Int32) -> Slide?
+pub fn SlideDocument::get_slide_source(Self, Int32) -> String
+pub fn SlideDocument::slide_count(Self) -> Int32
 
 // Type aliases
 
 // Traits
-
